@@ -136,8 +136,9 @@ Once the application is running, you can access:
 1. **Domain Layer**: Define entities in `app/domain/entities/`
 2. **Repository**: Create implementation in `app/domain/repositories/`
 4. **Dtos**: Define Pydantic models in `app/domain/dtos/`
-5. **API**: Create endpoints in `app/api/v1/`
-6. **Tests**: Add tests in the `tests/` directory
+5. **Services**: Define business logic in `app/domain/services`
+6. **API**: Create endpoints in `app/api/v1/`
+7. **Tests**: Add tests in the `tests/` directory
 
 ### Code Style
 
