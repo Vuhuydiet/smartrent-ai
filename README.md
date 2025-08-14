@@ -41,53 +41,86 @@ app/
 
 ## 🛠️ Installation
 
+### Task Runner
+
+This project uses **Just** as a cross-platform task runner.
+
+#### **Just** - `justfile`
+
+Modern command runner with excellent cross-platform support.
+
+**Installation:**
+
+```bash
+# Windows (via Chocolatey)
+choco install just
+
+# macOS
+brew install just
+
+# Linux
+cargo install just
+```
+
+#### Available Commands
+
+| Command              | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `install`            | Install/update dependencies                          |
+| `test`               | Run tests                                            |
+| `lint`               | Run linting                                          |
+| `format`             | Format code                                          |
+| `format-check`       | Check formatting without changes                     |
+| `lint-fix`           | Run linting with auto-fix                            |
+| `pre-commit-install` | Install pre-commit hooks                             |
+| `pre-commit-run`     | Run pre-commit hooks                                 |
+| `check-all`          | Run all code quality checks                          |
+| `run`                | Start development server                             |
+| `clean`              | Clean up build artifacts                             |
+| `migrate`            | Run database migrations                              |
+| `dev-setup`          | Full development environment setup                   |
+| `health`             | Check project health                                 |
+
 ### Local Development
 
 1. **Clone the repository**
+
 ```bash
   git clone <repository-url>
   cd smartrent-ai
 ```
 
-2. **Create virtual environment**
-```bash
-  python -m venv venv
-  # Activate venv
-	source venv/bin/activate # for Unix
-	venv\\Scripts\\activate  # for Windows
+2. **Setup project (creates venv and installs dependencies)**
 
+```bash
+  just install-for-<os>
+  just pre-commit-install
 ```
 
-3. **Install dependencies**
-```bash
-  pip install -r requirements.txt
-```
-Or easier, just run 
-```bash
-  make setup
-```
+3. **Set up environment variables**
 
-4. **Set up environment variables**
 ```bash
   cp .env.example .env
   # Edit .env with your configuration
 ```
 
-5. **Set up database**
+4. **Set up database**
+
 ```bash
   # Create MySQL database
   mysql -u root -p -e "CREATE DATABASE smartrent_ai;"
   mysql -u root -p -e "CREATE USER 'smartrent'@'localhost' IDENTIFIED BY 'password';"
   mysql -u root -p -e "GRANT ALL PRIVILEGES ON smartrent_ai.* TO 'smartrent'@'localhost';"
   mysql -u root -p -e "FLUSH PRIVILEGES;"
-   
+
   # Run migrations
-  alembic upgrade head
+  just migrate
 ```
 
 6. **Run the application**
+
 ```bash
-  uvicorn app.main:app --reload
+  just run
 ```
 
 ## 🗄️ Database Migrations
@@ -96,13 +129,13 @@ This project uses Alembic for database migrations:
 
 ```bash
 # Create a new migration
-alembic revision --autogenerate -m "Description of changes"
+just migrate-create <description>
 
 # Apply migrations
-alembic upgrade head
+just migrate
 
 # Downgrade migrations
-alembic downgrade -1
+just migrate-downgrade
 ```
 
 ## 🧪 Testing
@@ -110,14 +143,11 @@ alembic downgrade -1
 Run the test suite:
 
 ```bash
-# Run all tests
-pytest
-
 # Run with coverage
-pytest --cov=app
+just test
 
 # Run specific test file
-pytest tests/test_main.py
+just test-file <file>
 ```
 
 ## 📚 API Documentation
@@ -134,18 +164,46 @@ Once the application is running, you can access:
 
 1. **Domain Layer**: Define entities in `app/entities/`
 2. **Repository**: Create implementation in `app/repositories/`
-4. **Dtos**: Define Pydantic models in `app/dtos/`
-5. **Services**: Define business logic in `app/services`
-6. **API**: Create endpoints in `app/api/v1/`
-7. **AI**: AI features
-8. **Tests**: Add tests in the `tests/` directory
+3. **Dtos**: Define Pydantic models in `app/dtos/`
+4. **Services**: Define business logic in `app/services`
+5. **API**: Create endpoints in `app/api/v1/`
+6. **AI**: AI features in `app/ai/` directory
+7. **Tests**: Add tests in the `tests/` directory
 
 ### Code Style
 
-- Follow PEP 8 guidelines
-- Use type hints throughout the codebase
+This project uses several tools to maintain code quality and consistency:
+
+#### Development Tools
+
+- **Black**: Code formatter that enforces a consistent style
+- **isort**: Import sorter that organizes imports according to PEP 8
+- **Flake8**: Linter that checks for code quality and style issues
+- **MyPy**: Static type checker for Python
+- **Pre-commit**: Git hooks that run checks before commits
+
+#### Configuration Files
+
+- `pyproject.toml`: Configuration for Black, isort, MyPy, and pytest
+- `.flake8`: Flake8 configuration
+- `.pre-commit-config.yaml`: Pre-commit hooks configuration
+
+#### VS Code Integration
+
+The project includes VS Code settings (`.vscode/settings.json`) that:
+
+- Automatically format code on save
+- Organize imports on save
+- Enable linting and type checking
+- Set the correct Python interpreter
+
+#### Code Quality Guidelines
+
+- Follow PEP 8 guidelines (enforced by Flake8)
+- Use type hints throughout the codebase (checked by MyPy)
 - Write comprehensive docstrings
 - Maintain test coverage above 80%
+- All code must pass linting and formatting checks
 
 ## 🤝 Contributing
 

@@ -1,9 +1,9 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.4.2
+pydantic>=2.11.0
 pydantic-settings==2.0.3
-sqlalchemy==2.0.23
-alembic==1.12.1
+sqlalchemy>=2.0.35
+alembic>=1.13.0
 PyMySQL==1.1.0
 cryptography==41.0.7
 python-jose[cryptography]==3.3.0
@@ -12,4 +12,12 @@ python-multipart==0.0.6
 httpx==0.25.2
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-cov==4.1.0
 pydantic[email]
+
+# Development tools
+black==23.12.1
+isort==5.13.2
+flake8==7.0.0
+mypy==1.8.0
+pre-commit==3.6.0
