@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from app.domain.entities.user import User
-from app.domain.dtos.user import UserCreate
+from app.entity.user import User
+from app.dto.user import UserCreate
 
 
 class UserRepository:

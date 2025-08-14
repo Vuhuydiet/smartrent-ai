@@ -16,11 +16,10 @@ app/
 ├── database/             # Database configuration
 │   └── database.py       # Database connection
 ├── ai/                   # Core AI features
-├── domain/               # Domain layer (business entities)
-│   ├── dtos              # Data tranfer objects
-│   ├── entities/         # Database models
-│   ├── repositories/     # Repositories
-│   └── services/         # Domain services
+├── dtos                  # Data tranfer objects
+├── entities/             # Database models
+├── repositories/         # Repositories
+└── services/             # Domain services
 ```
 
 ## 🚀 Features
@@ -82,7 +81,7 @@ Or easier, just run
   mysql -u root -p -e "GRANT ALL PRIVILEGES ON smartrent_ai.* TO 'smartrent'@'localhost';"
   mysql -u root -p -e "FLUSH PRIVILEGES;"
    
-# Run migrations
+  # Run migrations
   alembic upgrade head
 ```
 
@@ -133,12 +132,13 @@ Once the application is running, you can access:
 
 ### Adding New Features
 
-1. **Domain Layer**: Define entities in `app/domain/entities/`
-2. **Repository**: Create implementation in `app/domain/repositories/`
-4. **Dtos**: Define Pydantic models in `app/domain/dtos/`
-5. **Services**: Define business logic in `app/domain/services`
+1. **Domain Layer**: Define entities in `app/entities/`
+2. **Repository**: Create implementation in `app/repositories/`
+4. **Dtos**: Define Pydantic models in `app/dtos/`
+5. **Services**: Define business logic in `app/services`
 6. **API**: Create endpoints in `app/api/v1/`
-7. **Tests**: Add tests in the `tests/` directory
+7. **AI**: AI features
+8. **Tests**: Add tests in the `tests/` directory
 
 ### Code Style
 

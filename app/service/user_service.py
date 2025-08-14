@@ -1,6 +1,6 @@
 from typing import Optional
-from app.domain.repositories.user_repository import UserRepository
-from app.domain.dtos.user import UserCreate, User
+from app.repository.user_repository import UserRepository
+from app.dto.user import UserCreate, User
 
 
 class UserService:
