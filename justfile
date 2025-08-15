@@ -60,7 +60,7 @@ run-activated:
 # Run linting
 lint:
     flake8 app tests
-    mypy app
+    mypy .
 
 # Format code
 format:
@@ -88,7 +88,7 @@ check-all:
     black --check app tests
     isort --check-only app tests
     flake8 app tests
-    mypy app
+    mypy .
     @echo "All checks passed!"
 
 # Clean up build artifacts (cross-platform Python solution)
