@@ -35,7 +35,7 @@ app/
 
 ## 📋 Requirements
 
-- Python 3.11+
+- Python 3.10+
 - MySQL 8.0+
 - Docker (optional)
 
@@ -64,22 +64,25 @@ cargo install just
 
 #### Available Commands
 
-| Command              | Description                                          |
-| -------------------- | ---------------------------------------------------- |
-| `install`            | Install/update dependencies                          |
-| `test`               | Run tests                                            |
-| `lint`               | Run linting                                          |
-| `format`             | Format code                                          |
-| `format-check`       | Check formatting without changes                     |
-| `lint-fix`           | Run linting with auto-fix                            |
-| `pre-commit-install` | Install pre-commit hooks                             |
-| `pre-commit-run`     | Run pre-commit hooks                                 |
-| `check-all`          | Run all code quality checks                          |
-| `run`                | Start development server                             |
-| `clean`              | Clean up build artifacts                             |
-| `migrate`            | Run database migrations                              |
-| `dev-setup`          | Full development environment setup                   |
-| `health`             | Check project health                                 |
+| Command              | Description                      |
+| -------------------- | -------------------------------- |
+| `install`            | Install/update dependencies      |
+| `test`               | Run tests                        |
+| `test-file <file>`   | Run specific test file           |
+| `lint`               | Run linting                      |
+| `format`             | Format code                      |
+| `format-check`       | Check formatting without changes |
+| `lint-fix`           | Run linting with auto-fix        |
+| `pre-commit-install` | Install pre-commit hooks         |
+| `pre-commit-run`     | Run pre-commit hooks             |
+| `check-all`          | Run all code quality checks      |
+| `run`                | Start development server         |
+| `run-activated`      | Start server (if venv activated) |
+| `clean`              | Clean up build artifacts         |
+| `migrate`            | Run database migrations          |
+| `migrate-create`     | Create new migration             |
+| `migrate-downgrade`  | Downgrade last migration         |
+| `health`             | Check project health             |
 
 ### Local Development
 
@@ -93,7 +96,7 @@ cargo install just
 2. **Setup project (creates venv and installs dependencies)**
 
 ```bash
-  just install-for-<os>
+  just install
   just pre-commit-install
 ```
 
@@ -159,6 +162,28 @@ Once the application is running, you can access:
 - **Health check**: http://localhost:8000/health
 
 ## 🏗️ Development Guidelines
+
+### CI/CD Pipeline
+
+This project includes a comprehensive GitHub Actions CI/CD pipeline that:
+
+- **Tests**: Runs unit tests, code quality checks, and coverage analysis
+- **Security**: Scans Docker images for vulnerabilities
+- **Build & Deploy**: Creates and pushes Docker images to DockerHub
+
+#### Pipeline Triggers
+
+- Push to `main` or `dev` branches
+- Pull requests to `main` branch
+
+#### Required Secrets
+
+Set these in your GitHub repository settings:
+
+- `DOCKERHUB_USERNAME`: Your DockerHub username
+- `DOCKERHUB_TOKEN`: DockerHub access token
+
+📖 **Detailed Setup Guide**: See [CI/CD Setup Documentation](docs/ci-cd-setup.md)
 
 ### Adding New Features
 

@@ -3,7 +3,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "SmartRent AI"
     VERSION: str = "1.0.0"
 
     # Database

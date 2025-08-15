@@ -16,7 +16,7 @@ default:
 
 # Setup project and install dependencies
 install:
-    python -m venv venv
+    py -3.10 -m venv venv
     {{venv_pip}} install -r requirements.txt
     @echo "✅ Setup completed!"
     @echo "To activate the virtual environment:"
@@ -42,12 +42,12 @@ migrate-downgrade:
 # Run tests
 test:
     @echo "Running tests..."
-    -pytest -v --cov=app --cov-report=html 2>/dev/null || pytest -v
+    -pytest -v --cov=app --cov-report=html
 
 # Run specific test file
 test-file file:
     @echo "Running specific test file: {{file}}"
-    -pytest {{file}} -v --cov=app --cov-report=html 2>/dev/null || pytest {{file}} -v
+    -pytest {{file}} -v --cov=app --cov-report=html
 
 # Run development server
 run:
@@ -93,19 +93,19 @@ check-all:
 
 # Clean up build artifacts (cross-platform Python solution)
 clean:
-    python -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('__pycache__')]"
-    python -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyc')]"
-    python -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyo')]"
-    python -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyd')]"
-    python -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('.coverage')]"
-    python -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('*.egg-info')]"
-    python -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('.pytest_cache')]"
-    python -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('htmlcov')]"
+    py -3.10 -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('__pycache__')]"
+    py -3.10 -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyc')]"
+    py -3.10 -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyo')]"
+    py -3.10 -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('*.pyd')]"
+    py -3.10 -c "import pathlib; [p.unlink(missing_ok=True) for p in pathlib.Path('.').rglob('.coverage')]"
+    py -3.10 -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('*.egg-info')]"
+    py -3.10 -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('.pytest_cache')]"
+    py -3.10 -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('htmlcov')]"
 
 # Check project health
 health:
     @echo "Checking project health..."
-    python --version
-    pip check
+    py -3.10 --version
+    {{venv_pip}} check
     just format-check
     just lint
