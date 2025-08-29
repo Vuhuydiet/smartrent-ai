@@ -138,7 +138,7 @@ jobs:
       run: |
         COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
         ENVIRONMENT=$([[ "${GITHUB_REF}" == "refs/heads/main" ]] && echo "prd" || echo "dev")
-        VALUES_FILE="deploy-repo/charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
+        VALUES_FILE="charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
 
         echo "commit-sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
         echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
@@ -148,10 +148,10 @@ jobs:
       run: |
         echo "Updating image tags to: ${{ steps.env.outputs.commit-sha }} for environment: ${{ steps.env.outputs.environment }}"
 
-        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ steps.env.outputs.commit-sha }}/' ${{ steps.env.outputs.values-file }}
+        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ steps.env.outputs.commit-sha }}/' deploy-repo/${{ steps.env.outputs.values-file }}
 
         echo "Updated values.yaml content:"
-        cat ${{ steps.env.outputs.values-file }}
+        cat deploy-repo/${{ steps.env.outputs.values-file }}
 
     - name: Get commit info
       id: commit-info
