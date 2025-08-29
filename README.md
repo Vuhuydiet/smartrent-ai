@@ -16,10 +16,10 @@ app/
 ├── database/             # Database configuration
 │   └── database.py       # Database connection
 ├── ai/                   # Core AI features
-├── dtos                  # Data tranfer objects
-├── entities/             # Database models
-├── repositories/         # Repositories
-└── services/             # Domain services
+├── dto                   # Data tranfer objects
+├── entitiy/              # Database models
+├── repository/           # Repositories
+└── service/              # Domain services
 ```
 
 ## 🚀 Features
@@ -187,10 +187,10 @@ Set these in your GitHub repository settings:
 
 ### Adding New Features
 
-1. **Domain Layer**: Define entities in `app/entities/`
-2. **Repository**: Create implementation in `app/repositories/`
-3. **Dtos**: Define Pydantic models in `app/dtos/`
-4. **Services**: Define business logic in `app/services`
+1. **Domain Layer**: Define entities in `app/entity/`
+2. **Repository**: Create implementation in `app/repository/`
+3. **Dtos**: Define Pydantic models in `app/dto/`
+4. **Services**: Define business logic in `app/service`
 5. **API**: Create endpoints in `app/api/v1/`
 6. **AI**: AI features in `app/ai/` directory
 7. **Tests**: Add tests in the `tests/` directory
@@ -213,15 +213,6 @@ This project uses several tools to maintain code quality and consistency:
 - `.flake8`: Flake8 configuration
 - `.pre-commit-config.yaml`: Pre-commit hooks configuration
 
-#### VS Code Integration
-
-The project includes VS Code settings (`.vscode/settings.json`) that:
-
-- Automatically format code on save
-- Organize imports on save
-- Enable linting and type checking
-- Set the correct Python interpreter
-
 #### Code Quality Guidelines
 
 - Follow PEP 8 guidelines (enforced by Flake8)
@@ -229,13 +220,3 @@ The project includes VS Code settings (`.vscode/settings.json`) that:
 - Write comprehensive docstrings
 - Maintain test coverage above 80%
 - All code must pass linting and formatting checks
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Ensure tests pass: `pytest`
-5. Commit your changes: `git commit -am 'Add new feature'`
-6. Push to the branch: `git push origin feature-name`
-7. Submit a pull request

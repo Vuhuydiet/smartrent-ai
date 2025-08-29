@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 env:
   DOCKER_IMAGE_NAME: smartrent-ai
@@ -80,7 +80,7 @@ jobs:
         name: codecov-umbrella
 
   build-and-push:
-    needs: [lint, test]
+    needs: [ lint, test ]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
@@ -119,3 +119,58 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+
+    steps:
+    - name: Checkout deployment repository
+      uses: actions/checkout@v4
+      with:
+        repository: 'Vuhuydiet/smartrent-deploy'
+        token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+        path: 'deploy-repo'
+
+    - name: Set environment variables
+      id: env
+      run: |
+        COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+        ENVIRONMENT=$([[ "${GITHUB_REF}" == "refs/heads/main" ]] && echo "prd" || echo "dev")
+        VALUES_FILE="deploy-repo/charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
+
+        echo "commit-sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+        echo "values-file=$VALUES_FILE" >> $GITHUB_OUTPUT
+
+    - name: Update image tags in values.yaml
+      run: |
+        echo "Updating image tags to: ${{ steps.env.outputs.commit-sha }} for environment: ${{ steps.env.outputs.environment }}"
+
+        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ steps.env.outputs.commit-sha }}/' ${{ steps.env.outputs.values-file }}
+
+        echo "Updated values.yaml content:"
+        cat ${{ steps.env.outputs.values-file }}
+
+    - name: Get commit info
+      id: commit-info
+      run: |
+        echo "commit-message=${{ github.event.head_commit.message }}" >> $GITHUB_OUTPUT
+        echo "commit-link=https://github.com/${{ github.repository }}/commit/${{ github.sha }}" >> $GITHUB_OUTPUT
+
+    - name: Commit and push changes
+      run: |
+        cd deploy-repo
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add ${{ steps.env.outputs.values-file }}
+
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+          exit 0
+        fi
+
+        COMMIT_MESSAGE="${{ steps.env.outputs.commit-sha }}: ${{ steps.commit-info.outputs.commit-message }} ${{ steps.commit-info.outputs.commit-link }}"
+        git commit -m "$COMMIT_MESSAGE"
+        git push
