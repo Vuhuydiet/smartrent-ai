@@ -105,7 +105,7 @@ jobs:
         tags: |
           type=ref,event=branch
           type=ref,event=pr
-          type=sha,format=short
+          type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
@@ -136,7 +136,7 @@ jobs:
     - name: Set environment variables
       id: env
       run: |
-        COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+        COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
         ENVIRONMENT=$([[ "${GITHUB_REF}" == "refs/heads/main" ]] && echo "prd" || echo "dev")
         VALUES_FILE="charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
 
@@ -148,7 +148,7 @@ jobs:
       run: |
         echo "Updating image tags to: ${{ steps.env.outputs.commit-sha }} for environment: ${{ steps.env.outputs.environment }}"
 
-        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ steps.env.outputs.commit-sha }}/' deploy-repo/${{ steps.env.outputs.values-file }}
+        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ github.ref_name }}-${{ steps.env.outputs.commit-sha }}/' deploy-repo/${{ steps.env.outputs.values-file }}
 
         echo "Updated values.yaml content:"
         cat deploy-repo/${{ steps.env.outputs.values-file }}
