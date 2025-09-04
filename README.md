@@ -59,7 +59,7 @@ choco install just
 brew install just
 
 # Linux
-cargo install just
+sudo apt install just
 ```
 
 #### Available Commands
