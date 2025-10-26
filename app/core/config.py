@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
+    # AI Configuration
+    GEMINI_API_KEY: str = ""
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 
