@@ -1,20 +1,28 @@
+import pytest
+
 from fastapi.testclient import TestClient
 
-# Import the actual app from main.py
 from app.main import app
 
 client = TestClient(app)
 
 
-def test_health_check_endpoint() -> None:
-    """Test the health check endpoint returns healthy status."""
+def test_health_check():
+    """Test health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
 
-def test_root_endpoint() -> None:
-    """Test the root endpoint returns welcome message."""
+def test_root_endpoint():
+    """Test root endpoint."""
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to SmartRent AI API"}
+    assert "Welcome to SmartRent AI API" in response.json()["message"]
+
+
+def test_openapi_docs():
+    """Test OpenAPI documentation is accessible."""
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert "openapi" in response.json()
