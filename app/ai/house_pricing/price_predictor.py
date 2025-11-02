@@ -1,12 +1,13 @@
+import ast
+import csv
 import pickle
+import re
 import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
-from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from xgboost import XGBRegressor
 
@@ -18,36 +19,38 @@ class TwoStageUncertaintyModel:
 
     def __init__(
         self,
-        model0,
-        model1,
-        n_splits=5,
-        method="squared_error",
-        seed=None,
-        lower_bound=1e-6,
-        alpha=0.1,
-        gamma0=1.65,
-        gamma1=1.75,
-        features1=None,
-    ):
+        model0: Any,
+        model1: Any,
+        n_splits: int = 5,
+        method: str = "squared_error",
+        seed: Optional[int] = None,
+        lower_bound: float = 1e-6,
+        alpha: float = 0.1,
+        gamma0: float = 1.65,
+        gamma1: float = 1.75,
+        features1: Optional[Any] = None,
+    ) -> None:
         self.model0, self.model1 = model0, model1
         self.n_splits, self.method, self.seed = n_splits, method, seed
         self.gamma0, self.gamma1 = gamma0, gamma1
         self.lower_bound, self.alpha, self.features1 = lower_bound, alpha, features1
         self.fitted_ = False
 
-    def _prepare_features_for_model1(self, X, y_pred):
+    def _prepare_features_for_model1(
+        self, X: pd.DataFrame, y_pred: Any
+    ) -> pd.DataFrame:
         X_tmp = X[self.features1].copy() if self.features1 != "same" else X.copy()
         X_tmp["y_pred"] = y_pred
         return X_tmp
 
-    def _get_target(self, y, oof_preds):
+    def _get_target(self, y: np.ndarray, oof_preds: np.ndarray) -> np.ndarray:
         return (
             (y - oof_preds) ** 2 + 1e-6
             if self.method == "squared_error"
             else np.abs(y - oof_preds)
         )
 
-    def fit(self, X, y):
+    def fit(self, X: pd.DataFrame, y: Any) -> "TwoStageUncertaintyModel":
         y = np.asarray(y)
         oof_preds = np.zeros_like(y, dtype=float)
         kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
@@ -68,7 +71,7 @@ class TwoStageUncertaintyModel:
         self.fitted_ = True
         return self
 
-    def predict_components(self, X):
+    def predict_components(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         if not self.fitted_:
             raise ValueError("Call fit() before predict()")
         y_hat = self.model0.predict(X)
@@ -81,13 +84,15 @@ class TwoStageUncertaintyModel:
         err_hat = np.maximum(err_hat, self.lower_bound)
         return y_hat, err_hat
 
-    def build_interval(self, y_hat, err_hat):
+    def build_interval(
+        self, y_hat: np.ndarray, err_hat: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         err_hat_sqrt = np.sqrt(err_hat) if self.method == "squared_error" else err_hat
         lower = y_hat - self.gamma0 * err_hat_sqrt
         upper = y_hat + self.gamma1 * err_hat_sqrt
         return lower, upper
 
-    def predict(self, X):
+    def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         y_hat, err_hat = self.predict_components(X)
         lower, upper = self.build_interval(y_hat, err_hat)
         return y_hat, lower, upper
@@ -96,16 +101,18 @@ class TwoStageUncertaintyModel:
 class TwoStageDiverseEnsemble:
     """Ensemble of multiple TwoStageUncertaintyModel with different hyperparameters."""
 
-    def __init__(self, model_configs, seed=None):
+    def __init__(
+        self, model_configs: List[Tuple[Any, Any]], seed: Optional[int] = None
+    ) -> None:
         """
         Args:
             model_configs: list of tuples (model0_instance, model1_instance)
         """
         self.model_configs = model_configs
-        self.models = []
+        self.models: List["TwoStageUncertaintyModel"] = []
         self.seed = seed
 
-    def fit(self, X, y):
+    def fit(self, X: pd.DataFrame, y: Any) -> "TwoStageDiverseEnsemble":
         self.models = []
         for i, (m0, m1) in enumerate(self.model_configs):
             model = TwoStageUncertaintyModel(
@@ -118,7 +125,7 @@ class TwoStageDiverseEnsemble:
             self.models.append(model)
         return self
 
-    def predict(self, X):
+    def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         y_hats, lowers, uppers = [], [], []
         for model in self.models:
             y_hat, lower, upper = model.predict(X)
@@ -135,8 +142,8 @@ class TwoStageDiverseEnsemble:
 class RealEstatePricePredictorModel:
     """Main model for Vietnamese real estate price prediction."""
 
-    def __init__(self):
-        self.model = None
+    def __init__(self) -> None:
+        self.model: Optional[Any] = None
         self.scaler = StandardScaler()
         self.encoder = OrdinalEncoder(
             handle_unknown="use_encoded_value", unknown_value=-1
@@ -148,7 +155,9 @@ class RealEstatePricePredictorModel:
         self.training_data = (
             None  # Store training data for KNN features during prediction
         )
-        self.location_encoders = {}  # Store encoders for location columns
+        self.location_encoders: Dict[
+            str, OrdinalEncoder
+        ] = {}  # Store encoders for location columns
         self.is_fitted = False
         # Model hyperparameters
         self.SEED = 42
@@ -237,7 +246,7 @@ class RealEstatePricePredictorModel:
 
         return df
 
-    def _create_knn_features(
+    def _create_knn_features(  # noqa: C901
         self, df: pd.DataFrame, target_col: str = "price", is_training: bool = False
     ) -> pd.DataFrame:
         """
@@ -326,7 +335,9 @@ class RealEstatePricePredictorModel:
 
         return df
 
-    def fit(self, train_data: pd.DataFrame, target_column: str = "price"):
+    def fit(
+        self, train_data: pd.DataFrame, target_column: str = "price"
+    ) -> "RealEstatePricePredictorModel":
         """
         Train the model with Vietnamese real estate data
         """
@@ -372,8 +383,6 @@ class RealEstatePricePredictorModel:
         y = y[valid_idx]
 
         # Additionally remove infinite values
-        import numpy as np
-
         valid_idx2 = (~np.isinf(y)) & (~np.isinf(X).any(axis=1))
         X = X[valid_idx2]
         y = y[valid_idx2]
@@ -400,7 +409,9 @@ class RealEstatePricePredictorModel:
 
         return self
 
-    def load_and_train_from_sql(self, sql_file_path: str = None):
+    def load_and_train_from_sql(
+        self, sql_file_path: Optional[str] = None
+    ) -> "RealEstatePricePredictorModel":
         """
         Load training data from SQL file and train the model
 
@@ -470,6 +481,9 @@ class RealEstatePricePredictorModel:
 
         # Scale and predict
         X_scaled = pd.DataFrame(self.scaler.transform(X), columns=X.columns)
+        if self.model is None:
+            raise ValueError("Model is not loaded or fitted")
+
         predicted_price, lower_bound, upper_bound = self.model.predict(X_scaled)
 
         return {
@@ -600,7 +614,7 @@ class RealEstatePricePredictorModel:
             "confidence": prediction_result["confidence_interval"],
         }
 
-    def save_model(self, filepath: str):
+    def save_model(self, filepath: str) -> None:
         """Save trained model to file"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before saving")
@@ -617,7 +631,7 @@ class RealEstatePricePredictorModel:
         with open(filepath, "wb") as f:
             pickle.dump(model_data, f)
 
-    def load_model(self, filepath: str):
+    def load_model(self, filepath: str) -> None:
         """Load trained model from file"""
         with open(filepath, "rb") as f:
             model_data = pickle.load(f)
@@ -630,7 +644,13 @@ class RealEstatePricePredictorModel:
         self.is_fitted = model_data["is_fitted"]
 
 
-def winkler_score(y_true, lower, upper, alpha=0.1, return_coverage=False):
+def winkler_score(
+    y_true: Any,
+    lower: Any,
+    upper: Any,
+    alpha: float = 0.1,
+    return_coverage: bool = False,
+) -> Any:
     """
     Compute the Winkler Interval Score for prediction intervals.
     """
@@ -652,13 +672,6 @@ def winkler_score(y_true, lower, upper, alpha=0.1, return_coverage=False):
         return np.mean(score), coverage
 
     return np.mean(score)
-
-
-import ast
-import csv
-
-# --- Thêm hàm load_data_from_sql_insert để đọc dữ liệu từ file SQL dạng INSERT ---
-import re
 
 
 def load_data_from_sql_insert(filepath: str) -> pd.DataFrame:
@@ -689,7 +702,7 @@ def load_data_from_sql_insert(filepath: str) -> pd.DataFrame:
         # Dùng csv.reader để tách giá trị an toàn với dấu phẩy trong chuỗi
         reader = csv.reader([rec], delimiter=",", quotechar="'", skipinitialspace=True)
         vals = next(reader)
-        row = []
+        row: List[Any] = []
         for v in vals:
             v = v.strip()
             if v.upper() == "NULL":
