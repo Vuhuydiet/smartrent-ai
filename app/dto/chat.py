@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):
@@ -38,6 +39,7 @@ class ConversationHistory(BaseModel):
 
 class AccountTokenInfo(BaseModel):
     """Information about API account token usage and limits."""
+
     requests_made_today: Optional[int] = None
     requests_remaining_today: Optional[int] = None
     daily_request_limit: Optional[int] = None

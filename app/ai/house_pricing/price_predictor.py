@@ -18,36 +18,36 @@ class TwoStageUncertaintyModel:
 
     def __init__(
         self,
-        model0,
-        model1,
-        n_splits=5,
-        method="squared_error",
-        seed=None,
-        lower_bound=1e-6,
-        alpha=0.1,
-        gamma0=1.65,
-        gamma1=1.75,
-        features1=None,
-    ):
+        model0: Any,
+        model1: Any,
+        n_splits: int = 5,
+        method: str = "squared_error",
+        seed: Optional[int] = None,
+        lower_bound: float = 1e-6,
+        alpha: float = 0.1,
+        gamma0: float = 1.65,
+        gamma1: float = 1.75,
+        features1: Optional[Any] = None,
+    ) -> None:
         self.model0, self.model1 = model0, model1
         self.n_splits, self.method, self.seed = n_splits, method, seed
         self.gamma0, self.gamma1 = gamma0, gamma1
         self.lower_bound, self.alpha, self.features1 = lower_bound, alpha, features1
         self.fitted_ = False
 
-    def _prepare_features_for_model1(self, X, y_pred):
+    def _prepare_features_for_model1(self, X: Any, y_pred: Any) -> Any:
         X_tmp = X[self.features1].copy() if self.features1 != "same" else X.copy()
         X_tmp["y_pred"] = y_pred
         return X_tmp
 
-    def _get_target(self, y, oof_preds):
+    def _get_target(self, y: Any, oof_preds: Any) -> Any:
         return (
             (y - oof_preds) ** 2 + 1e-6
             if self.method == "squared_error"
             else np.abs(y - oof_preds)
         )
 
-    def fit(self, X, y):
+    def fit(self, X: Any, y: Any) -> None:
         y = np.asarray(y)
         oof_preds = np.zeros_like(y, dtype=float)
         kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
@@ -68,7 +68,7 @@ class TwoStageUncertaintyModel:
         self.fitted_ = True
         return self
 
-    def predict_components(self, X):
+    def predict_components(self, X: Any) -> Tuple[Any, Any]:
         if not self.fitted_:
             raise ValueError("Call fit() before predict()")
         y_hat = self.model0.predict(X)
@@ -81,13 +81,13 @@ class TwoStageUncertaintyModel:
         err_hat = np.maximum(err_hat, self.lower_bound)
         return y_hat, err_hat
 
-    def build_interval(self, y_hat, err_hat):
+    def build_interval(self, y_hat: Any, err_hat: Any) -> Tuple[Any, Any]:
         err_hat_sqrt = np.sqrt(err_hat) if self.method == "squared_error" else err_hat
         lower = y_hat - self.gamma0 * err_hat_sqrt
         upper = y_hat + self.gamma1 * err_hat_sqrt
         return lower, upper
 
-    def predict(self, X):
+    def predict(self, X: Any) -> Tuple[Any, Any, Any]:
         y_hat, err_hat = self.predict_components(X)
         lower, upper = self.build_interval(y_hat, err_hat)
         return y_hat, lower, upper
@@ -135,8 +135,8 @@ class TwoStageDiverseEnsemble:
 class RealEstatePricePredictorModel:
     """Main model for Vietnamese real estate price prediction."""
 
-    def __init__(self):
-        self.model = None
+    def __init__(self) -> None:
+        self.model: Optional[Any] = None
         self.scaler = StandardScaler()
         self.encoder = OrdinalEncoder(
             handle_unknown="use_encoded_value", unknown_value=-1
@@ -148,7 +148,7 @@ class RealEstatePricePredictorModel:
         self.training_data = (
             None  # Store training data for KNN features during prediction
         )
-        self.location_encoders = {}  # Store encoders for location columns
+        self.location_encoders: Dict[str, Any] = {}  # Store encoders for location columns
         self.is_fitted = False
         # Model hyperparameters
         self.SEED = 42
@@ -326,7 +326,7 @@ class RealEstatePricePredictorModel:
 
         return df
 
-    def fit(self, train_data: pd.DataFrame, target_column: str = "price"):
+    def fit(self, train_data: pd.DataFrame, target_column: str = "price") -> None:
         """
         Train the model with Vietnamese real estate data
         """
@@ -400,7 +400,7 @@ class RealEstatePricePredictorModel:
 
         return self
 
-    def load_and_train_from_sql(self, sql_file_path: str = None):
+    def load_and_train_from_sql(self, sql_file_path: Optional[str] = None) -> None:
         """
         Load training data from SQL file and train the model
 
@@ -600,7 +600,7 @@ class RealEstatePricePredictorModel:
             "confidence": prediction_result["confidence_interval"],
         }
 
-    def save_model(self, filepath: str):
+    def save_model(self, filepath: str) -> None:
         """Save trained model to file"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before saving")
@@ -617,7 +617,7 @@ class RealEstatePricePredictorModel:
         with open(filepath, "wb") as f:
             pickle.dump(model_data, f)
 
-    def load_model(self, filepath: str):
+    def load_model(self, filepath: str) -> None:
         """Load trained model from file"""
         with open(filepath, "rb") as f:
             model_data = pickle.load(f)
@@ -630,7 +630,13 @@ class RealEstatePricePredictorModel:
         self.is_fitted = model_data["is_fitted"]
 
 
-def winkler_score(y_true, lower, upper, alpha=0.1, return_coverage=False):
+def winkler_score(
+    y_true: Any,
+    lower: Any,
+    upper: Any,
+    alpha: float = 0.1,
+    return_coverage: bool = False,
+) -> Any:
     """
     Compute the Winkler Interval Score for prediction intervals.
     """
