@@ -1,12 +1,13 @@
+import ast
+import csv
 import pickle
+import re
 import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
-from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from xgboost import XGBRegressor
 
@@ -66,7 +67,7 @@ class TwoStageUncertaintyModel:
         self.model1.fit(X_resid_feat, target)
         self.model0.fit(X, y)
         self.fitted_ = True
-        return self
+        return None
 
     def predict_components(self, X: Any) -> Tuple[Any, Any]:
         if not self.fitted_:
@@ -96,16 +97,18 @@ class TwoStageUncertaintyModel:
 class TwoStageDiverseEnsemble:
     """Ensemble of multiple TwoStageUncertaintyModel with different hyperparameters."""
 
-    def __init__(self, model_configs, seed=None):
+    def __init__(
+        self, model_configs: List[Tuple[Any, Any]], seed: Optional[int] = None
+    ) -> None:
         """
         Args:
             model_configs: list of tuples (model0_instance, model1_instance)
         """
         self.model_configs = model_configs
-        self.models = []
+        self.models: List["TwoStageUncertaintyModel"] = []
         self.seed = seed
 
-    def fit(self, X, y):
+    def fit(self, X: pd.DataFrame, y: Any) -> "TwoStageDiverseEnsemble":
         self.models = []
         for i, (m0, m1) in enumerate(self.model_configs):
             model = TwoStageUncertaintyModel(
@@ -118,7 +121,7 @@ class TwoStageDiverseEnsemble:
             self.models.append(model)
         return self
 
-    def predict(self, X):
+    def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         y_hats, lowers, uppers = [], [], []
         for model in self.models:
             y_hat, lower, upper = model.predict(X)
@@ -148,7 +151,9 @@ class RealEstatePricePredictorModel:
         self.training_data = (
             None  # Store training data for KNN features during prediction
         )
-        self.location_encoders: Dict[str, Any] = {}  # Store encoders for location columns
+        self.location_encoders: Dict[
+            str, Any
+        ] = {}  # Store encoders for location columns
         self.is_fitted = False
         # Model hyperparameters
         self.SEED = 42
@@ -237,7 +242,7 @@ class RealEstatePricePredictorModel:
 
         return df
 
-    def _create_knn_features(
+    def _create_knn_features(  # noqa: C901
         self, df: pd.DataFrame, target_col: str = "price", is_training: bool = False
     ) -> pd.DataFrame:
         """
@@ -372,8 +377,6 @@ class RealEstatePricePredictorModel:
         y = y[valid_idx]
 
         # Additionally remove infinite values
-        import numpy as np
-
         valid_idx2 = (~np.isinf(y)) & (~np.isinf(X).any(axis=1))
         X = X[valid_idx2]
         y = y[valid_idx2]
@@ -394,11 +397,12 @@ class RealEstatePricePredictorModel:
             ),
         ]
 
-        self.model = TwoStageDiverseEnsemble(model_configs, seed=self.SEED)
+        # Corrected instantiation to match the constructor signature
+        self.model = TwoStageDiverseEnsemble(model_configs, self.SEED)
         self.model.fit(X_scaled, y)
         self.is_fitted = True
 
-        return self
+        return None
 
     def load_and_train_from_sql(self, sql_file_path: Optional[str] = None) -> None:
         """
@@ -421,7 +425,7 @@ class RealEstatePricePredictorModel:
         # Train model
         self.fit(df, target_column="price")
 
-        return self
+        return None
 
     def predict_price_range(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -470,6 +474,9 @@ class RealEstatePricePredictorModel:
 
         # Scale and predict
         X_scaled = pd.DataFrame(self.scaler.transform(X), columns=X.columns)
+        if self.model is None:
+            raise ValueError("Model is not loaded or fitted")
+
         predicted_price, lower_bound, upper_bound = self.model.predict(X_scaled)
 
         return {
@@ -660,13 +667,6 @@ def winkler_score(
     return np.mean(score)
 
 
-import ast
-import csv
-
-# --- Thêm hàm load_data_from_sql_insert để đọc dữ liệu từ file SQL dạng INSERT ---
-import re
-
-
 def load_data_from_sql_insert(filepath: str) -> pd.DataFrame:
     """
     Đọc file SQL dạng INSERT INTO ... VALUES (...),...; và trả về DataFrame.
@@ -695,7 +695,7 @@ def load_data_from_sql_insert(filepath: str) -> pd.DataFrame:
         # Dùng csv.reader để tách giá trị an toàn với dấu phẩy trong chuỗi
         reader = csv.reader([rec], delimiter=",", quotechar="'", skipinitialspace=True)
         vals = next(reader)
-        row = []
+        row: List[Any] = []
         for v in vals:
             v = v.strip()
             if v.upper() == "NULL":

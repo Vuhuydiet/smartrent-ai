@@ -13,11 +13,11 @@ venv_pip := venv_bin_dir / if os_family() == "windows" { "pip.exe" } else { "pip
 # Cross-platform python launcher
 python_launcher := if os_family() == "windows" { "py -3.10" } else { "python3" }
 
-# Cross-platform venv creation command (prefer pyenv, then 3.10, then defaults)
+# Cross-platform venv creation command (prefer the native py launcher on Windows, then pyenv, then defaults)
 create_venv_cmd := if os_family() == "windows" {
-  "if (Get-Command pyenv -ErrorAction SilentlyContinue) { pyenv exec python -m venv venv } \n"
-  + "elseif (Get-Command py -ErrorAction SilentlyContinue) { py -3.10 -m venv venv; if ($LASTEXITCODE -ne 0) { py -3 -m venv venv } } \n"
-  + "else { python -m venv venv }"
+    "if (Get-Command py -ErrorAction SilentlyContinue) { py -3.10 -m venv venv; if ($LASTEXITCODE -ne 0) { py -3 -m venv venv } } \n"
+    + "elseif (Get-Command pyenv -ErrorAction SilentlyContinue) { pyenv exec python -m venv venv } \n"
+    + "else { python -m venv venv }"
 } else {
   "if command -v pyenv >/dev/null 2>&1; then pyenv exec python -m venv venv; "
   + "elif command -v python3.10 >/dev/null 2>&1; then python3.10 -m venv venv; "
@@ -52,15 +52,15 @@ pre-commit-install:
 
 # Run database migrations
 migrate:
-    {{venv_bin_dir}}/alembic upgrade head
+    {{venv_python}} -c "import sys; from alembic.config import main as _main; sys.argv=['alembic','upgrade','head']; _main()"
 
 # Create new migration
 migrate-create description:
-    {{venv_bin_dir}}/alembic revision --autogenerate -m "{{description}}"
+    {{venv_python}} -c "import sys; from alembic.config import main as _main; sys.argv=['alembic','revision','--autogenerate','-m','{{description}}']; _main()"
 
 # Downgrade last migration
 migrate-downgrade:
-    {{venv_bin_dir}}/alembic downgrade -1
+    {{venv_python}} -c "import sys; from alembic.config import main as _main; sys.argv=['alembic','downgrade','-1']; _main()"
 
 # Run tests
 test:

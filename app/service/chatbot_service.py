@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from app.ai import get_llm_instance
 from app.ai.llm.gemini_client import GeminiClient
@@ -11,7 +11,6 @@ from app.dto.chat import (
     ChatRequest,
     ChatResponse,
     ConversationHistory,
-    TokenUsage,
 )
 
 logger = logging.getLogger(__name__)
