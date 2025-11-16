@@ -36,21 +36,19 @@ class TwoStageUncertaintyModel:
         self.lower_bound, self.alpha, self.features1 = lower_bound, alpha, features1
         self.fitted_ = False
 
-    def _prepare_features_for_model1(
-        self, X: pd.DataFrame, y_pred: Any
-    ) -> pd.DataFrame:
+    def _prepare_features_for_model1(self, X: Any, y_pred: Any) -> Any:
         X_tmp = X[self.features1].copy() if self.features1 != "same" else X.copy()
         X_tmp["y_pred"] = y_pred
         return X_tmp
 
-    def _get_target(self, y: np.ndarray, oof_preds: np.ndarray) -> np.ndarray:
+    def _get_target(self, y: Any, oof_preds: Any) -> Any:
         return (
             (y - oof_preds) ** 2 + 1e-6
             if self.method == "squared_error"
             else np.abs(y - oof_preds)
         )
 
-    def fit(self, X: pd.DataFrame, y: Any) -> "TwoStageUncertaintyModel":
+    def fit(self, X: Any, y: Any) -> None:
         y = np.asarray(y)
         oof_preds = np.zeros_like(y, dtype=float)
         kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
@@ -69,9 +67,9 @@ class TwoStageUncertaintyModel:
         self.model1.fit(X_resid_feat, target)
         self.model0.fit(X, y)
         self.fitted_ = True
-        return self
+        return None
 
-    def predict_components(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    def predict_components(self, X: Any) -> Tuple[Any, Any]:
         if not self.fitted_:
             raise ValueError("Call fit() before predict()")
         y_hat = self.model0.predict(X)
@@ -84,15 +82,13 @@ class TwoStageUncertaintyModel:
         err_hat = np.maximum(err_hat, self.lower_bound)
         return y_hat, err_hat
 
-    def build_interval(
-        self, y_hat: np.ndarray, err_hat: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def build_interval(self, y_hat: Any, err_hat: Any) -> Tuple[Any, Any]:
         err_hat_sqrt = np.sqrt(err_hat) if self.method == "squared_error" else err_hat
         lower = y_hat - self.gamma0 * err_hat_sqrt
         upper = y_hat + self.gamma1 * err_hat_sqrt
         return lower, upper
 
-    def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def predict(self, X: Any) -> Tuple[Any, Any, Any]:
         y_hat, err_hat = self.predict_components(X)
         lower, upper = self.build_interval(y_hat, err_hat)
         return y_hat, lower, upper
@@ -156,7 +152,7 @@ class RealEstatePricePredictorModel:
             None  # Store training data for KNN features during prediction
         )
         self.location_encoders: Dict[
-            str, OrdinalEncoder
+            str, Any
         ] = {}  # Store encoders for location columns
         self.is_fitted = False
         # Model hyperparameters
@@ -335,9 +331,7 @@ class RealEstatePricePredictorModel:
 
         return df
 
-    def fit(
-        self, train_data: pd.DataFrame, target_column: str = "price"
-    ) -> "RealEstatePricePredictorModel":
+    def fit(self, train_data: pd.DataFrame, target_column: str = "price") -> None:
         """
         Train the model with Vietnamese real estate data
         """
@@ -403,15 +397,14 @@ class RealEstatePricePredictorModel:
             ),
         ]
 
-        self.model = TwoStageDiverseEnsemble(model_configs, seed=self.SEED)
+        # Corrected instantiation to match the constructor signature
+        self.model = TwoStageDiverseEnsemble(model_configs, self.SEED)
         self.model.fit(X_scaled, y)
         self.is_fitted = True
 
-        return self
+        return None
 
-    def load_and_train_from_sql(
-        self, sql_file_path: Optional[str] = None
-    ) -> "RealEstatePricePredictorModel":
+    def load_and_train_from_sql(self, sql_file_path: Optional[str] = None) -> None:
         """
         Load training data from SQL file and train the model
 
@@ -432,7 +425,7 @@ class RealEstatePricePredictorModel:
         # Train model
         self.fit(df, target_column="price")
 
-        return self
+        return None
 
     def predict_price_range(self, property_data: Dict[str, Any]) -> Dict[str, Any]:
         """

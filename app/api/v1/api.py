@@ -1,15 +1,12 @@
 from fastapi import APIRouter
 
-from . import chat, completion, house_pricing_frontend, users
+from . import chat, price_suggestion, users
 
 api_router = APIRouter()
 api_router.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 api_router.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 api_router.include_router(
-    house_pricing_frontend.router,
-    prefix="/api/v1/house-pricing",
-    tags=["House Pricing"],
-)
-api_router.include_router(
-    completion.router, prefix="/api/v1/completion", tags=["completion"]
+    price_suggestion.router,
+    prefix="/api/v1/price-suggestion",
+    tags=["Price Suggestion"],
 )
