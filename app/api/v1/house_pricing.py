@@ -16,28 +16,25 @@ def get_model() -> RealEstatePricePredictorModel:
     return _model_instance
 
 
-@router.post("/get-price-suggestion", response_model=PriceSuggestionResponse)
-async def get_price_suggestion(
+@router.post("/get-price-range", response_model=PriceSuggestionResponse)
+async def get_price_range(
     request: PriceSuggestionRequest,
 ) -> PriceSuggestionResponse:
     """
-    Get price range suggestion for real estate properties
+    Get price range for real estate properties
 
-    This endpoint provides AI-powered price range suggestions based on:
+    This endpoint provides AI-powered price range predictions based on:
     - Property location (city, district, ward)
-    - Property type (House, Apartment, etc.)
+    - Property type (APARTMENT, HOUSE, ROOM, STUDIO)
     - Property area (optional)
     - Geographic coordinates (latitude, longitude)
-
-    Similar to popular Vietnamese real estate platforms like batdongsan.com,
-    this API helps users understand market price ranges for their properties.
 
     Returns:
         PriceSuggestionResponse: Contains price range in VND, location info, and property type
 
     Example:
-        Request: Property in My Tho, Tien Giang (60m² house)
-        Response: Price range 9.5M - 43.1M VND
+        Request: Property in Ba Dinh, Hanoi (APARTMENT)
+        Response: Price range 15M - 50M VND
     """
     try:
         # Load model
@@ -66,11 +63,11 @@ async def get_price_suggestion(
         return PriceSuggestionResponse(
             price_range={"min": total_price_min, "max": total_price_max},
             location=f"{request.district}, {request.city}",
-            property_type=request.property_type.value,  # Use enum value
+            property_type=request.property_type.value,
             currency="VND",
         )
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error getting price suggestion: {str(e)}"
+            status_code=500, detail=f"Error getting price range: {str(e)}"
         )

@@ -1,6 +1,16 @@
+from enum import Enum
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
+
+
+class HousingPropertyType(str, Enum):
+    """Enum for supported housing property types"""
+
+    APARTMENT = "APARTMENT"
+    HOUSE = "HOUSE"
+    ROOM = "ROOM"
+    STUDIO = "STUDIO"
 
 
 class PriceSuggestionRequest(BaseModel):
@@ -17,8 +27,8 @@ class PriceSuggestionRequest(BaseModel):
     ward: str = Field(
         ..., description="Ward or commune name (e.g., 'Dien Bien Ward', 'Ward 1')"
     )
-    property_type: str = Field(
-        ..., description="Type of property (House, Apartment, Villa, Office, etc.)"
+    property_type: HousingPropertyType = Field(
+        ..., description="Type of property (APARTMENT, HOUSE, ROOM, STUDIO)"
     )
     area: Optional[float] = Field(
         None, description="Property area in square meters (m²) - optional", gt=0

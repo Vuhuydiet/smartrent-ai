@@ -196,15 +196,20 @@ class RealEstatePricePredictorModel:
             df["month"] = df["post_date"].dt.month
             df.drop(["post_date"], axis=1, inplace=True)
 
-        # Handle Vietnamese property types
+        # Handle property types using new enum values
         if "property_type" in df.columns:
-            # Map Vietnamese property types to numeric
+            # Map property types to numeric values
             property_type_mapping = {
-                "Nhà trọ, phòng trọ": 1,
-                "Chung cư": 2,
-                "Cho thuê nhà trọ, phòng trọ": 3,
-                "Văn phòng": 4,
-                "Ký túc xá": 5,
+                "APARTMENT": 1,
+                "HOUSE": 2,
+                "ROOM": 3,
+                "STUDIO": 4,
+                # Backward compatibility with old Vietnamese types
+                "Nhà trọ, phòng trọ": 3,  # Map to ROOM
+                "Chung cư": 1,  # Map to APARTMENT
+                "Cho thuê nhà trọ, phòng trọ": 3,  # Map to ROOM
+                "Văn phòng": 4,  # Map to STUDIO
+                "Ký túc xá": 3,  # Map to ROOM
             }
             df["property_type_encoded"] = (
                 df["property_type"].map(property_type_mapping).fillna(0)

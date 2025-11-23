@@ -1,5 +1,3 @@
-import pytest
-
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -13,7 +11,7 @@ def test_house_pricing_api_structure():
     valid_data = {
         "latitude": 21.0285,
         "longitude": 105.8542,
-        "property_type": "Apartment",
+        "property_type": "APARTMENT",  # Updated to use enum value
         "city": "Hanoi",
         "district": "Ba Dinh",
         "ward": "Dien Bien Ward",
@@ -47,7 +45,7 @@ def test_house_pricing_api_validation():
     invalid_data = {
         "latitude": 50.0,  # Outside Vietnam range
         "longitude": 105.8542,
-        "property_type": "Apartment",
+        "property_type": "HOUSE",  # Updated to use enum value
         "city": "Hanoi",
         "district": "Ba Dinh",
         "ward": "Dien Bien Ward",
