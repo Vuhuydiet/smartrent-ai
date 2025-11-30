@@ -190,16 +190,22 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
 
         # Extract video analysis
         video_analysis = analysis_result.get("video_analysis", {})
+        total_videos = len(listing_data.videos)
+        valid_videos_count = video_analysis.get("total_videos_analyzed", total_videos)
+        video_issues = video_analysis.get("issues", [])
+
+        # Video is valid if: no videos OR (all videos are valid AND no issues)
+        video_is_valid = (total_videos == 0) or (
+            valid_videos_count == total_videos and len(video_issues) == 0
+        )
+
         video_validation = VideoValidation(
-            is_valid=video_analysis.get("is_valid", len(listing_data.videos) == 0),
-            total_videos=len(listing_data.videos),
-            valid_videos=video_analysis.get(
-                "total_videos_analyzed",
-                len(listing_data.videos) if listing_data.videos else 0,
-            ),
-            issues=video_analysis.get("issues", []),
+            is_valid=video_is_valid,
+            total_videos=total_videos,
+            valid_videos=valid_videos_count,
+            issues=video_issues,
             quality_score=video_analysis.get(
-                "quality_score", 1.0 if len(listing_data.videos) == 0 else 0.7
+                "quality_score", 1.0 if total_videos == 0 else 0.7
             ),
         )
 
@@ -330,11 +336,14 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
                 else 0.3,  # Changed from 2 to 1
             ),
             video_validation=VideoValidation(
-                is_valid=True,  # Fallback assumes videos are valid if present
+                is_valid=len(listing_data.videos)
+                == 0,  # Only valid if no videos (can't analyze in fallback)
                 total_videos=len(listing_data.videos),
-                valid_videos=len(listing_data.videos),
+                valid_videos=0
+                if len(listing_data.videos) > 0
+                else 0,  # Can't validate in fallback
                 issues=[clean_error_msg] if len(listing_data.videos) > 0 else [],
-                quality_score=0.8 if len(listing_data.videos) > 0 else 1.0,
+                quality_score=1.0 if len(listing_data.videos) == 0 else 0.5,
             ),
             content_validation=ContentValidation(
                 is_rental_related=True,
