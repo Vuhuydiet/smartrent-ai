@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -139,7 +139,6 @@ async def chatbot_health() -> dict[str, str]:
     """
     try:
         # Try to initialize the service to check if API key is configured
-        chatbot_service = ChatbotService()
         return {"status": "healthy", "service": "chatbot"}
     except ValueError as e:
         raise HTTPException(
