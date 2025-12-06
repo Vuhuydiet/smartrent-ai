@@ -2,7 +2,6 @@ from typing import Optional
 
 from app.ai.llm.base_llm import BaseLLM
 from app.ai.llm.gemini_client import GeminiClient
-from app.core.config import settings
 
 
 class LLMFactory:

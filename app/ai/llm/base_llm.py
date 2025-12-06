@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
-from app.dto.chat import ChatMessage, TokenUsage
+from app.dto.chat import TokenUsage
 
 
 class BaseLLM(ABC):

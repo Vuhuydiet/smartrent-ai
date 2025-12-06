@@ -72,6 +72,7 @@ async def verify_listing(
         error = ListingVerificationError(
             error="validation_error",
             message=f"Invalid request data: {str(e)}",
+            details=None,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -120,11 +121,11 @@ async def health_check() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "status": "unhealthy",
                 "error": str(e),
                 "service": "listing_verification",
             },
-        )  # type: ignore[no-any-return]
+        )

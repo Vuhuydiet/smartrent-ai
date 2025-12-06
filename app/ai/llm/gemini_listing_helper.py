@@ -40,7 +40,7 @@ class GeminiListingVerificationHelper:
                 f"Failed to download image {index+1}: HTTP {response.status_code}"
             )
 
-        pil_image = Image.open(BytesIO(response.content))
+        pil_image: Image.Image = Image.open(BytesIO(response.content))
         # Convert to RGB if necessary
         if pil_image.mode != "RGB":
             pil_image = pil_image.convert("RGB")
@@ -153,7 +153,7 @@ class GeminiListingVerificationHelper:
                 try:
                     response = requests.get(image_url, timeout=10)
                     if response.status_code == 200:
-                        pil_image = Image.open(BytesIO(response.content))
+                        pil_image: Image.Image = Image.open(BytesIO(response.content))
                         # Convert to RGB if necessary
                         if pil_image.mode != "RGB":
                             pil_image = pil_image.convert("RGB")

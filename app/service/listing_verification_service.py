@@ -252,6 +252,7 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
                 Suggestion(
                     category="general",
                     message=recommendation,
+                    field=None,
                     priority="medium",
                 )
             )
@@ -362,6 +363,7 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
                 Suggestion(
                     category="system",
                     message="AI analysis failed - manual review recommended",
+                    field=None,
                     priority="high",
                 )
             ],
