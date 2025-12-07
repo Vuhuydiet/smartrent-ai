@@ -1,6 +1,12 @@
 from fastapi import APIRouter
 
-from . import chat, completion, listing_verification, price_suggestion, users
+from . import (
+    chat,
+    completion,
+    listing_verification,
+    price_suggestion,
+    users,
+)
 
 api_router = APIRouter()
 api_router.include_router(users.router, prefix="/api/v1/users", tags=["users"])

@@ -1,19 +1,13 @@
+from typing import Any, cast
+
+import httpx
+
 from fastapi import APIRouter, HTTPException
 
-from app.ai.house_pricing.price_predictor import RealEstatePricePredictorModel
+from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
 
 router = APIRouter()
-
-_model_instance = None
-
-
-def get_model() -> RealEstatePricePredictorModel:
-    global _model_instance
-    if _model_instance is None:
-        _model_instance = RealEstatePricePredictorModel()
-        _model_instance.load_and_train_from_sql()
-    return _model_instance
 
 
 @router.post("/get-price-suggestion", response_model=PriceSuggestionResponse)
@@ -40,36 +34,49 @@ async def get_price_suggestion(
         Response: Price range 9.5M - 43.1M VND
     """
     try:
-        # Load model
-        model = get_model()
-
-        # Prepare input data
-        input_data = {
-            "latitude": request.latitude,
-            "longitude": request.longitude,
-            "property_type": request.property_type,
+        # Call SmartRent backend house pricing API via MCP
+        payload = {
             "city": request.city,
             "district": request.district,
             "ward": request.ward,
-            "post_date": "2025-11-07T00:00:00",  # Current date
+            "property_type": request.property_type,
+            "latitude": request.latitude,
+            "longitude": request.longitude,
         }
 
-        # Get price prediction
-        result = model.predict_price_range(input_data)
-        range_min = result["price_range"]["min"]  # triệu VND
-        range_max = result["price_range"]["max"]  # triệu VND
+        if request.area is not None:
+            payload["area"] = request.area
 
-        # Convert to VND for response
-        total_price_min = int(range_min * 1_000_000)  # VND
-        total_price_max = int(range_max * 1_000_000)  # VND
+        # Use configured backend URL
+        backend_url = settings.SMARTRENT_AI_URL.rstrip("/")
+        pricing_endpoint = f"{backend_url}/api/v1/house-pricing/get-price-range"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                pricing_endpoint,
+                json=payload,
+                timeout=60.0,  # Longer timeout for ML prediction
+            )
+            response.raise_for_status()
+            result = cast(dict[str, Any], response.json())
+
+        # Extract price range from response
+        price_range = result.get("price_range", {})
+        range_min = price_range.get("min", 0)  # VND
+        range_max = price_range.get("max", 0)  # VND
 
         return PriceSuggestionResponse(
-            price_range={"min": total_price_min, "max": total_price_max},
+            price_range={"min": range_min, "max": range_max},
             location=f"{request.district}, {request.city}",
             property_type=request.property_type,
             currency="VND",
         )
 
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Backend API error: {e.response.text}",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error getting price suggestion: {str(e)}"
