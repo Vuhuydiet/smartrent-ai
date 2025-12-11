@@ -70,7 +70,7 @@ def print_chat_result(result: Dict[str, Any], title: str = "Chat Response"):
     metadata = result.get("metadata", {})
 
     print(f"🤖 Assistant: {message.get('content', '')}")
-    
+
     if metadata:
         print(f"\n📊 Metadata:")
         if "function_calls" in metadata:
@@ -85,14 +85,14 @@ async def test_simple_query() -> None:
     """Test a simple property search query"""
     print("\n🧪 Test 1: Simple Search Query")
     print("-" * 60)
-    
+
     messages = [
         {
             "role": "user",
             "content": "I'm looking for a 2-bedroom apartment in Hanoi with a budget around $1000/month"
         }
     ]
-    
+
     print(f"👤 User: {messages[0]['content']}")
     result = await chat_with_ai(messages)
     print_chat_result(result, "Response")
@@ -102,7 +102,7 @@ async def test_multi_turn_conversation() -> None:
     """Test a multi-turn conversation"""
     print("\n🧪 Test 2: Multi-Turn Conversation")
     print("-" * 60)
-    
+
     messages = [
         {
             "role": "user",
@@ -117,11 +117,11 @@ async def test_multi_turn_conversation() -> None:
             "content": "I need 1 bedroom, budget is $600-800, and I prefer District 1 or District 3"
         }
     ]
-    
+
     for msg in messages:
         role_icon = "👤" if msg["role"] == "user" else "🤖"
         print(f"{role_icon} {msg['role'].capitalize()}: {msg['content'][:100]}...")
-    
+
     result = await chat_with_ai(messages)
     print_chat_result(result, "Response")
 
@@ -130,14 +130,14 @@ async def test_specific_requirements() -> None:
     """Test search with specific requirements"""
     print("\n🧪 Test 3: Search with Specific Requirements")
     print("-" * 60)
-    
+
     messages = [
         {
             "role": "user",
             "content": "Find me a furnished studio apartment near Hoan Kiem Lake, pet-friendly, with gym and parking, max $700"
         }
     ]
-    
+
     print(f"👤 User: {messages[0]['content']}")
     result = await chat_with_ai(messages)
     print_chat_result(result, "Response")
@@ -147,9 +147,9 @@ async def test_invalid_request() -> None:
     """Test error handling with invalid request"""
     print("\n🧪 Test 4: Invalid Request (Empty Messages)")
     print("-" * 60)
-    
+
     messages = []
-    
+
     print("👤 User: [sending empty messages array]")
     result = await chat_with_ai(messages)
     print_chat_result(result, "Response")
@@ -159,7 +159,7 @@ async def test_assistant_last_message() -> None:
     """Test error handling when last message is from assistant"""
     print("\n🧪 Test 5: Invalid Request (Last Message from Assistant)")
     print("-" * 60)
-    
+
     messages = [
         {
             "role": "user",
@@ -170,11 +170,11 @@ async def test_assistant_last_message() -> None:
             "content": "Hi! How can I help you?"
         }
     ]
-    
+
     for msg in messages:
         role_icon = "👤" if msg["role"] == "user" else "🤖"
         print(f"{role_icon} {msg['role'].capitalize()}: {msg['content']}")
-    
+
     result = await chat_with_ai(messages)
     print_chat_result(result, "Response")
 
