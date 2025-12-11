@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.ai import get_llm_instance
 from app.ai.llm.base_llm import BaseLLM
-from app.dto.chat import TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,6 @@ class CompletionRequest(BaseModel):
 class CompletionResponse(BaseModel):
     text: str
     model_used: str
-    token_usage: Optional[TokenUsage] = None
 
 
 def get_llm() -> BaseLLM:
@@ -56,12 +54,11 @@ async def completion(
 
     try:
         # Currently the BaseLLM interface expects a single string and returns (text, token_usage)
-        text, token_usage = await llm.generate_response(request.prompt)
+        text= await llm.generate_response(request.prompt)
 
         return CompletionResponse(
             text=text,
-            model_used=getattr(llm, "model_name", request.model or "unknown"),
-            token_usage=token_usage,
+            model_used=getattr(llm, "model_name", request.model or "unknown")
         )
 
     except HTTPException:
