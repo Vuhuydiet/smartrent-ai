@@ -35,7 +35,7 @@ async def get_price_suggestion(
     """
     try:
         # Call SmartRent backend house pricing API via MCP
-        payload = {
+        payload: dict[str, Any] = {
             "city": request.city,
             "district": request.district,
             "ward": request.ward,
