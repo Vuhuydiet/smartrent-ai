@@ -163,7 +163,7 @@ class ListingVerificationResponse(BaseModel):
 
     # Metadata
     verification_timestamp: datetime = Field(default_factory=datetime.now)
-    model_used: str = Field(default="gemini-2.5-pro")
+    model_used: str = Field(default="gemini-2.5-flash")
     processing_time_seconds: Optional[float] = None
 
 

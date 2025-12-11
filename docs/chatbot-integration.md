@@ -64,7 +64,7 @@ Send a message to the AI chatbot.
   "message": "To submit a maintenance request, you can...",
   "conversation_id": "uuid-conversation-id",
   "timestamp": "2024-01-15T10:30:00Z",
-  "model_used": "gemini-2.5-pro"
+  "model_used": "gemini-2.5-flash"
 }
 ```
 

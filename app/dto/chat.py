@@ -26,7 +26,7 @@ class ChatResponse(BaseModel):
     message: str
     conversation_id: str
     timestamp: datetime
-    model_used: str = "gemini-2.5-pro"
+    model_used: str = "gemini-2.5-flash"
     token_usage: Optional[TokenUsage] = None
 
 

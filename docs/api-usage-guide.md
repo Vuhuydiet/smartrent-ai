@@ -97,7 +97,7 @@ type HousingPropertyType = 'APARTMENT' | 'HOUSE' | 'ROOM' | 'STUDIO'
     }
   ],
   "verification_timestamp": "2025-11-23T15:30:00Z",
-  "model_used": "gemini-2.5-pro",
+  "model_used": "gemini-2.5-flash",
   "processing_time_seconds": 6.2
 }
 ```

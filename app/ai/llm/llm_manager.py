@@ -13,7 +13,7 @@ class LLMFactory:
     ) -> BaseLLM:
         """Create an LLM instance based on the specified type."""
         if llm_type.lower() == "gemini":
-            model_name = model_name or "gemini-2.5-pro"
+            model_name = model_name or "gemini-2.5-flash"
             return GeminiClient(model_name)
         else:
             raise ValueError(f"Unsupported LLM type: {llm_type}")

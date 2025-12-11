@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class GeminiClient(BaseLLM):
     """Gemini AI client implementation."""
 
-    def __init__(self, model_name: str = "gemini-2.5-pro"):
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
         """Initialize the Gemini client."""
         super().__init__(model_name)
 

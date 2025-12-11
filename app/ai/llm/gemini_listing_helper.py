@@ -29,7 +29,7 @@ class GeminiListingVerificationHelper:
 
         # Use latest models available in the new account
         self.vision_model = genai.GenerativeModel("gemini-2.5-flash")
-        self.text_model = genai.GenerativeModel("gemini-2.5-pro")
+        self.text_model = genai.GenerativeModel("gemini-2.5-flash")
         logger.info("Gemini models initialized successfully")
 
     def _process_image(self, image_url: str, index: int) -> Image.Image:

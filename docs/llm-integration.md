@@ -110,7 +110,7 @@ from app.ai.llm import LLMFactory, reset_llm_instance
 reset_llm_instance()
 
 # Create a specific LLM type (when more are added)
-llm = LLMFactory.create_llm("gemini", "gemini-2.5-pro")
+llm = LLMFactory.create_llm("gemini", "gemini-2.5-flash")
 ```
 
 ## Configuration
