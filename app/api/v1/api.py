@@ -4,7 +4,6 @@ from . import (
     chat,
     completion,
     listing_verification,
-    price_prediction,
     price_suggestion,
     users,
 )
@@ -12,9 +11,6 @@ from . import (
 api_router = APIRouter()
 api_router.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 api_router.include_router(chat.router, prefix="/api/v1", tags=["chat"])
-api_router.include_router(
-    price_prediction.router, prefix="/api/v1", tags=["price_prediction"]
-)
 api_router.include_router(
     completion.router, prefix="/api/v1/completion", tags=["completion"]
 )

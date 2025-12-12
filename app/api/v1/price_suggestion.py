@@ -1,83 +1,66 @@
-from typing import Any, cast
+import logging
 
-import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from fastapi import APIRouter, HTTPException
-
-from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
+from app.service.price_prediction_service import PricePredictionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/get-price-suggestion", response_model=PriceSuggestionResponse)
+def get_price_prediction_service() -> PricePredictionService:
+    """Dependency to get price prediction service instance."""
+    try:
+        return PricePredictionService()
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Price prediction service not available: {str(e)}",
+        )
+
+
+@router.post(
+    "/get-price-suggestion",
+    response_model=PriceSuggestionResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def get_price_suggestion(
     request: PriceSuggestionRequest,
+    service: PricePredictionService = Depends(get_price_prediction_service),
 ) -> PriceSuggestionResponse:
     """
-    Get price range suggestion for real estate properties
+    Get AI-powered price prediction for a property.
 
-    This endpoint provides AI-powered price range suggestions based on:
-    - Property location (city, district, ward)
-    - Property type (House, Apartment, etc.)
-    - Property area (optional)
-    - Geographic coordinates (latitude, longitude)
+    Provide property details to get an estimated price range based on:
+    - Location (city, district, ward)
+    - Property type (House, Apartment, Villa, Office, etc.)
+    - Area in square meters
+    - Geographic coordinates
 
-    Similar to popular Vietnamese real estate platforms like batdongsan.com,
-    this API helps users understand market price ranges for their properties.
+    The AI analyzes market data and provides realistic price ranges in VND.
 
-    Returns:
-        PriceSuggestionResponse: Contains price range in VND, location info, and property type
-
-    Example:
-        Request: Property in My Tho, Tien Giang (60m² house)
-        Response: Price range 9.5M - 43.1M VND
+    - **city**: City or province name (e.g., 'Hanoi', 'Ho Chi Minh')
+    - **district**: District name within the city
+    - **ward**: Ward name within the district
+    - **property_type**: Type of property
+    - **area**: Property area in m² (optional)
+    - **latitude**: Latitude coordinate
+    - **longitude**: Longitude coordinate
     """
     try:
-        # Call SmartRent backend house pricing API via MCP
-        payload: dict[str, Any] = {
-            "city": request.city,
-            "district": request.district,
-            "ward": request.ward,
-            "property_type": request.property_type,
-            "latitude": request.latitude,
-            "longitude": request.longitude,
-        }
-
-        if request.area is not None:
-            payload["area"] = request.area
-
-        # Use configured backend URL
-        backend_url = settings.SMARTRENT_AI_URL.rstrip("/")
-        pricing_endpoint = f"{backend_url}/api/v1/house-pricing/get-price-range"
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                pricing_endpoint,
-                json=payload,
-                timeout=60.0,  # Longer timeout for ML prediction
-            )
-            response.raise_for_status()
-            result = cast(dict[str, Any], response.json())
-
-        # Extract price range from response
-        price_range = result.get("price_range", {})
-        range_min = price_range.get("min", 0)  # VND
-        range_max = price_range.get("max", 0)  # VND
-
-        return PriceSuggestionResponse(
-            price_range={"min": range_min, "max": range_max},
-            location=f"{request.district}, {request.city}",
-            property_type=request.property_type,
-            currency="VND",
-        )
-
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Backend API error: {e.response.text}",
-        )
+        return await service.predict_price(request)
     except Exception as e:
+        logger.error(f"Price prediction failed: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting price suggestion: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Price prediction failed: {str(e)}",
         )
+
+
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def health_check() -> dict[str, str]:
+    """Health check endpoint for price prediction service."""
+    return {"status": "healthy", "service": "price_prediction"}
+
