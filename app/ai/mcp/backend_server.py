@@ -9,11 +9,10 @@ import httpx
 from typing import Optional, List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
+from app.core.config import settings
+
 # Initialize FastMCP server
 mcp = FastMCP("smartrent-backend")
-
-# Backend API configuration
-BACKEND_URL = "http://localhost:8080"  # Can be configured via environment variable
 
 
 @mcp.tool()
@@ -312,7 +311,7 @@ async def search_listings(
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"{BACKEND_URL}/v1/listings/search",
+                f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
                 json=filter_request,
                 timeout=30.0
             )
