@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
     SMARTRENT_AI_URL: str = "http://localhost:8000"
 
+    # Chat Configuration
+    MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 

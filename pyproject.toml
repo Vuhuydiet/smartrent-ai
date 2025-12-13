@@ -28,6 +28,7 @@ dependencies = [
     "aiomysql>=0.0.21",
     "anyio>=4.6.0",
     "mcp[cli]>=1.13.1",
+    "chat2edit>=0.0.1",
 ]
 
 [project.optional-dependencies]

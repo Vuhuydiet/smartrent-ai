@@ -267,6 +267,15 @@ wheels = [
 ]
 
 [[package]]
+name = "chat2edit"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/84/c1eb2dc6bc71566fbcd1864ab8dfe46ad9cc6abe9ba083e39145839c5316/chat2edit-0.0.1.tar.gz", hash = "sha256:814d83e087b22c4a966dafa77fccfb5964f9ebd0151a825e735978dfed91c90e", size = 28650, upload-time = "2024-11-23T17:25:55.598Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/59/9af667d91df7ac9045740d8ba314d6904602e45951968db48e9d98ca94eb/chat2edit-0.0.1-py3-none-any.whl", hash = "sha256:e7402d0c2963620f127e78b0e506a37542bff2fd4311d6fed0bc4c846805bdeb", size = 42176, upload-time = "2024-11-23T17:25:53.933Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1674,6 +1683,7 @@ dependencies = [
     { name = "aiomysql" },
     { name = "alembic" },
     { name = "anyio" },
+    { name = "chat2edit" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-generativeai" },
@@ -1725,6 +1735,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.12.0,<2.0.0" },
     { name = "anyio", specifier = ">=4.6.0" },
     { name = "black", marker = "extra == 'dev'", specifier = "==23.12.1" },
+    { name = "chat2edit", specifier = ">=0.0.1" },
     { name = "cryptography", specifier = "==41.0.7" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = "==7.0.0" },
