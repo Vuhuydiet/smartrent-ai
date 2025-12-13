@@ -46,15 +46,31 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
             parameters=Schema(
                 type=Type.OBJECT,
                 properties={
-                    "cityCode": Schema(type=Type.STRING, description="City code (01=Hanoi, 79=HCM)"),
-                    "districtCode": Schema(type=Type.STRING, description="District code"),
+                    "cityCode": Schema(
+                        type=Type.STRING, description="City code (01=Hanoi, 79=HCM)"
+                    ),
+                    "districtCode": Schema(
+                        type=Type.STRING, description="District code"
+                    ),
                     "wardCode": Schema(type=Type.STRING, description="Ward code"),
-                    "minPrice": Schema(type=Type.NUMBER, description="Minimum price in VND"),
-                    "maxPrice": Schema(type=Type.NUMBER, description="Minimum price in VND"),
-                    "minArea": Schema(type=Type.NUMBER, description="Minimum area in sqm"),
-                    "maxArea": Schema(type=Type.NUMBER, description="Maximum area in sqm"),
-                    "bedrooms": Schema(type=Type.INTEGER, description="Number of bedrooms"),
-                    "propertyType": Schema(type=Type.STRING, description="ROOM, APARTMENT, HOUSE, LAND"),
+                    "minPrice": Schema(
+                        type=Type.NUMBER, description="Minimum price in VND"
+                    ),
+                    "maxPrice": Schema(
+                        type=Type.NUMBER, description="Minimum price in VND"
+                    ),
+                    "minArea": Schema(
+                        type=Type.NUMBER, description="Minimum area in sqm"
+                    ),
+                    "maxArea": Schema(
+                        type=Type.NUMBER, description="Maximum area in sqm"
+                    ),
+                    "bedrooms": Schema(
+                        type=Type.INTEGER, description="Number of bedrooms"
+                    ),
+                    "propertyType": Schema(
+                        type=Type.STRING, description="ROOM, APARTMENT, HOUSE, LAND"
+                    ),
                     "listingType": Schema(type=Type.STRING, description="RENT or SALE"),
                 },
             ),
@@ -82,14 +98,20 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
 
             # Add system instruction as first message if no history
             if len(messages) == 1:
-                chat_history.append({
-                    "role": "user",
-                    "parts": [self.system_instruction],
-                })
-                chat_history.append({
-                    "role": "model",
-                    "parts": ["Understood. I will help users find real estate in Vietnam and respond in Vietnamese."],
-                })
+                chat_history.append(
+                    {
+                        "role": "user",
+                        "parts": [self.system_instruction],
+                    }
+                )
+                chat_history.append(
+                    {
+                        "role": "model",
+                        "parts": [
+                            "Understood. I will help users find real estate in Vietnam and respond in Vietnamese."
+                        ],
+                    }
+                )
 
             for msg in messages[:-1]:  # All except last message
                 chat_history.append(  # type: ignore
@@ -108,7 +130,9 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
             response = chat.send_message(last_message)  # type: ignore
 
             logger.info("=== Received response from Gemini ===")
-            logger.info(f"Response has {len(response.candidates[0].content.parts)} parts")
+            logger.info(
+                f"Response has {len(response.candidates[0].content.parts)} parts"
+            )
 
             # Check if Gemini wants to call a function
             tools_used: List[str] = []
@@ -140,21 +164,6 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
 
                         logger.info(f"Search returned {len(all_listings)} listings")
 
-                        # Simplify listings for AI - only essential fields to reduce token count
-                        simplified_listings = [
-                            {
-                                "listingId": l.get("listingId"),
-                                "price": l.get("price"),
-                                "area": l.get("area"),
-                                "bedrooms": l.get("bedrooms"),
-                                "bathrooms": l.get("bathrooms"),
-                                "district": l.get("districtName"),
-                                "ward": l.get("wardName"),
-                                "propertyType": l.get("propertyType"),
-                            }
-                            for l in all_listings
-                        ]
-
                         # Send simplified acknowledgment - we'll rank separately
                         response = chat.send_message(  # type: ignore
                             Content(
@@ -177,7 +186,9 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
                         break
                 else:
                     # No more function calls, get final text response
-                    logger.info(">>> No more function calls detected, extracting final response")
+                    logger.info(
+                        ">>> No more function calls detected, extracting final response"
+                    )
                     break
 
             # Extract final text response safely
@@ -200,28 +211,47 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
             # If we have listings, call AI separately to rank them
             if all_listings:
                 logger.info(f">>> Calling AI to rank {len(all_listings)} listings...")
-                ai_rankings = await self._rank_listings_with_ai(all_listings, messages[-1].content)
+                ai_rankings = await self._rank_listings_with_ai(
+                    all_listings, messages[-1].content
+                )
                 logger.info(f">>> AI provided {len(ai_rankings)} rankings")
 
                 # After ranking, call AI again to generate final message about TOP listings
                 if ai_rankings:
-                    sorted_rankings = sorted(ai_rankings, key=lambda x: x.get("score", 0), reverse=True)
-                    top_rankings = sorted_rankings[:settings.MAX_LISTINGS_RETURN]
+                    sorted_rankings = sorted(
+                        ai_rankings, key=lambda x: x.get("score", 0), reverse=True
+                    )
+                    top_rankings = sorted_rankings[: settings.MAX_LISTINGS_RETURN]
 
-                    logger.info(f">>> Calling AI to generate final message about top {len(top_rankings)} listings...")
-                    final_response = await self._generate_final_message(top_rankings, all_listings, messages[-1].content)
+                    logger.info(
+                        f">>> Calling AI to generate final message about top {len(top_rankings)} listings..."
+                    )
+                    final_response = await self._generate_final_message(
+                        top_rankings, all_listings, messages[-1].content
+                    )
                     logger.info(">>> Generated final message successfully")
 
             # Build listing_data from AI rankings
             if ai_rankings and all_listings:
-                logger.info(f">>> Building response from AI rankings: {len(ai_rankings)} items ranked")
+                logger.info(
+                    f">>> Building response from AI rankings: {len(ai_rankings)} items ranked"
+                )
                 # Sort by score (highest first) and take top N
-                sorted_rankings = sorted(ai_rankings, key=lambda x: x.get("score", 0), reverse=True)
-                top_ranking_ids = [r["listingId"] for r in sorted_rankings[:settings.MAX_LISTINGS_RETURN]]
+                sorted_rankings = sorted(
+                    ai_rankings, key=lambda x: x.get("score", 0), reverse=True
+                )
+                top_ranking_ids = [
+                    r["listingId"]
+                    for r in sorted_rankings[: settings.MAX_LISTINGS_RETURN]
+                ]
 
                 # Filter listings by top ranked IDs, preserve ranking order
-                listings_map = {listing["listingId"]: listing for listing in all_listings}
-                selected_listings = [listings_map[lid] for lid in top_ranking_ids if lid in listings_map]
+                listings_map = {
+                    listing["listingId"]: listing for listing in all_listings
+                }
+                selected_listings = [
+                    listings_map[lid] for lid in top_ranking_ids if lid in listings_map
+                ]
 
                 listing_data = {
                     "listings": selected_listings,
@@ -230,7 +260,9 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
                     "pageSize": len(selected_listings),
                     "totalPages": 1,
                     "selectedFromTotal": len(all_listings),
-                    "aiRankings": sorted_rankings[:settings.MAX_LISTINGS_RETURN],  # Include AI's reasoning
+                    "aiRankings": sorted_rankings[
+                        : settings.MAX_LISTINGS_RETURN
+                    ],  # Include AI's reasoning
                 }
                 logger.info(
                     f">>> SUCCESS: Returning {len(selected_listings)} top-ranked listings from {len(all_listings)} total"
@@ -238,12 +270,10 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
                 logger.info(f">>> Top ranked IDs: {top_ranking_ids}")
             elif all_listings:
                 # No rankings - shouldn't happen
-                logger.error(
-                    f">>> ERROR: Failed to get rankings from AI!"
-                )
+                logger.error(">>> ERROR: Failed to get rankings from AI!")
                 logger.error(f">>> all_listings count: {len(all_listings)}")
                 # Return first N as emergency fallback
-                selected_listings = all_listings[:settings.MAX_LISTINGS_RETURN]
+                selected_listings = all_listings[: settings.MAX_LISTINGS_RETURN]
                 listing_data = {
                     "listings": selected_listings,
                     "totalCount": len(selected_listings),
@@ -252,7 +282,9 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
                     "totalPages": 1,
                     "selectedFromTotal": len(all_listings),
                 }
-                logger.error(f">>> Emergency fallback: returning first {len(selected_listings)} listings")
+                logger.error(
+                    f">>> Emergency fallback: returning first {len(selected_listings)} listings"
+                )
             else:
                 logger.warning(">>> No listings available at all!")
 
@@ -328,16 +360,16 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
             # Simplify listings for AI
             simplified_listings = [
                 {
-                    "listingId": l.get("listingId"),
-                    "price": l.get("price"),
-                    "area": l.get("area"),
-                    "bedrooms": l.get("bedrooms"),
-                    "bathrooms": l.get("bathrooms"),
-                    "district": l.get("districtName"),
-                    "ward": l.get("wardName"),
-                    "propertyType": l.get("propertyType"),
+                    "listingId": listing.get("listingId"),
+                    "price": listing.get("price"),
+                    "area": listing.get("area"),
+                    "bedrooms": listing.get("bedrooms"),
+                    "bathrooms": listing.get("bathrooms"),
+                    "district": listing.get("districtName"),
+                    "ward": listing.get("wardName"),
+                    "propertyType": listing.get("propertyType"),
                 }
-                for l in all_listings
+                for listing in all_listings
             ]
 
             # Create ranking prompt
@@ -370,28 +402,30 @@ Chỉ trả về JSON, không thêm text nào khác."""
             response_text = response.text.strip()
 
             # Try to extract JSON from markdown code block if present
-            json_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', response_text, re.DOTALL)
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\])\s*```", response_text, re.DOTALL
+            )
             if json_match:
                 response_text = json_match.group(1)
 
             # Remove any leading/trailing non-JSON text
-            if response_text.startswith('['):
+            if response_text.startswith("["):
                 # Find the end of JSON array
                 try:
                     rankings = json.loads(response_text)
                 except json.JSONDecodeError:
                     # Try to find just the JSON array portion
-                    json_end = response_text.rfind(']')
+                    json_end = response_text.rfind("]")
                     if json_end > 0:
-                        rankings = json.loads(response_text[:json_end + 1])
+                        rankings = json.loads(response_text[: json_end + 1])
                     else:
                         raise
             else:
                 # Try to find JSON array in response
-                json_start = response_text.find('[')
-                json_end = response_text.rfind(']')
+                json_start = response_text.find("[")
+                json_end = response_text.rfind("]")
                 if json_start >= 0 and json_end > json_start:
-                    rankings = json.loads(response_text[json_start:json_end + 1])
+                    rankings = json.loads(response_text[json_start : json_end + 1])
                 else:
                     raise ValueError("No JSON array found in response")
 
@@ -422,7 +456,7 @@ Chỉ trả về JSON, không thêm text nào khác."""
         """
         try:
             # Get full details of top listings
-            listings_map = {l["listingId"]: l for l in all_listings}
+            listings_map = {listing["listingId"]: listing for listing in all_listings}
             top_listings = [
                 listings_map[r["listingId"]]
                 for r in top_rankings
@@ -456,8 +490,3 @@ Chỉ trả về đoạn text tiếng Việt, KHÔNG thêm JSON hay format khác
             logger.error(f"Error generating final message: {e}")
             # Fallback message
             return f"Tôi đã tìm được {len(top_rankings)} bất động sản phù hợp với yêu cầu của bạn. Hãy xem chi tiết bên dưới."
-
-
-
-
-
