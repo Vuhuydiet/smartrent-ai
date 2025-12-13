@@ -15,9 +15,16 @@ def get_chat_service() -> ChatService:
     try:
         return ChatService()
     except ValueError as e:
+        logger.error(f"Chat service initialization failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat service not available: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error initializing chat service: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat service initialization error: {str(e)}",
         )
 
 
@@ -54,10 +61,14 @@ async def chat(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {str(e)}")
+        logger.error(
+            f"Error in chat endpoint: {type(e).__name__}: {str(e)}",
+            exc_info=True,
+            extra={"request": chat_request.model_dump()}
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing your message",
+            detail=f"Error processing message: {type(e).__name__}: {str(e)}",
         )
 
 
@@ -71,13 +82,14 @@ async def chat_health() -> dict[str, str]:
         ChatService()
         return {"status": "healthy", "service": "chat"}
     except ValueError as e:
+        logger.error(f"Chat service unavailable: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Chat service unavailable: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"Error checking chat health: {str(e)}")
+        logger.error(f"Error checking chat health: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error checking chat service health",
+            detail=f"Error checking chat service health: {type(e).__name__}: {str(e)}",
         )

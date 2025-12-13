@@ -81,7 +81,7 @@ When users ask for price suggestions:
 
         # Initialize model with function calling
         self.model = genai.GenerativeModel(  # type: ignore[call-arg]
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-2.0-flash",
             tools=[predict_price_declaration],  # type: ignore[arg-type]
         )
         self.system_instruction = system_instruction

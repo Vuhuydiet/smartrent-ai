@@ -39,102 +39,106 @@ Important notes:
 - Default listing_type is RENT unless user specifies otherwise
 - Be conversational and helpful, not robotic"""
 
-        # Define search_listings tool using dictionary format
-        search_listings_declaration: Dict[str, Any] = {
-            "name": "search_listings",
-            "description": "Search property listings from SmartRent backend. Use this when users want to find rental properties, apartments, houses, or other real estate.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "province_code": {
-                        "type": "string",
-                        "description": "Province code (e.g., '01' for Hanoi, '79' for Ho Chi Minh City)",
+        # Define search_listings tool
+        search_listings_tool = {
+            "function_declarations": [
+                {
+                    "name": "search_listings",
+                    "description": "Search property listings from SmartRent backend. Use this when users want to find rental properties, apartments, houses, or other real estate.",
+                    "parameters": {
+                        "type_": "OBJECT",
+                        "properties": {
+                            "province_code": {
+                                "type_": "STRING",
+                                "description": "Province code (e.g., '01' for Hanoi, '79' for Ho Chi Minh City)",
+                            },
+                            "district_id": {
+                                "type_": "INTEGER",
+                                "description": "District ID within province",
+                            },
+                            "ward_id": {
+                                "type_": "STRING",
+                                "description": "Ward ID within district",
+                            },
+                            "listing_type": {
+                                "type_": "STRING",
+                                "description": "Type of listing: RENT, SALE, or SHARE",
+                                "enum": ["RENT", "SALE", "SHARE"],
+                            },
+                            "product_type": {
+                                "type_": "STRING",
+                                "description": "Type of property: ROOM, APARTMENT, HOUSE, OFFICE, or STUDIO",
+                                "enum": ["ROOM", "APARTMENT", "HOUSE", "OFFICE", "STUDIO"],
+                            },
+                            "min_price": {
+                                "type_": "NUMBER",
+                                "description": "Minimum price in VND",
+                            },
+                            "max_price": {
+                                "type_": "NUMBER",
+                                "description": "Maximum price in VND",
+                            },
+                            "price_unit": {
+                                "type_": "STRING",
+                                "description": "Price unit: MONTH, DAY, or YEAR",
+                                "enum": ["MONTH", "DAY", "YEAR"],
+                            },
+                            "min_area": {
+                                "type_": "NUMBER",
+                                "description": "Minimum area in square meters",
+                            },
+                            "max_area": {
+                                "type_": "NUMBER",
+                                "description": "Maximum area in square meters",
+                            },
+                            "min_bedrooms": {
+                                "type_": "INTEGER",
+                                "description": "Minimum number of bedrooms",
+                            },
+                            "max_bedrooms": {
+                                "type_": "INTEGER",
+                                "description": "Maximum number of bedrooms",
+                            },
+                            "min_bathrooms": {
+                                "type_": "INTEGER",
+                                "description": "Minimum number of bathrooms",
+                            },
+                            "max_bathrooms": {
+                                "type_": "INTEGER",
+                                "description": "Maximum number of bathrooms",
+                            },
+                            "furnishing": {
+                                "type_": "STRING",
+                                "description": "Furnishing status",
+                                "enum": ["FULLY_FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"],
+                            },
+                            "keyword": {
+                                "type_": "STRING",
+                                "description": "Keyword to search in title and description",
+                            },
+                            "page": {
+                                "type_": "INTEGER",
+                                "description": "Page number (default 1)",
+                            },
+                            "size": {
+                                "type_": "INTEGER",
+                                "description": "Results per page (default 20, max 100)",
+                            },
+                            "sort_by": {
+                                "type_": "STRING",
+                                "description": "Sort field",
+                                "enum": ["DEFAULT", "PRICE_ASC", "PRICE_DESC", "NEWEST", "OLDEST"],
+                            },
+                        },
                     },
-                    "district_id": {
-                        "type": "integer",
-                        "description": "District ID within province",
-                    },
-                    "ward_id": {
-                        "type": "string",
-                        "description": "Ward ID within district",
-                    },
-                    "listing_type": {
-                        "type": "string",
-                        "description": "Type of listing: RENT, SALE, or SHARE",
-                        "enum": ["RENT", "SALE", "SHARE"],
-                    },
-                    "product_type": {
-                        "type": "string",
-                        "description": "Type of property: ROOM, APARTMENT, HOUSE, OFFICE, or STUDIO",
-                        "enum": ["ROOM", "APARTMENT", "HOUSE", "OFFICE", "STUDIO"],
-                    },
-                    "min_price": {
-                        "type": "number",
-                        "description": "Minimum price in VND",
-                    },
-                    "max_price": {
-                        "type": "number",
-                        "description": "Maximum price in VND",
-                    },
-                    "price_unit": {
-                        "type": "string",
-                        "description": "Price unit: MONTH, DAY, or YEAR",
-                        "enum": ["MONTH", "DAY", "YEAR"],
-                    },
-                    "min_area": {
-                        "type": "number",
-                        "description": "Minimum area in square meters",
-                    },
-                    "max_area": {
-                        "type": "number",
-                        "description": "Maximum area in square meters",
-                    },
-                    "min_bedrooms": {
-                        "type": "integer",
-                        "description": "Minimum number of bedrooms",
-                    },
-                    "max_bedrooms": {
-                        "type": "integer",
-                        "description": "Maximum number of bedrooms",
-                    },
-                    "min_bathrooms": {
-                        "type": "integer",
-                        "description": "Minimum number of bathrooms",
-                    },
-                    "max_bathrooms": {
-                        "type": "integer",
-                        "description": "Maximum number of bathrooms",
-                    },
-                    "furnishing": {
-                        "type": "string",
-                        "description": "Furnishing status",
-                        "enum": ["FULLY_FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"],
-                    },
-                    "keyword": {
-                        "type": "string",
-                        "description": "Keyword to search in title and description",
-                    },
-                    "page": {
-                        "type": "integer",
-                        "description": "Page number (default 1)",
-                    },
-                    "size": {
-                        "type": "integer",
-                        "description": "Results per page (default 20, max 100)",
-                    },
-                    "sort_by": {
-                        "type": "string",
-                        "description": "Sort field",
-                        "enum": ["DEFAULT", "PRICE_ASC", "PRICE_DESC", "NEWEST", "OLDEST"],
-                    },
-                },
-            },
+                }
+            ]
         }
 
         # Initialize model with tools
         self.model = genai.GenerativeModel(  # type: ignore[call-arg]
-            model_name="gemini-2.0-flash-exp",
-            tools=[search_listings_declaration],  # type: ignore[arg-type]
+            model_name="gemini-2.0-flash",
+            tools=[search_listings_tool],  # type: ignore[arg-type]
         )
         self.system_instruction = system_instruction
 
@@ -206,13 +210,16 @@ Important notes:
                 message=ChatMessage(role="assistant", content=final_response),
                 metadata={
                     "tools_used": tools_used,
-                    "model": "gemini-2.0-flash-exp",
+                    "model": "gemini-2.0-flash",
                 },
             )
 
         except Exception as e:
-            logger.error(f"Error in chat service: {str(e)}")
-            raise Exception(f"Failed to process chat: {str(e)}")
+            logger.error(
+                f"Error in chat service: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
+            raise Exception(f"Failed to process chat: {type(e).__name__}: {str(e)}") from e
 
     async def _call_search_listings(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Call the backend search listings API."""
@@ -241,8 +248,8 @@ Important notes:
                     }
 
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error calling backend: {str(e)}")
+            logger.error(f"HTTP error calling backend: {type(e).__name__}: {str(e)}", exc_info=True)
             return {"error": f"Failed to search listings: {str(e)}"}
         except Exception as e:
-            logger.error(f"Error calling backend: {str(e)}")
+            logger.error(f"Error calling backend: {type(e).__name__}: {str(e)}", exc_info=True)
             return {"error": f"Error searching listings: {str(e)}"}
