@@ -1,47 +1,23 @@
-from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
+    """Single message in a conversation."""
+
+    role: Literal["user", "assistant"]
     content: str
-    timestamp: Optional[datetime] = None
 
 
 class ChatRequest(BaseModel):
-    message: str
-    conversation_id: Optional[str] = None
-    context: Optional[str] = None
+    """Request to chat endpoint with conversation history."""
 
-
-class TokenUsage(BaseModel):
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
+    messages: List[ChatMessage]
 
 
 class ChatResponse(BaseModel):
-    message: str
-    conversation_id: str
-    timestamp: datetime
-    model_used: str = "gemini-2.5-flash"
-    token_usage: Optional[TokenUsage] = None
+    """Response from chat endpoint."""
 
-
-class ConversationHistory(BaseModel):
-    conversation_id: str
-    messages: List[ChatMessage]
-    created_at: datetime
-    updated_at: datetime
-
-
-class AccountTokenInfo(BaseModel):
-    """Information about API account token usage and limits."""
-
-    requests_made_today: Optional[int] = None
-    requests_remaining_today: Optional[int] = None
-    daily_request_limit: Optional[int] = None
-    rate_limit_per_minute: Optional[int] = None
-    last_updated: datetime
+    message: ChatMessage
+    metadata: Optional[Dict[str, Any]] = None

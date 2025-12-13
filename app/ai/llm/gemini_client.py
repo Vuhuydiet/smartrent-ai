@@ -1,10 +1,8 @@
 import logging
-from typing import Tuple
 
-import google.generativeai as genai
+import google.generativeai as genai  # type: ignore
 
 from app.core.config import settings
-from app.dto.chat import TokenUsage
 
 from .base_llm import BaseLLM
 
@@ -39,41 +37,16 @@ Be helpful, professional, and provide accurate information about rental properti
 If you don't know something specific about SmartRent, acknowledge it and provide general helpful guidance.
 """
 
-    async def generate_response(
-        self, conversation_context: str
-    ) -> Tuple[str, TokenUsage]:
-        """Generate response using Gemini API and return response with token usage."""
+    async def generate_response(self, conversation_context: str) -> str:
+        """Generate response using Gemini API."""
         try:
-            # Count input tokens (approximate)
-            input_tokens = self.estimate_tokens(conversation_context)
-
             # Generate response
             response = self.model.generate_content(conversation_context)
-
-            # Count output tokens (approximate)
-            output_tokens = self.estimate_tokens(response.text)
-
-            # Create token usage object
-            token_usage = TokenUsage(
-                prompt_tokens=input_tokens,
-                completion_tokens=output_tokens,
-                total_tokens=input_tokens + output_tokens,
-            )
-
-            # Log token usage
-            self.log_token_usage(token_usage)
-
-            return response.text, token_usage
+            return response.text
 
         except Exception as e:
             logger.error(f"Error generating response from Gemini: {str(e)}")
             raise Exception(f"Failed to generate AI response: {str(e)}")
-
-    def estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text (approximate calculation)."""
-        # Simple approximation: ~4 characters per token for English text
-        # This is a rough estimate as Gemini uses its own tokenization
-        return max(1, len(text) // 4)
 
     def get_system_prompt(self) -> str:
         """Get the system prompt for SmartRent context."""

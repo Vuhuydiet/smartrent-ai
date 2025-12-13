@@ -72,11 +72,11 @@ async def verify_listing(
         error = ListingVerificationError(
             error="validation_error",
             message=f"Invalid request data: {str(e)}",
-            details=None,
+            details={},
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error.dict(),
+            detail=error.model_dump(),
         )
 
     except Exception as e:
@@ -88,7 +88,7 @@ async def verify_listing(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error.dict(),
+            detail=error.model_dump(),
         )
 
 

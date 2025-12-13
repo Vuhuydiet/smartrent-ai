@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # AI Configuration
     GEMINI_API_KEY: str = ""
 
+    # SmartRent Backend Configuration
+    SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
+    SMARTRENT_AI_URL: str = "http://localhost:8000"
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 
