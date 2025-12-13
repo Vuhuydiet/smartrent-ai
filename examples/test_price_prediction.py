@@ -37,7 +37,10 @@ async def predict_price(
                 return response.json()
             else:
                 print(f"Error {response.status_code}: {response.text}")
-                return {"error": f"HTTP {response.status_code}", "detail": response.text}
+                return {
+                    "error": f"HTTP {response.status_code}",
+                    "detail": response.text,
+                }
 
         except Exception as e:
             print(f"Request failed: {str(e)}")
@@ -74,10 +77,12 @@ def print_prediction_result(result: Dict[str, Any], title: str = "Price Predicti
     print(f"🏠 Property Type: {result.get('property_type', 'N/A')}")
     print(f"💰 Currency: {result.get('currency', 'VND')}")
 
-    print(f"\n💵 Price Range:")
+    print("\n💵 Price Range:")
     print(f"   Min: {min_price:,} VND ({min_price/1_000_000:,.1f} million VND)")
     print(f"   Max: {max_price:,} VND ({max_price/1_000_000:,.1f} million VND)")
-    print(f"   Average: {(min_price + max_price)/2:,.0f} VND ({(min_price + max_price)/2/1_000_000:,.1f} million VND)")
+    print(
+        f"   Average: {(min_price + max_price)/2:,.0f} VND ({(min_price + max_price)/2/1_000_000:,.1f} million VND)"
+    )
 
 
 async def test_hanoi_apartment() -> None:
@@ -95,11 +100,15 @@ async def test_hanoi_apartment() -> None:
         "longitude": 105.8542,
     }
 
-    print(f"📋 Property Details:")
-    print(f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}")
+    print("📋 Property Details:")
+    print(
+        f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}"
+    )
     print(f"   - Type: {property_data['property_type']}")
     print(f"   - Area: {property_data['area']} m²")
-    print(f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})")
+    print(
+        f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})"
+    )
 
     result = await predict_price(property_data)
     print_prediction_result(result, "Hanoi Apartment - Price Prediction")
@@ -120,11 +129,15 @@ async def test_hcm_house() -> None:
         "longitude": 106.7019,
     }
 
-    print(f"📋 Property Details:")
-    print(f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}")
+    print("📋 Property Details:")
+    print(
+        f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}"
+    )
     print(f"   - Type: {property_data['property_type']}")
     print(f"   - Area: {property_data['area']} m²")
-    print(f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})")
+    print(
+        f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})"
+    )
 
     result = await predict_price(property_data)
     print_prediction_result(result, "HCMC House - Price Prediction")
@@ -145,11 +158,15 @@ async def test_danang_villa() -> None:
         "longitude": 108.2022,
     }
 
-    print(f"📋 Property Details:")
-    print(f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}")
+    print("📋 Property Details:")
+    print(
+        f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}"
+    )
     print(f"   - Type: {property_data['property_type']}")
     print(f"   - Area: {property_data['area']} m²")
-    print(f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})")
+    print(
+        f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})"
+    )
 
     result = await predict_price(property_data)
     print_prediction_result(result, "Da Nang Villa - Price Prediction")
@@ -169,11 +186,15 @@ async def test_without_area() -> None:
         "longitude": 105.8195,
     }
 
-    print(f"📋 Property Details:")
-    print(f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}")
+    print("📋 Property Details:")
+    print(
+        f"   - Location: {property_data['ward']}, {property_data['district']}, {property_data['city']}"
+    )
     print(f"   - Type: {property_data['property_type']}")
-    print(f"   - Area: Not specified")
-    print(f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})")
+    print("   - Area: Not specified")
+    print(
+        f"   - Coordinates: ({property_data['latitude']}, {property_data['longitude']})"
+    )
 
     result = await predict_price(property_data)
     print_prediction_result(result, "Apartment (No Area) - Price Prediction")

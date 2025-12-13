@@ -21,7 +21,9 @@ def get_chat_service() -> ChatService:
             detail=f"Chat service not available: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"Unexpected error initializing chat service: {str(e)}", exc_info=True)
+        logger.error(
+            f"Unexpected error initializing chat service: {str(e)}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat service initialization error: {str(e)}",
@@ -64,7 +66,7 @@ async def chat(
         logger.error(
             f"Error in chat endpoint: {type(e).__name__}: {str(e)}",
             exc_info=True,
-            extra={"request": chat_request.model_dump()}
+            extra={"request": chat_request.model_dump()},
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -88,7 +90,9 @@ async def chat_health() -> dict[str, str]:
             detail=f"Chat service unavailable: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"Error checking chat health: {type(e).__name__}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error checking chat health: {type(e).__name__}: {str(e)}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error checking chat service health: {type(e).__name__}: {str(e)}",

@@ -54,11 +54,10 @@ async def completion(
 
     try:
         # Currently the BaseLLM interface expects a single string and returns (text, token_usage)
-        text= await llm.generate_response(request.prompt)
+        text = await llm.generate_response(request.prompt)
 
         return CompletionResponse(
-            text=text,
-            model_used=getattr(llm, "model_name", request.model or "unknown")
+            text=text, model_used=getattr(llm, "model_name", request.model or "unknown")
         )
 
     except HTTPException:

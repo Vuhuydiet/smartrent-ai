@@ -63,4 +63,3 @@ async def get_price_suggestion(
 async def health_check() -> dict[str, str]:
     """Health check endpoint for price prediction service."""
     return {"status": "healthy", "service": "price_prediction"}
-

@@ -37,7 +37,10 @@ async def chat_with_ai(
                 return response.json()
             else:
                 print(f"Error {response.status_code}: {response.text}")
-                return {"error": f"HTTP {response.status_code}", "detail": response.text}
+                return {
+                    "error": f"HTTP {response.status_code}",
+                    "detail": response.text,
+                }
 
         except Exception as e:
             print(f"Request failed: {str(e)}")
@@ -72,7 +75,7 @@ def print_chat_result(result: Dict[str, Any], title: str = "Chat Response"):
     print(f"🤖 Assistant: {message.get('content', '')}")
 
     if metadata:
-        print(f"\n📊 Metadata:")
+        print("\n📊 Metadata:")
         if "function_calls" in metadata:
             print(f"   Function Calls: {metadata['function_calls']}")
         if "model" in metadata:
@@ -89,7 +92,7 @@ async def test_simple_query() -> None:
     messages = [
         {
             "role": "user",
-            "content": "I'm looking for a 2-bedroom apartment in Hanoi with a budget around $1000/month"
+            "content": "I'm looking for a 2-bedroom apartment in Hanoi with a budget around $1000/month",
         }
     ]
 
@@ -104,18 +107,15 @@ async def test_multi_turn_conversation() -> None:
     print("-" * 60)
 
     messages = [
-        {
-            "role": "user",
-            "content": "I need an apartment in Ho Chi Minh City"
-        },
+        {"role": "user", "content": "I need an apartment in Ho Chi Minh City"},
         {
             "role": "assistant",
-            "content": "I'd be happy to help you find an apartment in Ho Chi Minh City. To narrow down the search, could you tell me more about your preferences? For example:\n- How many bedrooms do you need?\n- What's your budget?\n- Any specific district or area?"
+            "content": "I'd be happy to help you find an apartment in Ho Chi Minh City. To narrow down the search, could you tell me more about your preferences? For example:\n- How many bedrooms do you need?\n- What's your budget?\n- Any specific district or area?",
         },
         {
             "role": "user",
-            "content": "I need 1 bedroom, budget is $600-800, and I prefer District 1 or District 3"
-        }
+            "content": "I need 1 bedroom, budget is $600-800, and I prefer District 1 or District 3",
+        },
     ]
 
     for msg in messages:
@@ -134,7 +134,7 @@ async def test_specific_requirements() -> None:
     messages = [
         {
             "role": "user",
-            "content": "Find me a furnished studio apartment near Hoan Kiem Lake, pet-friendly, with gym and parking, max $700"
+            "content": "Find me a furnished studio apartment near Hoan Kiem Lake, pet-friendly, with gym and parking, max $700",
         }
     ]
 
@@ -148,7 +148,7 @@ async def test_invalid_request() -> None:
     print("\n🧪 Test 4: Invalid Request (Empty Messages)")
     print("-" * 60)
 
-    messages = []
+    messages: List[Dict[str, str]] = []
 
     print("👤 User: [sending empty messages array]")
     result = await chat_with_ai(messages)
@@ -161,14 +161,8 @@ async def test_assistant_last_message() -> None:
     print("-" * 60)
 
     messages = [
-        {
-            "role": "user",
-            "content": "Hello"
-        },
-        {
-            "role": "assistant",
-            "content": "Hi! How can I help you?"
-        }
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi! How can I help you?"},
     ]
 
     for msg in messages:

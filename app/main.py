@@ -13,9 +13,7 @@ from app.core.config import settings
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 
 logger = logging.getLogger(__name__)
@@ -36,13 +34,11 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(
         f"Unhandled exception: {type(exc).__name__}: {str(exc)}",
         exc_info=True,
-        extra={"path": request.url.path, "method": request.method}
+        extra={"path": request.url.path, "method": request.method},
     )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"
-        }
+        content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"},
     )
 
 
@@ -51,12 +47,13 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.warning(
         f"Validation error: {exc.errors()}",
-        extra={"path": request.url.path, "method": request.method}
+        extra={"path": request.url.path, "method": request.method},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors()}
+        content={"detail": exc.errors()},
     )
+
 
 # Add CORS middleware
 app.add_middleware(

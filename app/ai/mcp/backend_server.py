@@ -5,8 +5,9 @@ This MCP server provides tools to search property listings from the SmartRent ba
 It uses FastMCP to expose listing search capabilities to AI assistants.
 """
 
+from typing import Any, Dict, List, Optional
+
 import httpx
-from typing import Optional, List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
 from app.core.config import settings
@@ -26,7 +27,6 @@ async def search_listings(
     exclude_expired: Optional[bool] = True,
     status: Optional[str] = None,
     listing_status: Optional[str] = None,
-
     # Location Filters
     province_id: Optional[str] = None,
     province_code: Optional[str] = None,
@@ -38,13 +38,11 @@ async def search_listings(
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
     radius_km: Optional[float] = None,
-
     # Category & Type Filters
     category_id: Optional[int] = None,
     listing_type: Optional[str] = None,
     vip_type: Optional[str] = None,
     product_type: Optional[str] = None,
-
     # Property Specs Filters
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -62,34 +60,28 @@ async def search_listings(
     direction: Optional[str] = None,
     min_room_capacity: Optional[int] = None,
     max_room_capacity: Optional[int] = None,
-
     # Utility Price Filters
     water_price: Optional[str] = None,
     electricity_price: Optional[str] = None,
     internet_price: Optional[str] = None,
     service_fee: Optional[str] = None,
-
     # Amenities & Media Filters
     amenity_ids: Optional[List[int]] = None,
     amenity_match_mode: Optional[str] = "ALL",
     has_media: Optional[bool] = None,
     min_media_count: Optional[int] = None,
-
     # Content Search
     keyword: Optional[str] = None,
-
     # Contact Filters
     owner_phone_verified: Optional[bool] = None,
-
     # Time Filters
     posted_within_days: Optional[int] = None,
     updated_within_days: Optional[int] = None,
-
     # Pagination & Sorting
     page: int = 1,
     size: int = 20,
     sort_by: Optional[str] = None,
-    sort_direction: str = "DESC"
+    sort_direction: str = "DESC",
 ) -> Dict[str, Any]:
     """
     Search property listings from SmartRent backend.
@@ -313,7 +305,7 @@ async def search_listings(
             response = await client.post(
                 f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
                 json=filter_request,
-                timeout=30.0
+                timeout=30.0,
             )
             response.raise_for_status()
 
@@ -325,19 +317,13 @@ async def search_listings(
             else:
                 return {
                     "error": result.get("message", "Unknown error"),
-                    "code": result.get("code")
+                    "code": result.get("code"),
                 }
 
         except httpx.HTTPError as e:
-            return {
-                "error": f"HTTP error occurred: {str(e)}",
-                "status": "failed"
-            }
+            return {"error": f"HTTP error occurred: {str(e)}", "status": "failed"}
         except Exception as e:
-            return {
-                "error": f"Error searching listings: {str(e)}",
-                "status": "failed"
-            }
+            return {"error": f"Error searching listings: {str(e)}", "status": "failed"}
 
 
 if __name__ == "__main__":
