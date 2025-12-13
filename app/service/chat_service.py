@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List
 
 import google.generativeai as genai  # type: ignore
+from google.ai.generativelanguage import Content, Part, FunctionResponse  # type: ignore
 import httpx
 
 from app.core.config import settings
@@ -184,12 +185,12 @@ Important notes:
                         # Call backend API
                         search_results = await self._call_search_listings(params)
 
-                        # Send results back to Gemini
+                        # Send results back to Gemini using proper types
                         response = chat.send_message(  # type: ignore
-                            genai.protos.Content(  # type: ignore
+                            Content(
                                 parts=[
-                                    genai.protos.Part(  # type: ignore
-                                        function_response=genai.protos.FunctionResponse(  # type: ignore
+                                    Part(
+                                        function_response=FunctionResponse(
                                             name=function_name,
                                             response={"result": search_results},
                                         )
