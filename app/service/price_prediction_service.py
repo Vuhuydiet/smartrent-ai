@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict
 
 import google.generativeai as genai  # type: ignore
+from google.ai.generativelanguage import Content, Part, FunctionResponse  # type: ignore
 
 from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
@@ -126,14 +127,18 @@ Provide a realistic price range for this property in the current Vietnamese real
                                 # Call the actual prediction function
                                 result = await self._call_predict_price(dict(function_call.args))
 
-                                # Send function response back to model
-                                function_response = genai.protos.FunctionResponse(  # type: ignore
-                                    name="predict_price",
-                                    response={"result": result}
-                                )
-
+                                # Send function response back to model using proper types
                                 response = chat.send_message(  # type: ignore
-                                    genai.protos.Part(function_response=function_response)  # type: ignore
+                                    Content(
+                                        parts=[
+                                            Part(
+                                                function_response=FunctionResponse(
+                                                    name="predict_price",
+                                                    response={"result": result}
+                                                )
+                                            )
+                                        ]
+                                    )
                                 )
 
             # For now, return a mock response based on location
