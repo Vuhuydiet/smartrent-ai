@@ -21,3 +21,4 @@ class ChatResponse(BaseModel):
 
     message: ChatMessage
     metadata: Optional[Dict[str, Any]] = None
+    listings: Optional[Dict[str, Any]] = None  # Raw listing data from search results

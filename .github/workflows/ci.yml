@@ -8,7 +8,7 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: smartrent-ai
-  PYTHON_VERSION: "3.10.11"
+  PYTHON_VERSION: "3.13"
 
 jobs:
   lint:
@@ -18,30 +18,30 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      run: uv sync
 
     - name: Run code quality checks
       run: |
         # Format check
-        black --check .
+        uv run black --check .
 
         # Import sorting check
-        isort --check-only .
+        uv run isort --check-only .
 
         # Linting
-        flake8 .
+        uv run flake8 .
 
         # Type checking
-        mypy .
+        uv run mypy .
 
   test:
     runs-on: ubuntu-latest
@@ -51,24 +51,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      run: uv sync
 
     - name: Run unit tests
       run: |
-        pytest tests/ -v --cov=app --cov-report=xml:tests/coverage.xml --cov-report=html:tests/htmlcov --cov-fail-under=1
+        uv run pytest tests/ -v --cov=app --cov-report=xml:tests/coverage.xml --cov-report=html:tests/htmlcov --cov-fail-under=1
 
     - name: Check coverage threshold
       run: |
-        coverage report --fail-under=1
+        uv run coverage report --fail-under=1
         echo "✅ Coverage is above the minimum threshold of 1%"
 
     - name: Upload coverage reports

@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict
 
 import google.generativeai as genai  # type: ignore
-from google.ai.generativelanguage import Content, Part, FunctionResponse  # type: ignore
+from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore
 
 from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
@@ -76,7 +76,14 @@ When users ask for price suggestions:
                         "description": "Property longitude coordinate in decimal degrees",
                     },
                 },
-                "required": ["city", "district", "ward", "property_type", "latitude", "longitude"],
+                "required": [
+                    "city",
+                    "district",
+                    "ward",
+                    "property_type",
+                    "latitude",
+                    "longitude",
+                ],
             },
         }
 
@@ -118,14 +125,18 @@ Provide a realistic price range for this property in the current Vietnamese real
             # Check for function calls
             if hasattr(response, "candidates") and response.candidates:
                 candidate = response.candidates[0]
-                if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
+                if hasattr(candidate, "content") and hasattr(
+                    candidate.content, "parts"
+                ):
                     for part in candidate.content.parts:
                         if hasattr(part, "function_call") and part.function_call:
                             function_call = part.function_call
 
                             if function_call.name == "predict_price":
                                 # Call the actual prediction function
-                                result = await self._call_predict_price(dict(function_call.args))
+                                result = await self._call_predict_price(
+                                    dict(function_call.args)
+                                )
 
                                 # Send function response back to model using proper types
                                 response = chat.send_message(  # type: ignore
@@ -134,7 +145,7 @@ Provide a realistic price range for this property in the current Vietnamese real
                                             Part(
                                                 function_response=FunctionResponse(
                                                     name="predict_price",
-                                                    response={"result": result}
+                                                    response={"result": result},
                                                 )
                                             )
                                         ]
@@ -203,7 +214,9 @@ Provide a realistic price range for this property in the current Vietnamese real
         base_price_per_m2 = city_prices[tier]
 
         # Apply property type multiplier
-        type_key = next((k for k in type_multipliers if k in property_type), "apartment")
+        type_key = next(
+            (k for k in type_multipliers if k in property_type), "apartment"
+        )
         multiplier = type_multipliers[type_key]
 
         price_per_m2 = base_price_per_m2 * multiplier
@@ -271,7 +284,9 @@ Provide a realistic price range for this property in the current Vietnamese real
         base_price_per_m2 = city_prices[tier]
 
         # Apply multiplier
-        type_key = next((k for k in type_multipliers if k in property_type), "apartment")
+        type_key = next(
+            (k for k in type_multipliers if k in property_type), "apartment"
+        )
         multiplier = type_multipliers[type_key]
 
         price_per_m2 = base_price_per_m2 * multiplier

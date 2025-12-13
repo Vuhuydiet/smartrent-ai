@@ -2,8 +2,8 @@ import logging
 from typing import Any, Dict, List
 
 import google.generativeai as genai  # type: ignore
-from google.ai.generativelanguage import Content, Part, FunctionResponse  # type: ignore
 import httpx
+from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore
 
 from app.core.config import settings
 from app.dto.chat import ChatMessage, ChatResponse
@@ -69,7 +69,13 @@ Important notes:
                             "product_type": {
                                 "type_": "STRING",
                                 "description": "Type of property: ROOM, APARTMENT, HOUSE, OFFICE, or STUDIO",
-                                "enum": ["ROOM", "APARTMENT", "HOUSE", "OFFICE", "STUDIO"],
+                                "enum": [
+                                    "ROOM",
+                                    "APARTMENT",
+                                    "HOUSE",
+                                    "OFFICE",
+                                    "STUDIO",
+                                ],
                             },
                             "min_price": {
                                 "type_": "NUMBER",
@@ -111,7 +117,11 @@ Important notes:
                             "furnishing": {
                                 "type_": "STRING",
                                 "description": "Furnishing status",
-                                "enum": ["FULLY_FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"],
+                                "enum": [
+                                    "FULLY_FURNISHED",
+                                    "SEMI_FURNISHED",
+                                    "UNFURNISHED",
+                                ],
                             },
                             "keyword": {
                                 "type_": "STRING",
@@ -128,7 +138,13 @@ Important notes:
                             "sort_by": {
                                 "type_": "STRING",
                                 "description": "Sort field",
-                                "enum": ["DEFAULT", "PRICE_ASC", "PRICE_DESC", "NEWEST", "OLDEST"],
+                                "enum": [
+                                    "DEFAULT",
+                                    "PRICE_ASC",
+                                    "PRICE_DESC",
+                                    "NEWEST",
+                                    "OLDEST",
+                                ],
                             },
                         },
                     },
@@ -165,6 +181,7 @@ Important notes:
 
             # Check if Gemini wants to call a function
             tools_used: List[str] = []
+            listing_data = None  # Store listing data to return
 
             # Handle function calls
             while response.candidates[0].content.parts:
@@ -184,6 +201,9 @@ Important notes:
 
                         # Call backend API
                         search_results = await self._call_search_listings(params)
+
+                        # Capture listing data for response
+                        listing_data = search_results
 
                         # Send results back to Gemini using proper types
                         response = chat.send_message(  # type: ignore
@@ -213,14 +233,16 @@ Important notes:
                     "tools_used": tools_used,
                     "model": "gemini-2.0-flash",
                 },
+                listings=listing_data,  # Include raw listing data
             )
 
         except Exception as e:
             logger.error(
-                f"Error in chat service: {type(e).__name__}: {str(e)}",
-                exc_info=True
+                f"Error in chat service: {type(e).__name__}: {str(e)}", exc_info=True
             )
-            raise Exception(f"Failed to process chat: {type(e).__name__}: {str(e)}") from e
+            raise Exception(
+                f"Failed to process chat: {type(e).__name__}: {str(e)}"
+            ) from e
 
     async def _call_search_listings(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Call the backend search listings API."""
@@ -249,8 +271,13 @@ Important notes:
                     }
 
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error calling backend: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(
+                f"HTTP error calling backend: {type(e).__name__}: {str(e)}",
+                exc_info=True,
+            )
             return {"error": f"Failed to search listings: {str(e)}"}
         except Exception as e:
-            logger.error(f"Error calling backend: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error calling backend: {type(e).__name__}: {str(e)}", exc_info=True
+            )
             return {"error": f"Error searching listings: {str(e)}"}
