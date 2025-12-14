@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import google.generativeai as genai  # type: ignore
 
+from app.ai.mcp.backend_server import search_listings
 from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
 
@@ -162,6 +163,19 @@ Search for similar listings within 2km radius and provide a realistic price rang
             result_text = response.text
             logger.info(f"Gemini final response: {result_text}")
 
+            # Strip markdown code blocks if present
+            if result_text.startswith("```"):
+                # Remove ```json or ``` at start
+                result_text = (
+                    result_text.split("\n", 1)[1]
+                    if "\n" in result_text
+                    else result_text[3:]
+                )
+                # Remove ``` at end
+                if result_text.endswith("```"):
+                    result_text = result_text.rsplit("\n```", 1)[0]
+                result_text = result_text.strip()
+
             result = json.loads(result_text)
 
             return PriceSuggestionResponse(
@@ -189,7 +203,7 @@ Search for similar listings within 2km radius and provide a realistic price rang
         self, function_name: str, args: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Execute MCP function call by calling backend API.
+        Execute MCP function by calling the actual MCP server function.
 
         Args:
             function_name: Name of the MCP function
@@ -199,31 +213,23 @@ Search for similar listings within 2km radius and provide a realistic price rang
             Function result
         """
         if function_name == "search_listings":
-            import httpx
-
             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
-                        json=args,
-                        timeout=15.0,
-                    )
-                    response.raise_for_status()
-                    result = response.json()
+                # Call MCP server function directly
+                result = await search_listings(**args)
 
-                    if result.get("code") == "999999" and "data" in result:
-                        listings = result["data"].get("listings", [])
-                        logger.info(
-                            f"MCP search_listings returned {len(listings)} results"
-                        )
-                        return {"listings": listings, "total": len(listings)}
-                    else:
-                        logger.warning(f"Backend API error: {result.get('message')}")
-                        return {
-                            "listings": [],
-                            "total": 0,
-                            "error": result.get("message"),
-                        }
+                # Parse MCP response
+                if isinstance(result, dict):
+                    listings = result.get("listings", [])
+                    logger.info(f"MCP search_listings returned {len(listings)} results")
+                    return {"listings": listings, "total": len(listings)}
+                else:
+                    # If result is string, parse it
+                    import json
+
+                    parsed = json.loads(result) if isinstance(result, str) else result
+                    listings = parsed.get("listings", [])
+                    logger.info(f"MCP search_listings returned {len(listings)} results")
+                    return {"listings": listings, "total": len(listings)}
 
             except Exception as e:
                 logger.error(f"Error executing MCP function: {str(e)}")
