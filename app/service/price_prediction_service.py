@@ -139,11 +139,17 @@ Search for similar listings within 2km radius and provide a realistic price rang
                 )
 
                 # Send result back to Gemini
+                from google.ai.generativelanguage_v1beta.types import (
+                    Content,
+                    FunctionResponse,
+                    Part,
+                )
+
                 response = chat.send_message(
-                    genai.protos.Content(
+                    Content(
                         parts=[
-                            genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
+                            Part(
+                                function_response=FunctionResponse(
                                     name=function_call.name,
                                     response={"result": function_result},
                                 )
