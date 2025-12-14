@@ -1,8 +1,8 @@
+import json
 import logging
 from typing import Any, Dict
 
 import google.generativeai as genai  # type: ignore
-from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore
 
 from app.core.config import settings
 from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
@@ -11,151 +11,167 @@ logger = logging.getLogger(__name__)
 
 
 class PricePredictionService:
-    """Service for AI-powered price prediction using Gemini."""
+    """Service for rental price prediction using Gemini AI with MCP backend integration."""
 
     def __init__(self) -> None:
-        """Initialize the price prediction service with Gemini."""
+        """Initialize the price prediction service with Gemini AI."""
         if not settings.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not configured")
 
-        genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+        genai.configure(api_key=settings.GEMINI_API_KEY)
 
-        # System instruction for price prediction
-        system_instruction = """You are an expert real estate price advisor for SmartRent in Vietnam.
+        # System instruction for price prediction with MCP
+        self.system_instruction = """You are a real estate price prediction expert for Vietnam rental market.
 
-Your role is to provide accurate price suggestions for rental and sale properties based on location, property type, and area.
+You have access to the SmartRent backend listing database through MCP tools.
 
-Key guidelines:
-1. Understand Vietnamese real estate market dynamics
-2. Consider location hierarchy: City > District > Ward
-3. Property types: House, Apartment, Villa, Office, Land, etc.
-4. Prices are in Vietnamese Dong (VND)
-5. Use coordinates (latitude, longitude) to refine estimates
-6. Provide realistic price ranges with min/max values
-7. Consider market conditions and property characteristics
+Your task:
+1. Use the `search_listings` tool to find similar rental properties in the requested location
+2. Search within 2km radius of the coordinates
+3. Filter by property type and area (±30% range)
+4. Analyze the prices of similar listings
+5. Calculate a realistic price range based on market data
 
-When users ask for price suggestions:
-1. Extract all property details (location, type, area, coordinates)
-2. Use the predict_price tool to get market-based estimates
-3. Explain the price range in context of the location and property type
-4. Provide insights about the market in that area if possible"""
+Return ONLY a JSON object with this exact format:
+{
+    "min_price": <number in VND>,
+    "max_price": <number in VND>,
+    "listings_found": <number of listings analyzed>,
+    "confidence": <"high" | "medium" | "low">
+}
 
-        # Define predict_price tool using dictionary format
-        predict_price_declaration: Dict[str, Any] = {
-            "name": "predict_price",
-            "description": "Predict real estate price based on property characteristics and location in Vietnam. Returns estimated price range in VND.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "city": {
-                        "type": "string",
-                        "description": "City or province name (e.g., 'Hanoi', 'Ho Chi Minh', 'Da Nang')",
-                    },
-                    "district": {
-                        "type": "string",
-                        "description": "District or county name within the city",
-                    },
-                    "ward": {
-                        "type": "string",
-                        "description": "Ward or commune name within the district",
-                    },
-                    "property_type": {
-                        "type": "string",
-                        "description": "Type of property: House, Apartment, Villa, Office, Land, etc.",
-                    },
-                    "area": {
-                        "type": "number",
-                        "description": "Property area in square meters (m²)",
-                    },
-                    "latitude": {
-                        "type": "number",
-                        "description": "Property latitude coordinate in decimal degrees",
-                    },
-                    "longitude": {
-                        "type": "number",
-                        "description": "Property longitude coordinate in decimal degrees",
-                    },
-                },
-                "required": [
-                    "city",
-                    "district",
-                    "ward",
-                    "property_type",
-                    "latitude",
-                    "longitude",
-                ],
-            },
-        }
+If no listings found, use estimation based on Vietnam rental market standards:
+- Hanoi: 150k-200k VND/m²/month
+- Ho Chi Minh: 180k-250k VND/m²/month
+- Da Nang: 130k-180k VND/m²/month"""
 
-        # Initialize model with function calling
-        self.model = genai.GenerativeModel(  # type: ignore[call-arg]
-            model_name="gemini-2.0-flash",
-            tools=[predict_price_declaration],  # type: ignore[arg-type]
+        # Initialize model with function calling (without system_instruction in constructor)
+        self.model = genai.GenerativeModel(
+            "gemini-2.0-flash-exp", tools=[self._get_mcp_search_tool()]
         )
-        self.system_instruction = system_instruction
+
+    def _get_mcp_search_tool(self):
+        """Get MCP search_listings tool declaration for Gemini."""
+        from google.ai.generativelanguage_v1beta.types import (
+            FunctionDeclaration,
+            Schema,
+            Tool,
+            Type,
+        )
+
+        search_function = FunctionDeclaration(
+            name="search_listings",
+            description="Search for rental property listings in SmartRent database. Use this to find similar properties and analyze market prices.",
+            parameters=Schema(
+                type=Type.OBJECT,
+                properties={
+                    "listing_type": Schema(
+                        type=Type.STRING,
+                        description="Type of listing",
+                        enum=["RENT", "SELL"],
+                    ),
+                    "latitude": Schema(
+                        type=Type.NUMBER, description="Latitude coordinate"
+                    ),
+                    "longitude": Schema(
+                        type=Type.NUMBER, description="Longitude coordinate"
+                    ),
+                    "radius_km": Schema(
+                        type=Type.NUMBER, description="Search radius in kilometers"
+                    ),
+                    "product_type": Schema(
+                        type=Type.STRING,
+                        description="Property type",
+                        enum=["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"],
+                    ),
+                    "min_area": Schema(
+                        type=Type.NUMBER, description="Minimum area in m²"
+                    ),
+                    "max_area": Schema(
+                        type=Type.NUMBER, description="Maximum area in m²"
+                    ),
+                    "size": Schema(
+                        type=Type.INTEGER, description="Number of results to return"
+                    ),
+                },
+                required=["listing_type", "latitude", "longitude"],
+            ),
+        )
+
+        return Tool(function_declarations=[search_function])
 
     async def predict_price(
         self, request: PriceSuggestionRequest
     ) -> PriceSuggestionResponse:
         """
-        Predict property price using AI.
+        Predict property price using Gemini AI with MCP backend integration.
 
         Args:
             request: Price prediction request with property details
 
         Returns:
-            Price suggestion response with estimated range
+            Price suggestion response with AI-analyzed price range
         """
         try:
-            # Build the user query
-            query = f"""Please predict the price for this property:
+            # Build prompt for Gemini with system instruction
+            prompt = f"""{self.system_instruction}
+
+Now analyze rental prices for this property:
 - Location: {request.ward}, {request.district}, {request.city}
-- Property Type: {request.property_type}
-- Area: {f'{request.area} m²' if request.area else 'Not specified'}
 - Coordinates: {request.latitude}, {request.longitude}
+- Property Type: {request.property_type}
+- Area: {request.area or 'not specified'} m²
 
-Provide a realistic price range for this property in the current Vietnamese real estate market."""
+Search for similar listings within 2km radius and provide a realistic price range."""
 
-            # Start chat session
-            chat = self.model.start_chat(history=[])  # type: ignore
+            # Call Gemini with MCP tool access
+            chat = self.model.start_chat()
+            response = chat.send_message(prompt)
 
-            # Send message
-            response = chat.send_message(query)  # type: ignore
+            # Handle function calls (MCP tools)
+            while response.candidates[0].content.parts[0].function_call:
+                function_call = response.candidates[0].content.parts[0].function_call
+                logger.info(f"Gemini called MCP tool: {function_call.name}")
 
-            # Check for function calls
-            if hasattr(response, "candidates") and response.candidates:
-                candidate = response.candidates[0]
-                if hasattr(candidate, "content") and hasattr(
-                    candidate.content, "parts"
-                ):
-                    for part in candidate.content.parts:
-                        if hasattr(part, "function_call") and part.function_call:
-                            function_call = part.function_call
+                # Execute MCP function
+                function_result = await self._execute_mcp_function(
+                    function_call.name, dict(function_call.args)
+                )
 
-                            if function_call.name == "predict_price":
-                                # Call the actual prediction function
-                                result = await self._call_predict_price(
-                                    dict(function_call.args)
+                # Send result back to Gemini
+                response = chat.send_message(
+                    genai.protos.Content(
+                        parts=[
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=function_call.name,
+                                    response={"result": function_result},
                                 )
+                            )
+                        ]
+                    )
+                )
 
-                                # Send function response back to model using proper types
-                                response = chat.send_message(  # type: ignore
-                                    Content(
-                                        parts=[
-                                            Part(
-                                                function_response=FunctionResponse(
-                                                    name="predict_price",
-                                                    response={"result": result},
-                                                )
-                                            )
-                                        ]
-                                    )
-                                )
+            # Parse final response
+            result_text = response.text
+            logger.info(f"Gemini final response: {result_text}")
 
-            # For now, return a mock response based on location
-            # TODO: Integrate with actual price predictor model
+            result = json.loads(result_text)
+
+            return PriceSuggestionResponse(
+                price_range={
+                    "min": int(result["min_price"]),
+                    "max": int(result["max_price"]),
+                },
+                location=f"{request.district}, {request.city}",
+                property_type=request.property_type,
+                currency="VND",
+            )
+
+        except Exception as e:
+            logger.error(f"Error in AI price prediction: {str(e)}")
+            # Fallback to estimation
             price_range = self._estimate_price_range(request)
-
             return PriceSuggestionResponse(
                 price_range=price_range,
                 location=f"{request.district}, {request.city}",
@@ -163,136 +179,131 @@ Provide a realistic price range for this property in the current Vietnamese real
                 currency="VND",
             )
 
-        except Exception as e:
-            logger.error(f"Error in price prediction: {str(e)}")
-            raise
-
-    async def _call_predict_price(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_mcp_function(
+        self, function_name: str, args: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
-        Call the price prediction logic.
+        Execute MCP function call by calling backend API.
 
         Args:
-            params: Prediction parameters from function call
+            function_name: Name of the MCP function
+            args: Function arguments
 
         Returns:
-            Prediction result with price range
+            Function result
         """
-        # TODO: Integrate with RealEstatePricePredictorModel
-        # For now, return estimated ranges based on location
+        if function_name == "search_listings":
+            import httpx
 
-        city = params.get("city", "").lower()
-        district = params.get("district", "").lower()
-        property_type = params.get("property_type", "").lower()
-        area = params.get("area")
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
+                        json=args,
+                        timeout=15.0,
+                    )
+                    response.raise_for_status()
+                    result = response.json()
 
-        # Base price per m² (VND millions) by city
-        base_prices = {
-            "hanoi": {"high": 80, "medium": 50, "low": 30},
-            "ho chi minh": {"high": 100, "medium": 60, "low": 35},
-            "da nang": {"high": 60, "medium": 40, "low": 25},
-        }
+                    if result.get("code") == "999999" and "data" in result:
+                        listings = result["data"].get("listings", [])
+                        logger.info(
+                            f"MCP search_listings returned {len(listings)} results"
+                        )
+                        return {"listings": listings, "total": len(listings)}
+                    else:
+                        logger.warning(f"Backend API error: {result.get('message')}")
+                        return {
+                            "listings": [],
+                            "total": 0,
+                            "error": result.get("message"),
+                        }
 
-        # Property type multipliers
-        type_multipliers = {
-            "apartment": 1.0,
-            "house": 1.2,
-            "villa": 1.8,
-            "office": 1.5,
-            "land": 0.8,
-        }
+            except Exception as e:
+                logger.error(f"Error executing MCP function: {str(e)}")
+                return {"listings": [], "total": 0, "error": str(e)}
 
-        # Select base price
-        city_prices = base_prices.get(city, base_prices["hanoi"])
-
-        # Determine district tier (simplified)
-        tier = "medium"
-        if "1" in district or "central" in district or "hoan kiem" in district:
-            tier = "high"
-        elif any(x in district for x in ["suburb", "ngoại", "outer"]):
-            tier = "low"
-
-        base_price_per_m2 = city_prices[tier]
-
-        # Apply property type multiplier
-        type_key = next(
-            (k for k in type_multipliers if k in property_type), "apartment"
-        )
-        multiplier = type_multipliers[type_key]
-
-        price_per_m2 = base_price_per_m2 * multiplier
-
-        # Calculate total price if area is provided
-        if area and area > 0:
-            total_price = price_per_m2 * area
-            min_price = int(total_price * 0.85)  # -15%
-            max_price = int(total_price * 1.15)  # +15%
-        else:
-            # Default ranges for typical properties
-            min_price = int(price_per_m2 * 50 * 0.85)  # Assume 50m²
-            max_price = int(price_per_m2 * 50 * 1.15)
-
-        # Convert to VND (from millions)
-        return {
-            "price_range": {
-                "min": min_price * 1_000_000,
-                "max": max_price * 1_000_000,
-            },
-            "currency": "VND",
-            "confidence": 0.75,
-            "base_price_per_m2": price_per_m2,
-        }
+        return {"error": f"Unknown function: {function_name}"}
 
     def _estimate_price_range(self, request: PriceSuggestionRequest) -> Dict[str, int]:
         """
-        Estimate price range for a property (fallback method).
+        Estimate RENTAL price range for a property (monthly rent in VND).
+        Fallback estimation when no backend data available.
 
         Args:
             request: Price prediction request
 
         Returns:
-            Dictionary with min and max price in VND
+            Dictionary with min and max MONTHLY RENT price in VND
         """
         city = request.city.lower()
         district = request.district.lower()
         property_type = request.property_type.lower()
-        area = request.area or 50  # Default 50m² if not provided
+        area = request.area or 30  # Default 30m² for typical room
 
-        # Base price per m² (VND millions)
-        base_prices = {
-            "hanoi": {"high": 80, "medium": 50, "low": 30},
-            "ho chi minh": {"high": 100, "medium": 60, "low": 35},
-            "da nang": {"high": 60, "medium": 40, "low": 25},
+        # Base RENTAL price per m² per MONTH in VND
+        base_rent_per_m2 = {
+            "hanoi": {"high": 200_000, "medium": 150_000, "low": 100_000},
+            "ho chi minh": {"high": 250_000, "medium": 180_000, "low": 120_000},
+            "da nang": {"high": 180_000, "medium": 130_000, "low": 90_000},
         }
 
-        # Property type multipliers
+        # Property type rent multipliers
         type_multipliers = {
             "apartment": 1.0,
-            "house": 1.2,
-            "villa": 1.8,
-            "office": 1.5,
-            "land": 0.8,
+            "house": 1.1,
+            "villa": 1.5,
+            "office": 1.2,
+            "room": 0.8,
+            "studio": 0.9,
         }
 
-        # Select city base price
-        city_prices = base_prices.get(city, {"high": 50, "medium": 35, "low": 20})
+        # Select city base rent
+        city_rents = base_rent_per_m2.get(
+            city, {"high": 180_000, "medium": 130_000, "low": 90_000}
+        )
 
-        # Determine tier
+        # Determine tier based on district
         tier = "medium"
-        if "1" in district or "central" in district:
+        if any(
+            x in district
+            for x in [
+                "hoan kiem",
+                "ba dinh",
+                "district 1",
+                "quan 1",
+                "hai chau",
+                "tay ho",
+                "district 3",
+            ]
+        ):
             tier = "high"
+        elif any(
+            x in district
+            for x in [
+                "ha dong",
+                "thanh tri",
+                "thu duc",
+                "binh thanh",
+                "binh tan",
+                "go vap",
+            ]
+        ):
+            tier = "low"
 
-        base_price_per_m2 = city_prices[tier]
+        rent_per_m2 = city_rents[tier]
 
-        # Apply multiplier
+        # Apply property type multiplier
         type_key = next(
             (k for k in type_multipliers if k in property_type), "apartment"
         )
-        multiplier = type_multipliers[type_key]
+        multiplier = type_multipliers.get(type_key, 1.0)
 
-        price_per_m2 = base_price_per_m2 * multiplier
-        total_price = price_per_m2 * area
+        # Calculate monthly rent
+        monthly_rent = rent_per_m2 * multiplier * area
 
+        # Return price range
         return {
-            "min": int(total_price * 0.85 * 1_000_000),
-            "max": int(total_price * 1.15 * 1_000_000),
+            "min": int(monthly_rent * 0.80),
+            "max": int(monthly_rent * 1.20),
         }
