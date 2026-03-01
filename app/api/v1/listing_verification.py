@@ -4,6 +4,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
+from app.core.config import settings
 from app.dto.listing_verification import (
     ListingVerificationError,
     ListingVerificationRequest,
@@ -110,7 +111,7 @@ async def health_check() -> Dict[str, Any]:
             "status": "healthy",
             "service": "listing_verification",
             "version": "1.0.0",
-            "ai_model": "gemini-2.5-flash",
+            "ai_model": settings.GEMINI_VISION_MODEL,
             "capabilities": [
                 "image_analysis",
                 "content_verification",
