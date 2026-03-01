@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     # AI Configuration
     GEMINI_API_KEY: str = ""
+    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
+    GEMINI_VISION_MODEL: str = (
+        "gemini-2.5-flash"  # Model used for listing verification (vision + text)
+    )
+    GEMINI_PRICE_MODEL: str = (
+        "gemini-2.0-flash-exp"  # Model used for price prediction (function calling)
+    )
 
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"

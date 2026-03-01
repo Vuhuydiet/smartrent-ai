@@ -28,8 +28,8 @@ class GeminiListingVerificationHelper:
         genai.configure(api_key=settings.GEMINI_API_KEY)
 
         # Use latest models available in the new account
-        self.vision_model = genai.GenerativeModel("gemini-2.5-flash")
-        self.text_model = genai.GenerativeModel("gemini-2.5-flash")
+        self.vision_model = genai.GenerativeModel(settings.GEMINI_VISION_MODEL)
+        self.text_model = genai.GenerativeModel(settings.GEMINI_VISION_MODEL)
         logger.info("Gemini models initialized successfully")
 
     def _process_image(self, image_url: str, index: int) -> Image.Image:

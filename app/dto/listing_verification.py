@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from app.core.config import settings
+
 
 class HousingPropertyType(str, Enum):
     """Housing property type enumeration"""
@@ -163,7 +165,7 @@ class ListingVerificationResponse(BaseModel):
 
     # Metadata
     verification_timestamp: datetime = Field(default_factory=datetime.now)
-    model_used: str = Field(default="gemini-2.5-flash")
+    model_used: str = Field(default_factory=lambda: settings.GEMINI_VISION_MODEL)
     processing_time_seconds: Optional[float] = None
 
 
