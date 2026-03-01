@@ -33,11 +33,28 @@ class ChatService:
         genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
 
         # System instruction
-        system_instruction = """Bạn là trợ lý tìm BĐS cho SmartRent tại Việt Nam.
-
-Khi người dùng tìm BĐS, gọi search_listings với tiêu chí phù hợp.
-
-Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
+        system_instruction = (
+            "Bạn là trợ lý AI của SmartRent - nền tảng cho thuê và mua bán bất động sản thông minh tại Việt Nam.\n"
+            "\n"
+            "PHẠM VI HỖ TRỢ - Bạn CHỈ được hỗ trợ các chủ đề sau:\n"
+            "1. Tìm kiếm, tra cứu bất động sản cho thuê hoặc mua bán (căn hộ, nhà, phòng trọ, văn phòng, studio)\n"
+            "2. Thông tin về giá thuê/bán, diện tích, vị trí, tiện nghi của bất động sản\n"
+            "3. Hỏi đáp về cách sử dụng nền tảng SmartRent (đăng tin, xem tin, liên hệ chủ nhà, thanh toán)\n"
+            "4. Kinh nghiệm và lời khuyên về thuê/mua nhà tại Việt Nam\n"
+            "5. Các câu hỏi liên quan đến hợp đồng thuê nhà, pháp lý bất động sản cơ bản\n"
+            "\n"
+            "QUY TẮC BẮT BUỘC:\n"
+            "- Nếu người dùng hỏi bất kỳ điều gì NGOÀI phạm vi trên (ví dụ: nấu ăn, thể thao, lập trình, "
+            "toán học, giải trí, chính trị, v.v.), bạn PHẢI từ chối nhẹ nhàng bằng tiếng Việt và nhắc họ "
+            "về những gì bạn có thể giúp.\n"
+            "- KHÔNG bao giờ cố gắng trả lời câu hỏi ngoài chủ đề, dù người dùng yêu cầu.\n"
+            "- Khi tìm BĐS, gọi search_listings với tiêu chí phù hợp. Lưu ý: HN='01', HCM='79', "
+            "giá tính bằng VND, mặc định RENT.\n"
+            "\n"
+            "Mẫu từ chối (dùng khi câu hỏi không liên quan):\n"
+            "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến bất động sản và nền tảng SmartRent. "
+            "Bạn có muốn tôi giúp tìm kiếm nhà/phòng trọ hay có câu hỏi nào về SmartRent không?"
+        )
 
         # Define tools using genai types
         search_listings_func = FunctionDeclaration(
@@ -86,12 +103,82 @@ Lưu ý: HN='01', HCM='79', giá VND, mặc định RENT"""
         )
         self.system_instruction = system_instruction
 
+    async def _is_on_topic(self, user_message: str) -> bool:
+        """
+        Classify whether a user message is on-topic for SmartRent.
+
+        Uses a lightweight Gemini call to check if the message is related to
+        real estate, property search, or SmartRent platform usage.
+
+        Args:
+            user_message: The latest message from the user.
+
+        Returns:
+            True if the message is on-topic, False otherwise.
+        """
+        classification_prompt = f"""Bạn là bộ phân loại chủ đề cho ứng dụng bất động sản SmartRent.
+
+Nhiệm vụ: Xác định xem tin nhắn sau có liên quan đến CHỦ ĐỀ HỢP LỆ hay không.
+
+CHỦ ĐỀ HỢP LỆ (trả về ON_TOPIC):
+- Tìm kiếm, hỏi về bất động sản: nhà, phòng trọ, căn hộ, văn phòng, studio
+- Giá thuê, giá bán, diện tích, vị trí, tiện nghi BĐS
+- Hỏi về nền tảng SmartRent: đăng tin, xem tin, tài khoản, thanh toán
+- Hợp đồng thuê nhà, kinh nghiệm thuê/mua nhà tại Việt Nam
+- Chào hỏi xã giao ngắn ("xin chào", "hello", "hi")
+
+CHỦ ĐỀ KHÔNG HỢP LỆ (trả về OFF_TOPIC):
+- Bất kỳ chủ đề nào không liên quan đến bất động sản hoặc SmartRent
+- Ví dụ: nấu ăn, thể thao, lập trình, toán học, giải trí, khoa học, y tế, v.v.
+
+Tin nhắn cần phân loại: "{user_message}"
+
+Chỉ trả về đúng một trong hai: ON_TOPIC hoặc OFF_TOPIC"""
+
+        try:
+            # Use a simple model without tools for fast classification
+            classifier_model = genai.GenerativeModel(  # type: ignore[call-arg]
+                model_name="gemini-2.0-flash"
+            )
+            response = classifier_model.generate_content(classification_prompt)  # type: ignore
+            result = response.text.strip().upper()
+            logger.info(
+                f"Topic classification for message '{user_message[:50]}...': {result}"
+            )
+            return "OFF_TOPIC" not in result
+        except Exception as e:
+            # On classification error, allow the message through (fail open)
+            logger.warning(
+                f"Topic classification failed, allowing message through: {e}"
+            )
+            return True
+
     async def process_chat(self, messages: List[ChatMessage]) -> ChatResponse:
         """Process chat messages and return response."""
         try:
             logger.info("=== Starting process_chat ===")
             logger.info(f"Number of messages: {len(messages)}")
             logger.info(f"Last message: {messages[-1].content[:100]}...")
+
+            # --- Topic guard ---
+            last_user_message = messages[-1].content
+            if not await self._is_on_topic(last_user_message):
+                logger.info("Message classified as OFF_TOPIC — returning refusal.")
+                refusal_text = (
+                    "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến "
+                    "bất động sản và nền tảng SmartRent. Bạn có muốn tôi giúp tìm kiếm "
+                    "nhà/phòng trọ hay có câu hỏi nào về SmartRent không? 🏠"
+                )
+                return ChatResponse(
+                    message=ChatMessage(role="assistant", content=refusal_text),
+                    metadata={
+                        "tools_used": [],
+                        "model": "gemini-2.0-flash",
+                        "off_topic": True,
+                    },
+                    listings=None,
+                )
+            # --- End topic guard ---
 
             # Convert messages to Gemini format
             chat_history = []
