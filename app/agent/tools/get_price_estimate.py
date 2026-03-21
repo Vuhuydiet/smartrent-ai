@@ -225,18 +225,15 @@ class GetPriceEstimateTool(BaseTool):
             ),
         )
 
-    async def execute(  # noqa: C901
-        self,
-        city: str,
-        district: str,
-        propertyType: str,  # noqa: N803
-        area: float,
-        ward: str = "",
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        askingPrice: Optional[float] = None,  # noqa: N803
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
+    async def execute(self, **kwargs: Any) -> Dict[str, Any]:  # noqa: C901
+        city: str = kwargs["city"]
+        district: str = kwargs["district"]
+        propertyType: str = kwargs["propertyType"]  # noqa: N806
+        area: float = float(kwargs["area"])
+        ward: str = kwargs.get("ward", "")
+        latitude: Optional[float] = kwargs.get("latitude")
+        longitude: Optional[float] = kwargs.get("longitude")
+        askingPrice: Optional[float] = kwargs.get("askingPrice")  # noqa: N806
         predictor = _get_predictor()
 
         # --- ML model path ---------------------------------------------------
