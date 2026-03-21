@@ -32,7 +32,6 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-
 logger = logging.getLogger(__name__)
 
 _KB_DIR = Path(__file__).parent / "knowledge_base"

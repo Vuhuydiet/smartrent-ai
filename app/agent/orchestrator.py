@@ -23,7 +23,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore[import]
+from google.ai.generativelanguage import (  # type: ignore[import]
+    Content,
+    FunctionResponse,
+    Part,
+)
 
 from app.agent.rag.retriever import RAGRetriever
 from app.agent.tools.registry import ToolRegistry

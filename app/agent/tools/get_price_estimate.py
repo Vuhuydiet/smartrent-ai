@@ -21,7 +21,11 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from google.ai.generativelanguage import FunctionDeclaration, Schema, Type  # type: ignore[import]
+from google.ai.generativelanguage import (  # type: ignore[import]
+    FunctionDeclaration,
+    Schema,
+    Type,
+)
 
 from app.agent.tools.base_tool import BaseTool
 

@@ -10,7 +10,11 @@ import logging
 from typing import Any, Dict
 
 import httpx
-from google.ai.generativelanguage import FunctionDeclaration, Schema, Type  # type: ignore[import]
+from google.ai.generativelanguage import (  # type: ignore[import]
+    FunctionDeclaration,
+    Schema,
+    Type,
+)
 
 from app.agent.tools.base_tool import BaseTool
 from app.core import backend_client
