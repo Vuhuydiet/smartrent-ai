@@ -21,11 +21,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from google.ai.generativelanguage import (  # type: ignore[import]
-    FunctionDeclaration,
-    Schema,
-    Type,
-)
+from google.ai.generativelanguage import FunctionDeclaration, Schema, Type  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 
@@ -84,29 +80,18 @@ _CITY_RENT: Dict[str, Dict[str, int]] = {
 _DEFAULT_RENT = {"high": 180_000, "medium": 130_000, "low": 90_000}
 
 _HIGH_TIER_DISTRICTS = {
-    "hoàn kiếm",
-    "ba đình",
-    "tây hồ",  # Hanoi premium
-    "quận 1",
-    "quận 3",
-    "bình thạnh",  # HCM premium
-    "hải châu",  # Da Nang premium
+    "hoàn kiếm", "ba đình", "tây hồ",         # Hanoi premium
+    "quận 1", "quận 3", "bình thạnh",          # HCM premium
+    "hải châu",                                 # Da Nang premium
 }
 _LOW_TIER_DISTRICTS = {
-    "hà đông",
-    "thanh trì",
-    "gia lâm",  # Hanoi fringe
-    "thủ đức",
-    "bình tân",
-    "gò vấp",  # HCM fringe
+    "hà đông", "thanh trì", "gia lâm",         # Hanoi fringe
+    "thủ đức", "bình tân", "gò vấp",           # HCM fringe
 }
 
 _PROPERTY_MULTIPLIERS: Dict[str, float] = {
-    "room": 0.75,
-    "apartment": 1.0,
-    "studio": 0.9,
-    "house": 1.15,
-    "office": 1.25,
+    "room": 0.75, "apartment": 1.0, "studio": 0.9,
+    "house": 1.15, "office": 1.25,
 }
 
 
@@ -199,7 +184,9 @@ class GetPriceEstimateTool(BaseTool):
                     ),
                     "propertyType": Schema(
                         type=Type.STRING,
-                        description=("ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE."),
+                        description=(
+                            "ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE."
+                        ),
                     ),
                     "area": Schema(
                         type=Type.NUMBER,
@@ -225,15 +212,18 @@ class GetPriceEstimateTool(BaseTool):
             ),
         )
 
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:  # noqa: C901
-        city: str = kwargs["city"]
-        district: str = kwargs["district"]
-        propertyType: str = kwargs["propertyType"]  # noqa: N806
-        area: float = float(kwargs["area"])
-        ward: str = kwargs.get("ward", "")
-        latitude: Optional[float] = kwargs.get("latitude")
-        longitude: Optional[float] = kwargs.get("longitude")
-        askingPrice: Optional[float] = kwargs.get("askingPrice")  # noqa: N806
+    async def execute(  # noqa: C901
+        self,
+        city: str,
+        district: str,
+        propertyType: str,  # noqa: N803
+        area: float,
+        ward: str = "",
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        askingPrice: Optional[float] = None,  # noqa: N803
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         predictor = _get_predictor()
 
         # --- ML model path ---------------------------------------------------
@@ -253,9 +243,7 @@ class GetPriceEstimateTool(BaseTool):
                 result: Dict[str, Any] = {
                     "status": "success",
                     "source": "ml_model",
-                    "estimatedMonthlyRent": int(
-                        prediction["predicted_price"] * 1_000_000
-                    ),
+                    "estimatedMonthlyRent": int(prediction["predicted_price"] * 1_000_000),
                     "priceRange": {
                         "min": int(prediction["price_range"]["min"] * 1_000_000),
                         "max": int(prediction["price_range"]["max"] * 1_000_000),
