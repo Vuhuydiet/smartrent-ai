@@ -42,7 +42,9 @@ class GetListingDetailTool(BaseTool):
             ),
         )
 
-    async def execute(self, listingId: str, **kwargs: Any) -> Dict[str, Any]:  # noqa: N803
+    async def execute(
+        self, listingId: str, **kwargs: Any
+    ) -> Dict[str, Any]:  # noqa: N803
         try:
             data = await backend_client.get_listing(listingId)
 
