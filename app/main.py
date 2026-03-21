@@ -1,5 +1,7 @@
 import logging
 import sys
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +20,20 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Flush Langfuse events on shutdown so no traces are lost."""
+    yield
+    try:
+        from app.ai.llm.gateway import _gateway_instance
+
+        if _gateway_instance is not None:
+            _gateway_instance.flush()
+    except Exception as e:
+        logger.warning("Failed to flush Langfuse on shutdown: %s", e)
+
+
 app = FastAPI(
     title="SmartRent AI - House Pricing API",
     version=settings.VERSION,
@@ -25,6 +41,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 

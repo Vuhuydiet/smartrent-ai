@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Chat Configuration
     MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user
 
+    # Langfuse Observability
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 
