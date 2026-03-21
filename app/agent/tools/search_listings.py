@@ -9,11 +9,7 @@ import logging
 from typing import Any, Dict
 
 import httpx
-from google.ai.generativelanguage import (  # type: ignore[import]
-    FunctionDeclaration,
-    Schema,
-    Type,
-)
+from google.ai.generativelanguage import FunctionDeclaration, Schema, Tool, Type  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 from app.core import backend_client
@@ -144,11 +140,8 @@ class SearchListingsTool(BaseTool):
         try:
             logger.info("search_listings request params: %s", params)
             data = await backend_client.search_listings(params)
-            logger.info(
-                "search_listings response: %d listings, totalCount=%s",
-                len(data.get("listings", [])),
-                data.get("totalCount"),
-            )
+            logger.info("search_listings response: %d listings, totalCount=%s",
+                        len(data.get("listings", [])), data.get("totalCount"))
 
             if "error" in data:
                 return {
@@ -165,19 +158,19 @@ class SearchListingsTool(BaseTool):
                 "totalCount": data.get("totalCount", len(listings)),
                 "listings": [
                     {
-                        "listingId": item.get("listingId"),
-                        "title": item.get("title", ""),
-                        "price": item.get("price"),
-                        "area": item.get("area"),
-                        "bedrooms": item.get("bedrooms"),
-                        "bathrooms": item.get("bathrooms"),
-                        "districtName": item.get("districtName", ""),
-                        "wardName": item.get("wardName", ""),
-                        "productType": item.get("productType", ""),
-                        "furnishing": item.get("furnishing", ""),
-                        "listingType": item.get("listingType", ""),
+                        "listingId": l.get("listingId"),
+                        "title": l.get("title", ""),
+                        "price": l.get("price"),
+                        "area": l.get("area"),
+                        "bedrooms": l.get("bedrooms"),
+                        "bathrooms": l.get("bathrooms"),
+                        "districtName": l.get("districtName", ""),
+                        "wardName": l.get("wardName", ""),
+                        "productType": l.get("productType", ""),
+                        "furnishing": l.get("furnishing", ""),
+                        "listingType": l.get("listingType", ""),
                     }
-                    for item in listings
+                    for l in listings
                 ],
                 "_raw_listings": listings,
             }
