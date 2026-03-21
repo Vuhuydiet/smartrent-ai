@@ -218,10 +218,10 @@ class AgentOrchestrator:
             response: Any = None
 
             for round_num in range(MAX_TOOL_ROUNDS):
-                logger.info(
-                    "Agent loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS
+                logger.info("Agent loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS)
+                span_name = (
+                    "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
                 )
-                span_name = "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
                 response = await self._gateway.send_message(
                     chat, message_to_send, trace, span_name
                 )
@@ -236,7 +236,8 @@ class AgentOrchestrator:
 
                 if not function_calls:
                     logger.info(
-                        "Round %d: no function calls — final LLM response.", round_num + 1
+                        "Round %d: no function calls — final LLM response.",
+                        round_num + 1,
                     )
                     break
 
@@ -251,7 +252,10 @@ class AgentOrchestrator:
 
                     # Search results: separate raw listings (for API payload) from the
                     # compact summary sent back to the LLM.
-                    if fc.name == "search_listings" and result.get("status") == "success":
+                    if (
+                        fc.name == "search_listings"
+                        and result.get("status") == "success"
+                    ):
                         raw = result.pop("_raw_listings", [])
                         all_raw_listings.extend(raw)
 
