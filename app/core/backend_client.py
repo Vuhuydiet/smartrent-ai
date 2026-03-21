@@ -8,7 +8,7 @@ All backend API calls go through this module so that:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import httpx
 
