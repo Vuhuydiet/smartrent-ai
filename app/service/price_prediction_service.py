@@ -2,11 +2,9 @@ import json
 import logging
 from typing import Any, Dict
 
+from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore[import]
 from google.ai.generativelanguage import (  # type: ignore[import]
-    Content,
     FunctionDeclaration,
-    FunctionResponse,
-    Part,
     Schema,
     Tool,
     Type,
@@ -265,21 +263,10 @@ class PricePredictionService:
 
         tier = "medium"
         high_districts = [
-            "hoan kiem",
-            "ba dinh",
-            "district 1",
-            "quan 1",
-            "hai chau",
-            "tay ho",
-            "district 3",
+            "hoan kiem", "ba dinh", "district 1", "quan 1", "hai chau", "tay ho", "district 3",
         ]
         low_districts = [
-            "ha dong",
-            "thanh tri",
-            "thu duc",
-            "binh thanh",
-            "binh tan",
-            "go vap",
+            "ha dong", "thanh tri", "thu duc", "binh thanh", "binh tan", "go vap",
         ]
         if any(x in district for x in high_districts):
             tier = "high"
@@ -287,9 +274,7 @@ class PricePredictionService:
             tier = "low"
 
         rent_per_m2 = city_rents[tier]
-        type_key = next(
-            (k for k in type_multipliers if k in property_type), "apartment"
-        )
+        type_key = next((k for k in type_multipliers if k in property_type), "apartment")
         multiplier = type_multipliers.get(type_key, 1.0)
         monthly_rent = rent_per_m2 * multiplier * area
 
