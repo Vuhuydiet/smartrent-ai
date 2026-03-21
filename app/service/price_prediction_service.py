@@ -2,9 +2,11 @@ import json
 import logging
 from typing import Any, Dict
 
-from google.ai.generativelanguage import Content, FunctionResponse, Part  # type: ignore[import]
 from google.ai.generativelanguage import (  # type: ignore[import]
+    Content,
     FunctionDeclaration,
+    FunctionResponse,
+    Part,
     Schema,
     Tool,
     Type,
