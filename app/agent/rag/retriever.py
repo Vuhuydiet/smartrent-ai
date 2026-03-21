@@ -185,13 +185,16 @@ class RAGRetriever:
         lines.append("MÃ TỈNH/THÀNH PHỐ (dùng cho tham số provinceCode):")
         for p in self._provinces:
             aliases = ", ".join(p.get("aliases", []))
-            lines.append(f'  {p["name"]} → provinceCode="{p["code"]}" (aliases: {aliases})')
+            lines.append(
+                f'  {p["name"]} → provinceCode="{p["code"]}" (aliases: {aliases})'
+            )
 
         lines.append("")
         lines.append("MÃ QUẬN/HUYỆN (dùng cho tham số districtId — kiểu INTEGER):")
         for prov_code, districts in self._districts.items():
             prov_name = next(
-                (p["name"] for p in self._provinces if p["code"] == prov_code), prov_code
+                (p["name"] for p in self._provinces if p["code"] == prov_code),
+                prov_code,
             )
             district_strs = [f'{d["name"]}={int(d["code"])}' for d in districts]
             lines.append(f"  {prov_name}: {', '.join(district_strs)}")
@@ -215,23 +218,31 @@ class RAGRetriever:
             [MÃ ĐỊA ĐIỂM]
             Cầu Giấy (Hà Nội): cityCode="01" districtCode="005"
         """
-        matched: List[Tuple[str, str, str, str]] = []  # (province_name, district_name, province_code, district_code)
+        matched: List[
+            Tuple[str, str, str, str]
+        ] = []  # (province_name, district_name, province_code, district_code)
 
         for province in self._provinces:
             province_names = [province["name"]] + province.get("aliases", [])
-            province_mentioned = any(_normalise(n) in query_norm for n in province_names)
+            province_mentioned = any(
+                _normalise(n) in query_norm for n in province_names
+            )
 
             for district in self._districts.get(province["code"], []):
                 district_names = [district["name"]] + district.get("aliases", [])
-                district_mentioned = any(_normalise(n) in query_norm for n in district_names)
+                district_mentioned = any(
+                    _normalise(n) in query_norm for n in district_names
+                )
 
                 if district_mentioned:
-                    matched.append((
-                        province["name"],
-                        district["name"],
-                        province["code"],
-                        district["code"],
-                    ))
+                    matched.append(
+                        (
+                            province["name"],
+                            district["name"],
+                            province["code"],
+                            district["code"],
+                        )
+                    )
                 elif province_mentioned and not matched:
                     # Province mentioned but no specific district — only emit city code
                     matched.append((province["name"], "", province["code"], ""))
@@ -275,7 +286,9 @@ class RAGRetriever:
         if not matched:
             return ""
 
-        return "[TIỆN NGHI — dùng amenityIds khi gọi search_listings]\n  " + " | ".join(matched)
+        return "[TIỆN NGHI — dùng amenityIds khi gọi search_listings]\n  " + " | ".join(
+            matched
+        )
 
     # ------------------------------------------------------------------
     # Private — FAQ matching

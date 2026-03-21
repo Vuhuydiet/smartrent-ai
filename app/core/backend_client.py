@@ -33,7 +33,11 @@ async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
         response.raise_for_status()
         result = response.json()
 
-    logger.info("Backend search raw response: code=%s, message=%s", result.get("code"), result.get("message"))
+    logger.info(
+        "Backend search raw response: code=%s, message=%s",
+        result.get("code"),
+        result.get("message"),
+    )
 
     if result.get("code") == "999999" and "data" in result:
         return result["data"]

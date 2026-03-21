@@ -270,7 +270,9 @@ class LLMGateway:
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
 
-            generation.end(output=output_text[:2000] if output_text else "", usage=usage)
+            generation.end(
+                output=output_text[:2000] if output_text else "", usage=usage
+            )
             return response
 
         except Exception as e:
@@ -336,7 +338,9 @@ class LLMGateway:
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
 
-            generation.end(output=output_text[:2000] if output_text else "", usage=usage)
+            generation.end(
+                output=output_text[:2000] if output_text else "", usage=usage
+            )
             return response
 
         except Exception as e:
