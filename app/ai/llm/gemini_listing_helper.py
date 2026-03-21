@@ -172,9 +172,7 @@ Be thorough but CONCISE. Keep all text fields short and focused.
             try:
                 resp = requests.get(image_url, timeout=10)
                 if resp.status_code != 200:
-                    logger.warning(
-                        "Failed to download image %d: HTTP %s", i + 1, resp.status_code
-                    )
+                    logger.warning("Failed to download image %d: HTTP %s", i + 1, resp.status_code)
                     continue
 
                 pil_image: Image.Image = Image.open(BytesIO(resp.content))
