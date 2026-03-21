@@ -12,7 +12,6 @@ import httpx
 from google.ai.generativelanguage import (  # type: ignore[import]
     FunctionDeclaration,
     Schema,
-    Tool,
     Type,
 )
 
@@ -193,19 +192,19 @@ class SearchListingsTool(BaseTool):
                 "totalCount": data.get("totalCount", len(listings)),
                 "listings": [
                     {
-                        "listingId": l.get("listingId"),
-                        "title": l.get("title", ""),
-                        "price": l.get("price"),
-                        "area": l.get("area"),
-                        "bedrooms": l.get("bedrooms"),
-                        "bathrooms": l.get("bathrooms"),
-                        "districtName": l.get("districtName", ""),
-                        "wardName": l.get("wardName", ""),
-                        "productType": l.get("productType", ""),
-                        "furnishing": l.get("furnishing", ""),
-                        "listingType": l.get("listingType", ""),
+                        "listingId": item.get("listingId"),
+                        "title": item.get("title", ""),
+                        "price": item.get("price"),
+                        "area": item.get("area"),
+                        "bedrooms": item.get("bedrooms"),
+                        "bathrooms": item.get("bathrooms"),
+                        "districtName": item.get("districtName", ""),
+                        "wardName": item.get("wardName", ""),
+                        "productType": item.get("productType", ""),
+                        "furnishing": item.get("furnishing", ""),
+                        "listingType": item.get("listingType", ""),
                     }
-                    for l in listings
+                    for item in listings
                 ],
                 "_raw_listings": listings,
             }
