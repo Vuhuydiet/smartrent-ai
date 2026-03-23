@@ -1,335 +1,107 @@
 import json
 import logging
+import re
 from io import BytesIO
 from typing import Any, Dict, List
 
-import google.generativeai as genai
 import requests  # type: ignore[import-untyped]
 from PIL import Image
 
-from app.core.config import settings
+from app.ai.llm.gateway import get_gateway
 
 logger = logging.getLogger(__name__)
 
 
 class GeminiListingVerificationHelper:
     """
-    Enhanced Gemini client specifically for listing verification with multimodal capabilities
+    Enhanced Gemini client specifically for listing verification with multimodal capabilities.
+
+    Uses LLMGateway so all calls are traced through Langfuse.
     """
 
     def __init__(self) -> None:
-        """Initialize the Gemini listing verification helper"""
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured")
+        self._gateway = get_gateway()
 
-        logger.info(
-            f"Configuring Gemini API with key: {settings.GEMINI_API_KEY[:10]}..."
-        )
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-        # Use latest models available in the new account
-        self.vision_model = genai.GenerativeModel(settings.GEMINI_VISION_MODEL)
-        self.text_model = genai.GenerativeModel(settings.GEMINI_VISION_MODEL)
-        logger.info("Gemini models initialized successfully")
-
-    def _process_image(self, image_url: str, index: int) -> Image.Image:
-        """Process a single image from URL"""
-        response = requests.get(image_url, timeout=10)
-        if response.status_code != 200:
-            raise ValueError(
-                f"Failed to download image {index+1}: HTTP {response.status_code}"
-            )
-
-        pil_image: Image.Image = Image.open(BytesIO(response.content))
-        # Convert to RGB if necessary
-        if pil_image.mode != "RGB":
-            pil_image = pil_image.convert("RGB")
-
-        # Resize if too large (max 2048x2048)
-        if pil_image.width > 2048 or pil_image.height > 2048:
-            pil_image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-
-        return pil_image
-
-    def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse JSON response with fallback handling"""
-        try:
-            result = json.loads(response_text)
-            logger.info("Successfully parsed JSON response from Gemini")
-            return result
-        except json.JSONDecodeError as e:
-            logger.error(
-                f"Failed to parse Gemini response as JSON: {response_text[:200]}..."
-            )
-            logger.error(f"JSON error: {str(e)}")
-
-            # Try to fix common JSON issues
-            import re
-
-            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-            if json_match:
-                try:
-                    result = json.loads(json_match.group())
-                    logger.info("Successfully extracted JSON from response")
-                    return result
-                except json.JSONDecodeError:
-                    pass
-
-            # Try to fix incomplete JSON by adding closing braces
-            if response_text.count("{") > response_text.count("}"):
-                missing_braces = response_text.count("{") - response_text.count("}")
-                fixed_text = response_text + "}" * missing_braces
-                try:
-                    result = json.loads(fixed_text)
-                    logger.info("Successfully fixed incomplete JSON")
-                    return result
-                except json.JSONDecodeError:
-                    pass
-
-            logger.error("All JSON parsing attempts failed")
-            return {
-                "error": "Failed to parse AI response",
-                "raw_response": response_text[:500],
-                "analysis_completed": False,
-            }
-
-    def _handle_api_response(self, response_text: str) -> Dict[str, Any]:
-        """Handle and parse API response"""
-        logger.info(f"Raw Gemini response: {response_text[:500]}...")
-
-        # Clean up response if it contains markdown formatting
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-
-        return self._parse_json_response(response_text)
-
-    def _generate_content_with_error_handling(
-        self, content_parts: List[Any], generation_config: Any
-    ) -> Dict[str, Any]:
-        """Generate content with comprehensive error handling"""
-        try:
-            response = self.vision_model.generate_content(
-                content_parts, generation_config=generation_config
-            )
-            return self._handle_api_response(response.text.strip())
-        except Exception as e:
-            return self._handle_generation_error(str(e))
-
-    def _handle_generation_error(self, error_msg: str) -> Dict[str, Any]:
-        """Handle generation errors with appropriate responses"""
-        logger.error(f"Error in multimodal analysis: {error_msg}")
-
-        # Check if it's a quota or API key issue
-        if "quota exceeded" in error_msg.lower() or "429" in error_msg:
-            return {"error": "quota exceeded", "analysis_completed": False}
-        elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-            return {"error": "invalid api key", "analysis_completed": False}
-        else:
-            return {"error": error_msg, "analysis_completed": False}
-
-    async def analyze_images_with_text(  # noqa: C901
+    async def analyze_images_with_text(
         self, images: List[str], text_content: str, analysis_prompt: str
     ) -> Dict[str, Any]:
         """
-        Analyze images along with text content for comprehensive listing verification
-
-        Args:
-            images: List of image URLs
-            text_content: Text content to analyze alongside images
-            analysis_prompt: Specific prompt for analysis
-
-        Returns:
-            Dict containing analysis results
+        Analyze images along with text content for comprehensive listing verification.
         """
         try:
-            # Prepare images
-            image_objects = []
-            for i, image_url in enumerate(
-                images[:8]
-            ):  # Limit to 8 images for API constraints
-                try:
-                    response = requests.get(image_url, timeout=10)
-                    if response.status_code == 200:
-                        pil_image: Image.Image = Image.open(BytesIO(response.content))
-                        # Convert to RGB if necessary
-                        if pil_image.mode != "RGB":
-                            pil_image = pil_image.convert("RGB")
-
-                        # Resize if too large (max 2048x2048)
-                        if pil_image.width > 2048 or pil_image.height > 2048:
-                            pil_image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-
-                        image_objects.append(pil_image)
-                        logger.info(f"Successfully processed image {i+1}")
-                    else:
-                        logger.warning(
-                            f"Failed to download image {i+1}: HTTP {response.status_code}"
-                        )
-                except Exception as e:
-                    logger.error(f"Error processing image {i+1}: {str(e)}")
-
+            image_objects = self._download_images(images)
             if not image_objects:
                 raise ValueError("No valid images could be processed")
 
-            # Create comprehensive prompt
-            full_prompt = f"""
-{analysis_prompt}
-
-Text Content to analyze:
-{text_content}
-
-Please analyze both the images and text content together to provide a comprehensive assessment.
-Return your response as valid JSON only, without any additional text or formatting.
-"""
-
-            # Generate content with both images and text
-            content_parts = [full_prompt] + image_objects
-
-            response = self.vision_model.generate_content(
-                content_parts,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.1,  # Low temperature for consistent results
-                    top_p=0.8,
-                    top_k=20,
-                    max_output_tokens=8192,  # Increased significantly for complete response
-                ),
+            full_prompt = (
+                f"{analysis_prompt}\n\n"
+                f"Text Content to analyze:\n{text_content}\n\n"
+                "Please analyze both the images and text content together to provide "
+                "a comprehensive assessment.\n"
+                "Return your response as valid JSON only, without any additional text or formatting."
             )
 
-            # Parse response
-            response_text = response.text.strip()
-            logger.info(f"Raw Gemini response: {response_text[:500]}...")
+            trace = self._gateway.create_trace(
+                name="listing-verification",
+                metadata={"image_count": len(image_objects), "mode": "images+text"},
+            )
 
-            # Clean up response if it contains markdown formatting
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-            response_text = response_text.strip()
+            response = await self._gateway.generate_with_images(
+                prompt=full_prompt,
+                images=image_objects,
+                generation_config={
+                    "temperature": 0.1,
+                    "top_p": 0.8,
+                    "top_k": 20,
+                    "max_output_tokens": 8192,
+                },
+                trace=trace,
+                span_name="verify-images-text",
+            )
 
-            try:
-                result = json.loads(response_text)
-                logger.info("Successfully parsed JSON response from Gemini")
-                return result  # type: ignore[no-any-return]
-            except json.JSONDecodeError as e:
-                logger.error(
-                    f"Failed to parse Gemini response as JSON: {response_text[:200]}..."
-                )
-                logger.error(f"JSON error: {str(e)}")
-
-                # Try to fix common JSON issues
-                fixed_text = response_text
-
-                # Try to find and extract complete JSON
-                import re
-
-                json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-                if json_match:
-                    try:
-                        result = json.loads(json_match.group())
-                        logger.info("Successfully extracted JSON from response")
-                        return result
-                    except json.JSONDecodeError:
-                        pass
-
-                # Try to fix incomplete JSON by adding closing braces
-                if response_text.count("{") > response_text.count("}"):
-                    missing_braces = response_text.count("{") - response_text.count("}")
-                    fixed_text = response_text + "}" * missing_braces
-                    try:
-                        result = json.loads(fixed_text)
-                        logger.info("Successfully fixed incomplete JSON")
-                        return result
-                    except json.JSONDecodeError:
-                        pass
-
-                logger.error("All JSON parsing attempts failed")
-                # Return a fallback response
-                return {
-                    "error": "Failed to parse AI response",
-                    "raw_response": response_text[:500],
-                    "analysis_completed": False,
-                }
+            return self._handle_api_response(response.text.strip())
 
         except Exception as e:
-            logger.error(f"Error in multimodal analysis: {str(e)}")
-            error_msg = str(e)
-
-            # Check if it's a quota or API key issue
-            if "quota exceeded" in error_msg.lower() or "429" in error_msg:
-                return {"error": "quota exceeded", "analysis_completed": False}
-            elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-                return {"error": "invalid api key", "analysis_completed": False}
-            else:
-                return {"error": error_msg, "analysis_completed": False}
+            return self._handle_generation_error(str(e))
 
     async def analyze_text_content(
         self, text_content: str, analysis_prompt: str
     ) -> Dict[str, Any]:
         """
-        Analyze text content for listing verification
-
-        Args:
-            text_content: Text content to analyze
-            analysis_prompt: Specific prompt for analysis
-
-        Returns:
-            Dict containing analysis results
+        Analyze text content for listing verification (no images).
         """
         try:
-            full_prompt = f"""
-{analysis_prompt}
-
-Content to analyze:
-{text_content}
-
-Return your response as valid JSON only, without any additional text or formatting.
-"""
-
-            response = self.text_model.generate_content(
-                full_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.1,
-                    top_p=0.8,
-                    top_k=20,
-                    max_output_tokens=4096,  # Increased for complete response
-                ),
+            full_prompt = (
+                f"{analysis_prompt}\n\n"
+                f"Content to analyze:\n{text_content}\n\n"
+                "Return your response as valid JSON only, without any additional text or formatting."
             )
 
-            response_text = response.text.strip()
+            trace = self._gateway.create_trace(
+                name="listing-verification",
+                metadata={"mode": "text-only"},
+            )
 
-            # Clean up response if it contains markdown formatting
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
+            response = await self._gateway.generate(
+                prompt=full_prompt,
+                generation_config={
+                    "temperature": 0.1,
+                    "top_p": 0.8,
+                    "top_k": 20,
+                    "max_output_tokens": 4096,
+                },
+                trace=trace,
+                span_name="verify-text",
+            )
 
-            try:
-                result = json.loads(response_text)
-                return result
-            except json.JSONDecodeError:
-                logger.error(
-                    f"Failed to parse text analysis response as JSON: {response_text}"
-                )
-                return {
-                    "error": "Failed to parse AI response",
-                    "raw_response": response_text,
-                    "analysis_completed": False,
-                }
+            return self._handle_api_response(response.text.strip())
 
         except Exception as e:
-            logger.error(f"Error in text analysis: {str(e)}")
-            error_msg = str(e)
-
-            # Check if it's a quota or API key issue
-            if "quota exceeded" in error_msg.lower() or "429" in error_msg:
-                return {"error": "quota exceeded", "analysis_completed": False}
-            elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-                return {"error": "invalid api key", "analysis_completed": False}
-            else:
-                return {"error": error_msg, "analysis_completed": False}
+            return self._handle_generation_error(str(e))
 
     def create_comprehensive_analysis_prompt(self) -> str:
         """Create a comprehensive analysis prompt for listing verification"""
@@ -387,3 +159,89 @@ Return a JSON response with this exact structure (keep messages concise, max 100
 
 Be thorough but CONCISE. Keep all text fields short and focused.
 """
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _download_images(image_urls: List[str], max_images: int = 8) -> List[Any]:
+        """Download and preprocess images from URLs."""
+        image_objects = []
+        for i, image_url in enumerate(image_urls[:max_images]):
+            try:
+                resp = requests.get(image_url, timeout=10)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "Failed to download image %d: HTTP %s", i + 1, resp.status_code
+                    )
+                    continue
+
+                pil_image: Image.Image = Image.open(BytesIO(resp.content))
+                if pil_image.mode != "RGB":
+                    pil_image = pil_image.convert("RGB")
+                if pil_image.width > 2048 or pil_image.height > 2048:
+                    pil_image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+
+                image_objects.append(pil_image)
+                logger.info("Successfully processed image %d", i + 1)
+            except Exception as e:
+                logger.error("Error processing image %d: %s", i + 1, e)
+
+        return image_objects
+
+    @staticmethod
+    def _parse_json_response(response_text: str) -> Dict[str, Any]:
+        """Parse JSON response with fallback handling."""
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting JSON object from response
+        json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # Try fixing incomplete JSON
+        if response_text.count("{") > response_text.count("}"):
+            missing = response_text.count("{") - response_text.count("}")
+            try:
+                return json.loads(response_text + "}" * missing)
+            except json.JSONDecodeError:
+                pass
+
+        logger.error("All JSON parsing attempts failed")
+        return {
+            "error": "Failed to parse AI response",
+            "raw_response": response_text[:500],
+            "analysis_completed": False,
+        }
+
+    @classmethod
+    def _handle_api_response(cls, response_text: str) -> Dict[str, Any]:
+        """Handle and parse API response."""
+        logger.info("Raw Gemini response: %s...", response_text[:500])
+
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+
+        return cls._parse_json_response(response_text)
+
+    @staticmethod
+    def _handle_generation_error(error_msg: str) -> Dict[str, Any]:
+        """Handle generation errors with appropriate responses."""
+        logger.error("Error in analysis: %s", error_msg)
+
+        if "quota exceeded" in error_msg.lower() or "429" in error_msg:
+            return {"error": "quota exceeded", "analysis_completed": False}
+        elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+            return {"error": "invalid api key", "analysis_completed": False}
+        else:
+            return {"error": error_msg, "analysis_completed": False}

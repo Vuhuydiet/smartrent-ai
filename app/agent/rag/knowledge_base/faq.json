@@ -1,0 +1,123 @@
+{
+  "entries": [
+    {
+      "id": "platform_post_listing",
+      "category": "platform",
+      "keywords": ["đăng tin", "đăng bài", "post listing", "đăng nhà", "đăng phòng", "cho thuê", "cách đăng"],
+      "question": "Cách đăng tin cho thuê nhà/phòng trên SmartRent?",
+      "answer": "Để đăng tin trên SmartRent: (1) Đăng nhập tài khoản, chọn 'Đăng tin mới'. (2) Điền thông tin: loại BĐS, địa chỉ, diện tích, giá thuê, tiện nghi. (3) Tải ảnh chụp rõ ràng (khuyến nghị ít nhất 5 ảnh). (4) Chọn gói tin (thường/VIP). (5) Xác nhận và chờ duyệt. Tin đăng thường được duyệt trong 2-24 giờ."
+    },
+    {
+      "id": "platform_contact_landlord",
+      "category": "platform",
+      "keywords": ["liên hệ", "contact", "chủ nhà", "số điện thoại", "gặp chủ trọ", "kết nối"],
+      "question": "Làm thế nào để liên hệ với chủ nhà trên SmartRent?",
+      "answer": "Bạn có thể liên hệ chủ nhà bằng cách: (1) Xem số điện thoại hiển thị trong phần chi tiết tin đăng. (2) Nhấn nút 'Liên hệ' để gọi điện trực tiếp. (3) Gửi tin nhắn qua hệ thống chat nội bộ SmartRent. Lưu ý: Tránh giao dịch ngoài nền tảng để được bảo vệ quyền lợi."
+    },
+    {
+      "id": "platform_account",
+      "category": "platform",
+      "keywords": ["tài khoản", "đăng ký", "đăng nhập", "mật khẩu", "account", "register", "login"],
+      "question": "Cách tạo tài khoản SmartRent?",
+      "answer": "Để tạo tài khoản SmartRent: (1) Truy cập SmartRent và nhấn 'Đăng ký'. (2) Nhập email, số điện thoại và tạo mật khẩu. (3) Xác minh email hoặc OTP điện thoại. (4) Hoàn thiện hồ sơ cá nhân. Đăng ký miễn phí và ngay lập tức có thể sử dụng."
+    },
+    {
+      "id": "platform_vip",
+      "category": "platform",
+      "keywords": ["vip", "gói tin", "nổi bật", "ưu tiên", "tin vip", "hiển thị nhiều hơn"],
+      "question": "Gói tin VIP trên SmartRent có lợi ích gì?",
+      "answer": "Gói tin VIP trên SmartRent có 3 cấp: Silver, Gold, Diamond. Lợi ích: Hiển thị ưu tiên trên trang tìm kiếm, đánh dấu nổi bật, hiển thị ở vị trí đầu, tăng lượt xem gấp 3-10 lần so với tin thường. Khuyến nghị dùng VIP Gold/Diamond cho phòng/nhà ở vị trí cạnh tranh cao."
+    },
+    {
+      "id": "platform_payment",
+      "category": "platform",
+      "keywords": ["thanh toán", "payment", "phí", "chi phí nền tảng", "nạp tiền"],
+      "question": "Phí dịch vụ trên SmartRent như thế nào?",
+      "answer": "SmartRent thu phí theo gói đăng tin: Tin thường miễn phí nhưng hiển thị hạn chế. Gói VIP Silver/Gold/Diamond tính phí theo ngày đăng. Người thuê tìm kiếm và liên hệ hoàn toàn miễn phí."
+    },
+    {
+      "id": "rent_documents",
+      "category": "rental_process",
+      "keywords": ["giấy tờ", "hồ sơ", "documents", "cmnd", "cccd", "cần những gì", "chuẩn bị"],
+      "question": "Cần chuẩn bị những giấy tờ gì khi thuê nhà?",
+      "answer": "Khi thuê nhà/phòng cần chuẩn bị: (1) CCCD/CMND bản gốc và photocopy. (2) Hợp đồng lao động hoặc bằng chứng thu nhập (nếu chủ nhà yêu cầu). (3) Số điện thoại và địa chỉ liên hệ. Một số chủ nhà yêu cầu thêm: sổ hộ khẩu tạm trú, giấy xác nhận của cơ quan/trường học."
+    },
+    {
+      "id": "rent_deposit",
+      "category": "rental_process",
+      "keywords": ["đặt cọc", "cọc", "deposit", "tiền cọc", "bao nhiêu cọc", "hoàn cọc"],
+      "question": "Tiền đặt cọc khi thuê nhà thường là bao nhiêu?",
+      "answer": "Tiền đặt cọc thuê nhà tại Việt Nam thường là 1-3 tháng tiền thuê: Phòng trọ bình dân: 1-2 tháng. Căn hộ chung cư: 2-3 tháng. Nhà nguyên căn: 2-3 tháng. Tiền cọc phải được hoàn trả khi kết thúc hợp đồng nếu không có hư hại. Nên ghi rõ điều kiện hoàn cọc trong hợp đồng."
+    },
+    {
+      "id": "rent_contract",
+      "category": "rental_process",
+      "keywords": ["hợp đồng", "contract", "ký hợp đồng", "điều khoản", "lease", "thời hạn"],
+      "question": "Hợp đồng thuê nhà cần có những điều khoản nào?",
+      "answer": "Hợp đồng thuê nhà cần ghi rõ: (1) Thông tin hai bên (họ tên, CCCD, địa chỉ). (2) Địa chỉ và mô tả tài sản thuê. (3) Thời hạn thuê (bắt đầu - kết thúc). (4) Giá thuê và kỳ thanh toán. (5) Tiền đặt cọc và điều kiện hoàn cọc. (6) Trách nhiệm sửa chữa, bảo trì. (7) Điều kiện chấm dứt hợp đồng sớm. (8) Chữ ký hai bên. Khuyến nghị công chứng nếu thuê dài hạn (trên 6 tháng)."
+    },
+    {
+      "id": "rent_negotiate",
+      "category": "rental_process",
+      "keywords": ["mặc cả", "thương lượng", "negotiate", "giảm giá", "discount", "trả giá"],
+      "question": "Làm thế nào để thương lượng giá thuê?",
+      "answer": "Mẹo thương lượng giá thuê hiệu quả: (1) Tìm hiểu giá thị trường khu vực trước. (2) Thuê dài hạn (1 năm+) thường được giảm 5-15%. (3) Đề xuất thanh toán trước 3-6 tháng. (4) Chỉ ra các điểm cần sửa chữa để yêu cầu giảm giá. (5) Thời điểm tốt nhất để thuê giá rẻ: tháng 2-3 (sau Tết), tháng 7-8 (mùa thấp điểm)."
+    },
+    {
+      "id": "rent_utilities",
+      "category": "rental_process",
+      "keywords": ["điện nước", "tiền điện", "tiền nước", "internet", "utilities", "phí sinh hoạt", "chi phí"],
+      "question": "Tiền điện nước khi thuê nhà tính như thế nào?",
+      "answer": "Phí điện nước khi thuê nhà có hai hình thức: (1) Theo giá nhà nước: Điện ~2.000-3.500đ/kWh (lũy tiến), nước ~6.000-15.000đ/m³. (2) Theo giá thỏa thuận với chủ nhà (thường cao hơn, trung bình điện 3.500-5.000đ/kWh). Nên hỏi rõ và ghi vào hợp đồng. Phí internet thường 100.000-300.000đ/tháng hoặc included."
+    },
+    {
+      "id": "legal_tenant_rights",
+      "category": "legal",
+      "keywords": ["quyền lợi", "tenant rights", "pháp lý", "luật", "bảo vệ người thuê", "quyền người thuê"],
+      "question": "Người thuê nhà có quyền lợi gì theo pháp luật Việt Nam?",
+      "answer": "Theo Bộ luật Dân sự 2015, người thuê nhà có quyền: (1) Được ở ổn định trong thời hạn hợp đồng. (2) Được thông báo trước ít nhất 30 ngày nếu chủ nhà muốn chấm dứt hợp đồng sớm. (3) Được hoàn trả tiền cọc đầy đủ nếu không vi phạm. (4) Được sửa chữa những hỏng hóc không do người thuê gây ra. (5) Không bị tự ý vào phòng khi chưa có sự đồng ý."
+    },
+    {
+      "id": "legal_register_temporary",
+      "category": "legal",
+      "keywords": ["tạm trú", "đăng ký tạm trú", "temporary residence", "khai báo", "công an phường"],
+      "question": "Có cần đăng ký tạm trú khi thuê nhà không?",
+      "answer": "Có, người thuê nhà cần đăng ký tạm trú theo quy định pháp luật: (1) Đăng ký tại công an phường/xã nơi thuê trong vòng 30 ngày kể từ ngày đến. (2) Chủ nhà có nghĩa vụ hỗ trợ và khai báo người thuê. (3) Tạm trú thường được cấp 3-12 tháng và có thể gia hạn. Cần mang theo: CCCD, hợp đồng thuê nhà, ảnh 4x6."
+    },
+    {
+      "id": "area_hanoi_districts",
+      "category": "area_guide",
+      "keywords": ["quận hà nội", "khu vực hà nội", "hanoi area", "ở đâu hà nội", "nên thuê quận nào hà nội"],
+      "question": "Nên thuê nhà ở quận nào tại Hà Nội?",
+      "answer": "Hướng dẫn chọn quận tại Hà Nội: Trung tâm (đắt nhất): Hoàn Kiếm, Ba Đình, Đống Đa — gần văn phòng, tiện nghi đầy đủ, giá 5-15 triệu/tháng. Khu vực phát triển: Cầu Giấy, Tây Hồ, Thanh Xuân — cân bằng giá-chất lượng, nhiều trường đại học, giá 3-8 triệu/tháng. Vùng ven: Hà Đông, Long Biên, Gia Lâm — giá rẻ hơn 1-4 triệu/tháng nhưng cần di chuyển xa hơn."
+    },
+    {
+      "id": "area_hcm_districts",
+      "category": "area_guide",
+      "keywords": ["quận hồ chí minh", "khu vực hcm", "hcm area", "ở đâu hcm", "nên thuê quận nào hcm", "sài gòn"],
+      "question": "Nên thuê nhà ở quận nào tại TP. HCM?",
+      "answer": "Hướng dẫn chọn quận tại TP. HCM: Trung tâm (đắt nhất): Quận 1, Quận 3 — trung tâm tài chính, tiện nghi cao cấp, giá 6-20 triệu/tháng. Khu vực cân bằng: Bình Thạnh, Phú Nhuận, Quận 7 (Phú Mỹ Hưng) — yên tĩnh, an ninh tốt, giá 4-10 triệu/tháng. Thủ Đức — khu công nghệ, nhiều bạn trẻ, giá 2-6 triệu/tháng. Vùng ven: Bình Tân, Gò Vấp, Hóc Môn — giá rẻ 1.5-4 triệu/tháng."
+    },
+    {
+      "id": "property_types",
+      "category": "property_info",
+      "keywords": ["loại nhà", "loại phòng", "phòng trọ", "căn hộ", "studio", "chung cư", "khác nhau như thế nào"],
+      "question": "Sự khác nhau giữa phòng trọ, studio, chung cư mini và căn hộ chung cư?",
+      "answer": "Phân loại BĐS cho thuê tại Việt Nam: PHÒNG TRỌ (ROOM): Diện tích 10-30m², WC chung hoặc riêng, giá 1-4 triệu/tháng — phù hợp sinh viên, người đơn. STUDIO: Phòng ngủ + phòng khách + bếp liền, 25-45m², giá 3-8 triệu — phù hợp người đi làm độc thân. CHUNG CƯ MINI: Tòa nhà nhỏ, phòng độc lập, tiện nghi cơ bản, 30-60m², 4-9 triệu. CHUNG CƯ: Tòa nhà lớn, đầy đủ tiện ích, 50-120m², giá 7-25 triệu — phù hợp gia đình."
+    },
+    {
+      "id": "price_range_general",
+      "category": "price_guide",
+      "keywords": ["giá thuê", "giá bao nhiêu", "bảng giá", "chi phí thuê", "giá trung bình", "mức giá"],
+      "question": "Giá thuê nhà/phòng trung bình ở các thành phố lớn Việt Nam?",
+      "answer": "Giá thuê tham khảo (2024): HÀ NỘI: Phòng trọ 1.5-4 triệu, Studio 3-7 triệu, Chung cư 7-20 triệu/tháng. TP.HCM: Phòng trọ 2-5 triệu, Studio 4-9 triệu, Chung cư 8-25 triệu/tháng. ĐÀ NẴNG: Phòng trọ 1.5-3.5 triệu, Studio 3-6 triệu, Chung cư 6-15 triệu/tháng. Giá phụ thuộc nhiều vào vị trí, nội thất, và tầng lớp."
+    },
+    {
+      "id": "moving_tips",
+      "category": "rental_process",
+      "keywords": ["chuyển nhà", "dọn đến", "move in", "nhận phòng", "check in", "bàn giao"],
+      "question": "Cần lưu ý gì khi nhận bàn giao phòng/nhà?",
+      "answer": "Checklist khi nhận bàn giao phòng: (1) Chụp ảnh toàn bộ tình trạng phòng trước khi vào ở. (2) Kiểm tra và ghi nhận số điện, nước tại thời điểm bàn giao. (3) Lập biên bản bàn giao có danh sách đồ đạc, nội thất kèm tình trạng. (4) Kiểm tra các thiết bị: điều hòa, máy nước nóng, bình gas, khóa cửa. (5) Yêu cầu biên lai/hóa đơn tiền cọc. Ký biên bản có đủ chữ ký hai bên."
+    }
+  ]
+}
