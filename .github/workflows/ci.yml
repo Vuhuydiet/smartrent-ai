@@ -123,58 +123,53 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-    - name: Checkout deployment repository
-      uses: actions/checkout@v4
-      with:
-        repository: 'Vuhuydiet/smartrent-deploy'
-        token: ${{ secrets.DEPLOY_REPO_TOKEN }}
-        path: 'deploy-repo'
+      - name: Checkout Deployment Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'Vuhuydiet/smartrent-deploy'
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          path: 'smartrent-deploy'
 
-    - name: Set environment variables
-      id: env
-      run: |
-        COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-        ENVIRONMENT=$([[ "${GITHUB_REF}" == "refs/heads/main" ]] && echo "prd" || echo "dev")
-        VALUES_FILE="charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
+      - name: Update AI image tag
+        run: |
+          sed -i 's/^AI_TAG=.*/AI_TAG=${{ github.sha }}/' smartrent-deploy/docker/tags.env
 
-        echo "commit-sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-        echo "values-file=$VALUES_FILE" >> $GITHUB_OUTPUT
+      - name: Commit and push changes
+        working-directory: smartrent-deploy
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docker/tags.env
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          COMMIT_LINK="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          git commit -m "Deploy AI: ${{ github.event.head_commit.message }} (${COMMIT_LINK})"
+          git push
 
-    - name: Update image tags in values.yaml
-      run: |
-        echo "Updating image tags to: ${{ steps.env.outputs.commit-sha }} for environment: ${{ steps.env.outputs.environment }}"
-
-        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ github.ref_name }}-${{ steps.env.outputs.commit-sha }}/' deploy-repo/${{ steps.env.outputs.values-file }}
-
-        echo "Updated values.yaml content:"
-        cat deploy-repo/${{ steps.env.outputs.values-file }}
-
-    - name: Get commit info
-      id: commit-info
-      run: |
-        {
-          echo "commit-message<<EOF"
-          echo "${{ github.event.head_commit.message }}"
-          echo "EOF"
-        } >> $GITHUB_OUTPUT
-        echo "commit-link=https://github.com/${{ github.repository }}/commit/${{ github.sha }}" >> $GITHUB_OUTPUT
-
-    - name: Commit and push changes
-      run: |
-        cd deploy-repo
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add ${{ steps.env.outputs.values-file }}
-
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-          exit 0
-        fi
-
-        COMMIT_MESSAGE="${{ steps.env.outputs.commit-sha }}: ${{ steps.commit-info.outputs.commit-message }} ${{ steps.commit-info.outputs.commit-link }}"
-        git commit -m "$COMMIT_MESSAGE"
-        git push
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd ~/smartrent-deploy
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose \
+              --env-file docker/.env \
+              --env-file docker/tags.env \
+              -f docker/docker-compose.yml \
+              pull ai
+            docker compose \
+              --env-file docker/.env \
+              --env-file docker/tags.env \
+              -f docker/docker-compose.yml \
+              up -d --no-deps ai
