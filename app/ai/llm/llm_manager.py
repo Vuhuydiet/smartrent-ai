@@ -1,7 +1,6 @@
 from typing import Optional
 
 from app.ai.llm.base_llm import BaseLLM
-from app.ai.llm.gemini_client import GeminiClient
 from app.core.config import settings
 
 
@@ -14,6 +13,8 @@ class LLMFactory:
     ) -> BaseLLM:
         """Create an LLM instance based on the specified type."""
         if llm_type.lower() == "gemini":
+            from app.ai.llm.gemini_client import GeminiClient
+
             model_name = model_name or settings.GEMINI_CHAT_MODEL
             return GeminiClient(model_name)
         else:

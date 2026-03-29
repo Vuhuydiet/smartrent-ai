@@ -51,6 +51,13 @@ class SearchListingsTool(BaseTool):
                             "92=Cần Thơ, 31=Hải Phòng."
                         ),
                     ),
+                    "provinceId": Schema(
+                        type=Type.STRING,
+                        description=(
+                            "Province/city ID (same value as provinceCode). "
+                            "Must be sent together with provinceCode for backward compatibility."
+                        ),
+                    ),
                     "districtId": Schema(
                         type=Type.INTEGER,
                         description="District ID (integer). E.g. 760=Quận 1, 765=Bình Thạnh.",
@@ -140,6 +147,21 @@ class SearchListingsTool(BaseTool):
         params.setdefault("size", 5)
         if params["size"] > _MAX_SIZE:
             params["size"] = _MAX_SIZE
+
+        # Gemini returns all numbers as floats (protobuf Value.number_value).
+        # Cast fields that the backend expects as integers.
+        for int_field in (
+            "districtId", "minBedrooms", "maxBedrooms", "bedrooms",
+            "bathrooms", "page", "size",
+        ):
+            if int_field in params and isinstance(params[int_field], float):
+                params[int_field] = int(params[int_field])
+
+        # Backend checks both old and new address fields — keep them in sync.
+        if "provinceCode" in params:
+            params.setdefault("provinceId", params["provinceCode"])
+        elif "provinceId" in params:
+            params.setdefault("provinceCode", params["provinceId"])
 
         try:
             logger.info("search_listings request params: %s", params)
