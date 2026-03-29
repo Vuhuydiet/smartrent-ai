@@ -151,8 +151,13 @@ class SearchListingsTool(BaseTool):
         # Gemini returns all numbers as floats (protobuf Value.number_value).
         # Cast fields that the backend expects as integers.
         for int_field in (
-            "districtId", "minBedrooms", "maxBedrooms", "bedrooms",
-            "bathrooms", "page", "size",
+            "districtId",
+            "minBedrooms",
+            "maxBedrooms",
+            "bedrooms",
+            "bathrooms",
+            "page",
+            "size",
         ):
             if int_field in params and isinstance(params[int_field], float):
                 params[int_field] = int(params[int_field])
