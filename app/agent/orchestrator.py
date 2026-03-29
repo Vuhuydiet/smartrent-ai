@@ -76,10 +76,11 @@ QUY TẮC BẮT BUỘC:
 
 SỬ DỤNG CÔNG CỤ:
 - Khi người dùng muốn tìm BĐS → GỌI search_listings với tiêu chí phù hợp. Luôn truyền provinceCode khi người dùng đề cập tỉnh/thành. Dùng districtId (số nguyên) cho quận/huyện, productType cho loại BĐS.
-- Khi người dùng hỏi chi tiết về một BĐS cụ thể (sau khi đã tìm thấy) → GỌI get_listing_detail.
+- Khi người dùng hỏi chi tiết về một BĐS cụ thể (sau khi đã tìm thấy) → TỰ tra listingId từ kết quả search trước đó dựa trên tên, vị trí, hoặc thứ tự (ví dụ "cái đầu tiên", "phòng trọ ở Long Hòa") rồi GỌI get_listing_detail. KHÔNG BAO GIỜ hỏi lại user cung cấp ID.
 - Khi người dùng hỏi giá thị trường hoặc muốn so sánh giá → GỌI get_price_estimate.
 - Giá tính bằng VND. Mặc định listingType="RENT" nếu không được chỉ định.
-- Sau khi nhận kết quả tìm kiếm, trình bày tối đa {max_listings} BĐS phù hợp nhất. Mô tả giá, diện tích, vị trí và điểm nổi bật của từng căn.\
+- Sau khi nhận kết quả tìm kiếm, trình bày tối đa {max_listings} BĐS phù hợp nhất. Mô tả giá, diện tích, vị trí và điểm nổi bật của từng căn.
+- QUAN TRỌNG: Khi trình bày kết quả, LUÔN ghi kèm mã tin (listingId) ở mỗi BĐS, ví dụ: "[Mã tin: abc123]". Điều này giúp bạn tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.\
 """
 
 
@@ -261,6 +262,14 @@ class AgentOrchestrator:
                     ):
                         raw = result.pop("_raw_listings", [])
                         all_raw_listings.extend(raw)
+
+                    # Detail result: include the full listing object in the API payload
+                    # so the frontend receives it just like search results.
+                    if (
+                        fc.name == "get_listing_detail"
+                        and result.get("status") == "success"
+                    ):
+                        all_raw_listings.append(result["listing"])
 
                     tool_span.end(
                         output={
