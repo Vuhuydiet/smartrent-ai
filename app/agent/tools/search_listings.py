@@ -126,6 +126,22 @@ class SearchListingsTool(BaseTool):
                         items=Schema(type=Type.INTEGER),
                         description="List of amenity IDs to filter by. E.g. [1,2] for WiFi + Điều hòa.",
                     ),
+                    "latitude": Schema(
+                        type=Type.NUMBER,
+                        description="Latitude for location-based search.",
+                    ),
+                    "longitude": Schema(
+                        type=Type.NUMBER,
+                        description="Longitude for location-based search.",
+                    ),
+                    "radiusKm": Schema(
+                        type=Type.NUMBER,
+                        description="Search radius in kilometers (used with latitude/longitude).",
+                    ),
+                    "postedWithinDays": Schema(
+                        type=Type.INTEGER,
+                        description="Only return listings posted within the last N days (e.g. 7).",
+                    ),
                     "sortBy": Schema(
                         type=Type.STRING,
                         description="Sort order: DEFAULT, PRICE_ASC, PRICE_DESC, NEWEST, OLDEST.",
@@ -158,6 +174,7 @@ class SearchListingsTool(BaseTool):
             "bathrooms",
             "page",
             "size",
+            "postedWithinDays",
         ):
             if int_field in params and isinstance(params[int_field], float):
                 params[int_field] = int(params[int_field])
@@ -190,6 +207,8 @@ class SearchListingsTool(BaseTool):
                 "status": "success",
                 "count": len(listings),
                 "totalCount": data.get("totalCount", len(listings)),
+                "currentPage": params.get("page", 1),
+                "pageSize": params["size"],
                 "listings": [
                     {
                         "listingId": item.get("listingId"),
