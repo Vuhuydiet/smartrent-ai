@@ -21,6 +21,8 @@ from app.core import backend_client
 
 logger = logging.getLogger(__name__)
 
+_MAX_DESCRIPTION_LENGTH = 500  # chars sent to LLM — full version kept in raw listing
+
 
 class GetListingDetailTool(BaseTool):
     name = "get_listing_detail"
@@ -54,33 +56,40 @@ class GetListingDetailTool(BaseTool):
             if "error" in data:
                 return {"status": "error", "error": data["error"]}
 
+            # Compact summary for LLM — keeps token usage low
+            listing_for_llm = {
+                "listingId": data.get("listingId"),
+                "title": data.get("title", ""),
+                "description": (data.get("description") or "")[
+                    :_MAX_DESCRIPTION_LENGTH
+                ],
+                "price": data.get("price"),
+                "priceUnit": data.get("priceUnit", ""),
+                "area": data.get("area"),
+                "bedrooms": data.get("bedrooms"),
+                "bathrooms": data.get("bathrooms"),
+                "address": data.get("address", ""),
+                "wardName": data.get("wardName", ""),
+                "districtName": data.get("districtName", ""),
+                "provinceName": data.get("provinceName", ""),
+                "propertyType": data.get("propertyType", ""),
+                "listingType": data.get("listingType", ""),
+                "furnishing": data.get("furnishing", ""),
+                "direction": data.get("direction", ""),
+                "floor": data.get("floor"),
+                "totalFloors": data.get("totalFloors"),
+                "amenities": data.get("amenities", []),
+                "contactName": data.get("contactName") or "",
+                "contactPhone": data.get("contactPhone") or "",
+                "contactAvailable": data.get("contactAvailable", False),
+                "postedAt": data.get("postedAt", ""),
+                "expiredAt": data.get("expiredAt", ""),
+            }
+
             return {
                 "status": "success",
-                "listing": {
-                    "listingId": data.get("listingId"),
-                    "title": data.get("title", ""),
-                    "description": data.get("description", ""),
-                    "price": data.get("price"),
-                    "priceUnit": data.get("priceUnit", ""),
-                    "area": data.get("area"),
-                    "bedrooms": data.get("bedrooms"),
-                    "bathrooms": data.get("bathrooms"),
-                    "address": data.get("address", ""),
-                    "wardName": data.get("wardName", ""),
-                    "districtName": data.get("districtName", ""),
-                    "provinceName": data.get("provinceName", ""),
-                    "propertyType": data.get("propertyType", ""),
-                    "listingType": data.get("listingType", ""),
-                    "furnishing": data.get("furnishing", ""),
-                    "direction": data.get("direction", ""),
-                    "floor": data.get("floor"),
-                    "totalFloors": data.get("totalFloors"),
-                    "amenities": data.get("amenities", []),
-                    "contactName": data.get("contactName", ""),
-                    "contactPhone": data.get("contactPhone", ""),
-                    "postedAt": data.get("postedAt", ""),
-                    "expiredAt": data.get("expiredAt", ""),
-                },
+                "listing": listing_for_llm,
+                "_raw_listing": data,  # full backend object for frontend
             }
 
         except httpx.HTTPStatusError as e:

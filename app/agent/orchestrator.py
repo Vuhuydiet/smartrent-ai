@@ -77,10 +77,37 @@ QUY TẮC BẮT BUỘC:
 SỬ DỤNG CÔNG CỤ:
 - Khi người dùng muốn tìm BĐS → GỌI search_listings với tiêu chí phù hợp. Luôn truyền provinceCode khi người dùng đề cập tỉnh/thành. Dùng districtId (số nguyên) cho quận/huyện, productType cho loại BĐS.
 - Khi người dùng hỏi chi tiết về một BĐS cụ thể (sau khi đã tìm thấy) → TỰ tra listingId từ kết quả search trước đó dựa trên tên, vị trí, hoặc thứ tự (ví dụ "cái đầu tiên", "phòng trọ ở Long Hòa") rồi GỌI get_listing_detail. KHÔNG BAO GIỜ hỏi lại user cung cấp ID.
+- Khi người dùng hỏi thông tin liên hệ, số điện thoại, hoặc muốn liên hệ chủ nhà → GỌI get_listing_detail. Giao diện sẽ TỰ ĐỘNG hiển thị thẻ liên hệ từ dữ liệu trả về. Bạn CHỈ CẦN viết text ngắn gọn, ví dụ: "Đây là thông tin liên hệ của tin đăng này:" hoặc nếu contactAvailable=false thì nói "Chủ nhà chưa cung cấp thông tin liên hệ."
 - Khi người dùng hỏi giá thị trường hoặc muốn so sánh giá → GỌI get_price_estimate.
 - Giá tính bằng VND. Mặc định listingType="RENT" nếu không được chỉ định.
 - Sau khi nhận kết quả tìm kiếm, trình bày tối đa {max_listings} BĐS phù hợp nhất. Mô tả giá, diện tích, vị trí và điểm nổi bật của từng căn.
-- QUAN TRỌNG: Khi trình bày kết quả, LUÔN ghi kèm mã tin (listingId) ở mỗi BĐS, ví dụ: "[Mã tin: abc123]". Điều này giúp bạn tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.\
+- QUAN TRỌNG: Khi trình bày kết quả, LUÔN ghi kèm mã tin (listingId) ở mỗi BĐS, ví dụ: "[Mã tin: abc123]". Điều này giúp bạn tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.
+
+PHÂN TRANG:
+- Khi người dùng nói "xem thêm", "tìm tiếp", "còn nữa không", "trang tiếp" → GỌI lại search_listings với cùng tiêu chí nhưng tăng page lên 1. Nhớ giữ nguyên tất cả filter từ lần search trước.
+- Luôn cho user biết đang ở trang bao nhiêu và tổng số kết quả (ví dụ: "Trang 2/5, tổng 25 kết quả").
+
+SO SÁNH:
+- Khi người dùng muốn so sánh 2 hoặc nhiều BĐS → GỌI get_listing_detail cho TỪNG BĐS cần so sánh, sau đó trình bày bảng so sánh rõ ràng về: giá, diện tích, vị trí, số phòng, tiện nghi, nội thất.
+
+SẮP XẾP:
+- Khi người dùng muốn sắp xếp kết quả (giá thấp nhất, mới nhất, rẻ nhất...) → GỌI search_listings với sortBy phù hợp: PRICE_ASC (giá tăng), PRICE_DESC (giá giảm), NEWEST (mới nhất), OLDEST (cũ nhất).
+
+TIỆN NGHI:
+- Khi người dùng yêu cầu BĐS có tiện nghi cụ thể (WiFi, điều hòa, máy giặt, bãi đỗ xe...) → dùng amenityIds trong search_listings. Tra danh sách amenity ID từ thông tin hệ thống đã cung cấp.
+
+ĐÁNH GIÁ GIÁ:
+- Khi người dùng hỏi "giá này đắt hay rẻ?", "giá có hợp lý không?" về một BĐS cụ thể → GỌI get_listing_detail để lấy thông tin (giá, diện tích, vị trí, loại BĐS), sau đó GỌI get_price_estimate với askingPrice = giá BĐS đó để đánh giá so với thị trường.
+
+TÌM THEO VỊ TRÍ GẦN:
+- Khi người dùng muốn tìm BĐS quanh một vị trí cụ thể (gần trường, gần chợ, tọa độ GPS) → dùng latitude, longitude và radiusKm trong search_listings.
+
+TIN MỚI ĐĂNG:
+- Khi người dùng muốn xem tin mới đăng gần đây → dùng postedWithinDays (ví dụ: 7 = trong 7 ngày qua) hoặc sortBy=NEWEST.
+
+HỎI LẠI KHI THIẾU THÔNG TIN:
+- Nếu người dùng yêu cầu tìm BĐS nhưng KHÔNG nêu vị trí (tỉnh/thành, quận/huyện) → HỎI LẠI vị trí trước khi search. Không bao giờ search mà không có ít nhất một tiêu chí vị trí hoặc keyword.
+- Nếu yêu cầu quá mơ hồ (ví dụ: "tìm phòng") → hỏi thêm: vị trí nào? ngân sách bao nhiêu?\
 """
 
 
@@ -263,13 +290,14 @@ class AgentOrchestrator:
                         raw = result.pop("_raw_listings", [])
                         all_raw_listings.extend(raw)
 
-                    # Detail result: include the full listing object in the API payload
-                    # so the frontend receives it just like search results.
+                    # Detail result: send raw backend object (with user object)
+                    # to frontend, compact summary stays in result for LLM.
                     if (
                         fc.name == "get_listing_detail"
                         and result.get("status") == "success"
                     ):
-                        all_raw_listings.append(result["listing"])
+                        raw = result.pop("_raw_listing", result["listing"])
+                        all_raw_listings.append(raw)
 
                     tool_span.end(
                         output={
