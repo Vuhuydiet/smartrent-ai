@@ -90,10 +90,10 @@ class LLMGateway:
             tmp.write(credentials_json)
             tmp.close()
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
-            self._credentials_tmp_path = tmp.name
+            self._credentials_tmp_path: Optional[str] = tmp.name
             logger.info("GCP credentials loaded from base64 env var.")
         else:
-            self._credentials_tmp_path = None
+            self._credentials_tmp_path: Optional[str] = None
             logger.warning(
                 "GCP_CREDENTIALS_BASE64 not set — falling back to "
                 "GOOGLE_APPLICATION_CREDENTIALS or application default credentials."
