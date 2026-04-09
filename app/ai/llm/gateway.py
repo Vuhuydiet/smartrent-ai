@@ -99,14 +99,22 @@ class LLMGateway:
                 "GOOGLE_APPLICATION_CREDENTIALS or application default credentials."
             )
 
+        location = settings.GCP_LOCATION or "us-central1"
+
+        # Force the API endpoint to match the configured location
+        # This prevents requests from being routed to a wrong region
+        api_endpoint = f"{location}-aiplatform.googleapis.com"
+
         vertexai.init(
             project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_LOCATION,
+            location=location,
+            api_endpoint=api_endpoint,
         )
         logger.info(
-            "Vertex AI initialised (project=%s, location=%s)",
+            "Vertex AI initialised (project=%s, location=%s, endpoint=%s)",
             settings.GCP_PROJECT_ID,
-            settings.GCP_LOCATION,
+            location,
+            api_endpoint,
         )
 
         # Langfuse is optional — gracefully disabled when keys are absent
@@ -187,8 +195,14 @@ class LLMGateway:
         if tools is not None:
             kwargs["tools"] = [tools]
 
-        logger.debug("Building model '%s' (tools=%s)", model_name, tools is not None)
-        return GenerativeModel(**kwargs)
+        model = GenerativeModel(**kwargs)
+        logger.debug(
+            "Building model '%s' (tools=%s, location=%s)",
+            model_name,
+            tools is not None,
+            getattr(model, "_location", "unknown"),
+        )
+        return model
 
     def start_chat(
         self,
