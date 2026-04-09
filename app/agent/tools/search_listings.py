@@ -19,6 +19,28 @@ logger = logging.getLogger(__name__)
 _MAX_SIZE = 50  # hard cap — prevents overloading the backend
 
 
+def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract only the fields the LLM needs, handling nested address."""
+    addr = item.get("address") or {}
+    summary: Dict[str, Any] = {
+        "listingId": str(item.get("listingId", "")),
+        "title": item.get("title", ""),
+        "price": item.get("price"),
+        "priceUnit": item.get("priceUnit", ""),
+        "area": item.get("area"),
+        "districtName": addr.get("districtName", ""),
+        "wardName": addr.get("wardName", ""),
+        "productType": item.get("productType", ""),
+        "listingType": item.get("listingType", ""),
+    }
+    # Optional fields — only include when present to save tokens
+    for key in ("bedrooms", "bathrooms", "furnishing", "direction"):
+        val = item.get(key)
+        if val is not None:
+            summary[key] = val
+    return summary
+
+
 class SearchListingsTool(BaseTool):
     name = "search_listings"
     description = (
@@ -204,22 +226,7 @@ class SearchListingsTool(BaseTool):
                 "totalCount": data.get("totalCount", len(listings)),
                 "currentPage": params.get("page", 1),
                 "pageSize": params["size"],
-                "listings": [
-                    {
-                        "listingId": item.get("listingId"),
-                        "title": item.get("title", ""),
-                        "price": item.get("price"),
-                        "area": item.get("area"),
-                        "bedrooms": item.get("bedrooms"),
-                        "bathrooms": item.get("bathrooms"),
-                        "districtName": item.get("districtName", ""),
-                        "wardName": item.get("wardName", ""),
-                        "productType": item.get("productType", ""),
-                        "furnishing": item.get("furnishing", ""),
-                        "listingType": item.get("listingType", ""),
-                    }
-                    for item in listings
-                ],
+                "listings": [_compact_search_item(item) for item in listings],
                 "_raw_listings": listings,
             }
 
