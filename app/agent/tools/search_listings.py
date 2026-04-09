@@ -9,11 +9,7 @@ import logging
 from typing import Any, Dict
 
 import httpx
-from google.ai.generativelanguage import (  # type: ignore[import]
-    FunctionDeclaration,
-    Schema,
-    Type,
-)
+from vertexai.generative_models import FunctionDeclaration  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 from app.core import backend_client
@@ -36,126 +32,126 @@ class SearchListingsTool(BaseTool):
         return FunctionDeclaration(
             name=self.name,
             description=self.description,
-            parameters=Schema(
-                type=Type.OBJECT,
-                properties={
-                    "keyword": Schema(
-                        type=Type.STRING,
-                        description="Free-text search (title, address, description). Vietnamese supported.",
-                    ),
-                    "provinceCode": Schema(
-                        type=Type.STRING,
-                        description=(
+            parameters={
+                "type": "object",
+                "properties": {
+                    "keyword": {
+                        "type": "string",
+                        "description": "Free-text search (title, address, description). Vietnamese supported.",
+                    },
+                    "provinceCode": {
+                        "type": "string",
+                        "description": (
                             "Province/city code. Common values: "
                             "01=Hà Nội, 79=TP. Hồ Chí Minh, 48=Đà Nẵng, "
                             "92=Cần Thơ, 31=Hải Phòng."
                         ),
-                    ),
-                    "provinceId": Schema(
-                        type=Type.STRING,
-                        description=(
+                    },
+                    "provinceId": {
+                        "type": "string",
+                        "description": (
                             "Province/city ID (same value as provinceCode). "
                             "Must be sent together with provinceCode for backward compatibility."
                         ),
-                    ),
-                    "districtId": Schema(
-                        type=Type.INTEGER,
-                        description="District ID (integer). E.g. 760=Quận 1, 765=Bình Thạnh.",
-                    ),
-                    "productType": Schema(
-                        type=Type.STRING,
-                        description=(
+                    },
+                    "districtId": {
+                        "type": "integer",
+                        "description": "District ID (integer). E.g. 760=Quận 1, 765=Bình Thạnh.",
+                    },
+                    "productType": {
+                        "type": "string",
+                        "description": (
                             "ROOM (phòng trọ), APARTMENT (chung cư), "
                             "HOUSE (nhà nguyên căn), OFFICE (văn phòng), "
                             "STUDIO (căn hộ studio)."
                         ),
-                    ),
-                    "listingType": Schema(
-                        type=Type.STRING,
-                        description="RENT for rental, SALE for sale, SHARE for shared. Default context is RENT.",
-                    ),
-                    "minPrice": Schema(
-                        type=Type.NUMBER,
-                        description="Minimum price in VND (e.g. 5000000 = 5 triệu).",
-                    ),
-                    "maxPrice": Schema(
-                        type=Type.NUMBER,
-                        description="Maximum price in VND.",
-                    ),
-                    "minArea": Schema(
-                        type=Type.NUMBER,
-                        description="Minimum area in m².",
-                    ),
-                    "maxArea": Schema(
-                        type=Type.NUMBER,
-                        description="Maximum area in m².",
-                    ),
-                    "minBedrooms": Schema(
-                        type=Type.INTEGER,
-                        description="Minimum number of bedrooms.",
-                    ),
-                    "maxBedrooms": Schema(
-                        type=Type.INTEGER,
-                        description="Maximum number of bedrooms.",
-                    ),
-                    "bedrooms": Schema(
-                        type=Type.INTEGER,
-                        description="Exact number of bedrooms.",
-                    ),
-                    "bathrooms": Schema(
-                        type=Type.INTEGER,
-                        description="Exact number of bathrooms.",
-                    ),
-                    "furnishing": Schema(
-                        type=Type.STRING,
-                        description=(
+                    },
+                    "listingType": {
+                        "type": "string",
+                        "description": "RENT for rental, SALE for sale, SHARE for shared. Default context is RENT.",
+                    },
+                    "minPrice": {
+                        "type": "number",
+                        "description": "Minimum price in VND (e.g. 5000000 = 5 triệu).",
+                    },
+                    "maxPrice": {
+                        "type": "number",
+                        "description": "Maximum price in VND.",
+                    },
+                    "minArea": {
+                        "type": "number",
+                        "description": "Minimum area in m².",
+                    },
+                    "maxArea": {
+                        "type": "number",
+                        "description": "Maximum area in m².",
+                    },
+                    "minBedrooms": {
+                        "type": "integer",
+                        "description": "Minimum number of bedrooms.",
+                    },
+                    "maxBedrooms": {
+                        "type": "integer",
+                        "description": "Maximum number of bedrooms.",
+                    },
+                    "bedrooms": {
+                        "type": "integer",
+                        "description": "Exact number of bedrooms.",
+                    },
+                    "bathrooms": {
+                        "type": "integer",
+                        "description": "Exact number of bathrooms.",
+                    },
+                    "furnishing": {
+                        "type": "string",
+                        "description": (
                             "FULLY_FURNISHED (đầy đủ nội thất), "
                             "SEMI_FURNISHED (nội thất cơ bản), "
                             "UNFURNISHED (không nội thất)."
                         ),
-                    ),
-                    "direction": Schema(
-                        type=Type.STRING,
-                        description=(
+                    },
+                    "direction": {
+                        "type": "string",
+                        "description": (
                             "Facing direction: NORTH, SOUTH, EAST, WEST, "
                             "NORTHEAST, NORTHWEST, SOUTHEAST, SOUTHWEST."
                         ),
-                    ),
-                    "amenityIds": Schema(
-                        type=Type.ARRAY,
-                        items=Schema(type=Type.INTEGER),
-                        description="List of amenity IDs to filter by. E.g. [1,2] for WiFi + Điều hòa.",
-                    ),
-                    "latitude": Schema(
-                        type=Type.NUMBER,
-                        description="Latitude for location-based search.",
-                    ),
-                    "longitude": Schema(
-                        type=Type.NUMBER,
-                        description="Longitude for location-based search.",
-                    ),
-                    "radiusKm": Schema(
-                        type=Type.NUMBER,
-                        description="Search radius in kilometers (used with latitude/longitude).",
-                    ),
-                    "postedWithinDays": Schema(
-                        type=Type.INTEGER,
-                        description="Only return listings posted within the last N days (e.g. 7).",
-                    ),
-                    "sortBy": Schema(
-                        type=Type.STRING,
-                        description="Sort order: DEFAULT, PRICE_ASC, PRICE_DESC, NEWEST, OLDEST.",
-                    ),
-                    "page": Schema(
-                        type=Type.INTEGER,
-                        description="Page number (1-based, default 1).",
-                    ),
-                    "size": Schema(
-                        type=Type.INTEGER,
-                        description=f"Results per page (default 5, max {_MAX_SIZE}).",
-                    ),
+                    },
+                    "amenityIds": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of amenity IDs to filter by. E.g. [1,2] for WiFi + Điều hòa.",
+                    },
+                    "latitude": {
+                        "type": "number",
+                        "description": "Latitude for location-based search.",
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "description": "Longitude for location-based search.",
+                    },
+                    "radiusKm": {
+                        "type": "number",
+                        "description": "Search radius in kilometers (used with latitude/longitude).",
+                    },
+                    "postedWithinDays": {
+                        "type": "integer",
+                        "description": "Only return listings posted within the last N days (e.g. 7).",
+                    },
+                    "sortBy": {
+                        "type": "string",
+                        "description": "Sort order: DEFAULT, PRICE_ASC, PRICE_DESC, NEWEST, OLDEST.",
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "Page number (1-based, default 1).",
+                    },
+                    "size": {
+                        "type": "integer",
+                        "description": f"Results per page (default 5, max {_MAX_SIZE}).",
+                    },
                 },
-            ),
+            },
         )
 
     async def execute(self, **kwargs: Any) -> Dict[str, Any]:
@@ -164,7 +160,6 @@ class SearchListingsTool(BaseTool):
         if params["size"] > _MAX_SIZE:
             params["size"] = _MAX_SIZE
 
-        # Gemini returns all numbers as floats (protobuf Value.number_value).
         # Cast fields that the backend expects as integers.
         for int_field in (
             "districtId",

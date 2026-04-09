@@ -21,11 +21,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from google.ai.generativelanguage import (  # type: ignore[import]
-    FunctionDeclaration,
-    Schema,
-    Type,
-)
+from vertexai.generative_models import FunctionDeclaration  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 
@@ -179,50 +175,50 @@ class GetPriceEstimateTool(BaseTool):
         return FunctionDeclaration(
             name=self.name,
             description=self.description,
-            parameters=Schema(
-                type=Type.OBJECT,
-                properties={
-                    "city": Schema(
-                        type=Type.STRING,
-                        description=(
+            parameters={
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": (
                             "City/province name in Vietnamese or English "
                             "(e.g. 'Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng')."
                         ),
-                    ),
-                    "district": Schema(
-                        type=Type.STRING,
-                        description="District name (e.g. 'Cầu Giấy', 'Quận 1').",
-                    ),
-                    "ward": Schema(
-                        type=Type.STRING,
-                        description="Ward name (optional).",
-                    ),
-                    "propertyType": Schema(
-                        type=Type.STRING,
-                        description=("ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE."),
-                    ),
-                    "area": Schema(
-                        type=Type.NUMBER,
-                        description="Property area in m².",
-                    ),
-                    "latitude": Schema(
-                        type=Type.NUMBER,
-                        description="Latitude (improves ML model accuracy).",
-                    ),
-                    "longitude": Schema(
-                        type=Type.NUMBER,
-                        description="Longitude (improves ML model accuracy).",
-                    ),
-                    "askingPrice": Schema(
-                        type=Type.NUMBER,
-                        description=(
+                    },
+                    "district": {
+                        "type": "string",
+                        "description": "District name (e.g. 'Cầu Giấy', 'Quận 1').",
+                    },
+                    "ward": {
+                        "type": "string",
+                        "description": "Ward name (optional).",
+                    },
+                    "propertyType": {
+                        "type": "string",
+                        "description": "ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE.",
+                    },
+                    "area": {
+                        "type": "number",
+                        "description": "Property area in m².",
+                    },
+                    "latitude": {
+                        "type": "number",
+                        "description": "Latitude (improves ML model accuracy).",
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "description": "Longitude (improves ML model accuracy).",
+                    },
+                    "askingPrice": {
+                        "type": "number",
+                        "description": (
                             "Optional: the price being asked (VND/month). "
                             "When provided, the tool also evaluates whether the price is fair."
                         ),
-                    ),
+                    },
                 },
-                required=["city", "district", "propertyType", "area"],
-            ),
+                "required": ["city", "district", "propertyType", "area"],
+            },
         )
 
     async def execute(self, **kwargs: Any) -> Dict[str, Any]:  # noqa: C901

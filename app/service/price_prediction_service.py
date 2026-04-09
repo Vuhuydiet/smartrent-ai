@@ -2,14 +2,11 @@ import json
 import logging
 from typing import Any, Dict
 
-from google.ai.generativelanguage import (  # type: ignore[import]
+from vertexai.generative_models import (  # type: ignore[import]
     Content,
     FunctionDeclaration,
-    FunctionResponse,
     Part,
-    Schema,
     Tool,
-    Type,
 )
 
 from app.ai.llm.gateway import get_gateway
@@ -46,47 +43,52 @@ If no listings found, use estimation based on Vietnam rental market standards:
 
 
 def _get_search_tool() -> Any:
-    """Build Gemini Tool declaration for search_listings."""
+    """Build Vertex AI Tool declaration for search_listings."""
     return Tool(
         function_declarations=[
             FunctionDeclaration(
                 name="search_listings",
                 description="Search for rental property listings in SmartRent database.",
-                parameters=Schema(
-                    type=Type.OBJECT,
-                    properties={
-                        "listing_type": Schema(
-                            type=Type.STRING,
-                            description="Type of listing",
-                            enum=["RENT", "SELL"],
-                        ),
-                        "latitude": Schema(
-                            type=Type.NUMBER, description="Latitude coordinate"
-                        ),
-                        "longitude": Schema(
-                            type=Type.NUMBER, description="Longitude coordinate"
-                        ),
-                        "radius_km": Schema(
-                            type=Type.NUMBER, description="Search radius in kilometers"
-                        ),
-                        "product_type": Schema(
-                            type=Type.STRING,
-                            description="Property type",
-                            enum=["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"],
-                        ),
-                        "min_area": Schema(
-                            type=Type.NUMBER, description="Minimum area in m²"
-                        ),
-                        "max_area": Schema(
-                            type=Type.NUMBER, description="Maximum area in m²"
-                        ),
-                        "size": Schema(
-                            type=Type.INTEGER,
-                            description="Number of results to return",
-                        ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "listing_type": {
+                            "type": "string",
+                            "description": "Type of listing",
+                            "enum": ["RENT", "SELL"],
+                        },
+                        "latitude": {
+                            "type": "number",
+                            "description": "Latitude coordinate",
+                        },
+                        "longitude": {
+                            "type": "number",
+                            "description": "Longitude coordinate",
+                        },
+                        "radius_km": {
+                            "type": "number",
+                            "description": "Search radius in kilometers",
+                        },
+                        "product_type": {
+                            "type": "string",
+                            "description": "Property type",
+                            "enum": ["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"],
+                        },
+                        "min_area": {
+                            "type": "number",
+                            "description": "Minimum area in m²",
+                        },
+                        "max_area": {
+                            "type": "number",
+                            "description": "Maximum area in m²",
+                        },
+                        "size": {
+                            "type": "integer",
+                            "description": "Number of results to return",
+                        },
                     },
-                    required=["listing_type", "latitude", "longitude"],
-                ),
+                    "required": ["listing_type", "latitude", "longitude"],
+                },
             )
         ]
     )
@@ -137,35 +139,40 @@ class PricePredictionService:
                 function_calls = [
                     p.function_call
                     for p in parts
-                    if hasattr(p, "function_call") and p.function_call.name
+                    if p.function_call is not None and p.function_call.name
                 ]
                 if not function_calls:
                     break
 
                 tool_response_parts = []
                 for fc in function_calls:
-                    args = dict(fc.args)
+                    args = dict(fc.args) if fc.args else {}
                     logger.info("Price prediction calling tool: %s", fc.name)
                     result = await self._execute_tool(fc.name, args)
                     tool_response_parts.append(
-                        Part(
-                            function_response=FunctionResponse(
-                                name=fc.name,
-                                response={"result": result},
-                            )
+                        Part.from_function_response(
+                            name=fc.name,
+                            response={"result": result},
                         )
                     )
 
                 response = await self._gateway.send_message(
                     chat,
-                    Content(parts=tool_response_parts),
+                    Content(role="user", parts=tool_response_parts),
                     trace,
                     span_name=f"price-round-{round_num}",
                 )
                 round_num += 1
 
             # Parse final response
-            result_text = response.text
+            try:
+                result_text = response.text
+            except (ValueError, AttributeError):
+                result_text = ""
+                for part in response.candidates[0].content.parts:
+                    if part.text:
+                        result_text = part.text
+                        break
             trace.update(output={"response": result_text[:500]})
 
             result = self._parse_json(result_text)

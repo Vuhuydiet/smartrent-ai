@@ -1,5 +1,5 @@
 """
-LLM Gateway — central point for ALL Gemini model interactions.
+LLM Gateway — central point for ALL Gemini model interactions via Vertex AI.
 
 Every LLM call in the application goes through this class so that:
 - Langfuse observability spans are created automatically
@@ -13,7 +13,6 @@ Used by:
 - PricePredictionService (one-shot generate)
 """
 
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -49,7 +48,7 @@ class _NoOpTrace:
 
 class LLMGateway:
     """
-    Thin orchestration layer between application services and the raw Gemini SDK.
+    Thin orchestration layer between application services and the Vertex AI SDK.
 
     Usage patterns:
 
@@ -71,15 +70,44 @@ class LLMGateway:
     """
 
     def __init__(self) -> None:
-        import google.generativeai as genai  # type: ignore[import]
+        import base64
+        import os
+        import tempfile
+
+        import vertexai  # type: ignore[import]
 
         from app.core.config import settings
 
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured")
+        if not settings.GCP_PROJECT_ID:
+            raise ValueError("GCP_PROJECT_ID is not configured")
 
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self._genai = genai
+        # Decode base64 service account JSON → temp file → set env var
+        if settings.GCP_CREDENTIALS_BASE64:
+            credentials_json = base64.b64decode(settings.GCP_CREDENTIALS_BASE64)
+            tmp = tempfile.NamedTemporaryFile(
+                suffix=".json", delete=False, prefix="gcp_creds_"
+            )
+            tmp.write(credentials_json)
+            tmp.close()
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
+            self._credentials_tmp_path = tmp.name
+            logger.info("GCP credentials loaded from base64 env var.")
+        else:
+            self._credentials_tmp_path = None
+            logger.warning(
+                "GCP_CREDENTIALS_BASE64 not set — falling back to "
+                "GOOGLE_APPLICATION_CREDENTIALS or application default credentials."
+            )
+
+        vertexai.init(
+            project=settings.GCP_PROJECT_ID,
+            location=settings.GCP_LOCATION,
+        )
+        logger.info(
+            "Vertex AI initialised (project=%s, location=%s)",
+            settings.GCP_PROJECT_ID,
+            settings.GCP_LOCATION,
+        )
 
         # Langfuse is optional — gracefully disabled when keys are absent
         self._langfuse: Optional[Any] = None
@@ -148,8 +176,10 @@ class LLMGateway:
         tools: Optional[Any] = None,
     ) -> Any:
         """
-        Build a Gemini GenerativeModel with a proper system_instruction.
+        Build a Vertex AI GenerativeModel with a proper system_instruction.
         """
+        from vertexai.generative_models import GenerativeModel  # type: ignore[import]
+
         kwargs: Dict[str, Any] = {
             "model_name": model_name,
             "system_instruction": system_instruction,
@@ -158,7 +188,7 @@ class LLMGateway:
             kwargs["tools"] = [tools]
 
         logger.debug("Building model '%s' (tools=%s)", model_name, tools is not None)
-        return self._genai.GenerativeModel(**kwargs)
+        return GenerativeModel(**kwargs)
 
     def start_chat(
         self,
@@ -183,17 +213,15 @@ class LLMGateway:
     ) -> Any:
         """
         Send a message through an active ChatSession, wrapped in a Langfuse span.
+        Uses Vertex AI native async (send_message_async).
         """
         generation = trace.generation(
             name=span_name,
-            model=getattr(getattr(chat, "_model", None), "model_name", "unknown"),
+            model=getattr(getattr(chat, "_model", None), "model_name", getattr(getattr(chat, "_model", None), "_model_name", "unknown")),
             input=str(message)[:2000],
         )
         try:
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, lambda: chat.send_message(message)
-            )
+            response = await chat.send_message_async(message)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -224,18 +252,13 @@ class LLMGateway:
         """
         One-shot text generation (no chat session).
 
-        Args:
-            prompt:             The user prompt.
-            model_name:         Gemini model to use (default: GEMINI_CHAT_MODEL).
-            system_instruction: Optional system prompt.
-            tools:              Optional Gemini Tool for function calling.
-            generation_config:  Optional GenerationConfig dict.
-            trace:              Langfuse trace (real or _NoOpTrace).
-            span_name:          Label for the Langfuse generation span.
-
-        Returns:
-            The raw GenerateContentResponse from Gemini.
+        Uses Vertex AI native async (generate_content_async).
         """
+        from vertexai.generative_models import (  # type: ignore[import]
+            GenerationConfig,
+            GenerativeModel,
+        )
+
         from app.core.config import settings
 
         trace = trace or _NoOpTrace()
@@ -247,11 +270,11 @@ class LLMGateway:
         if tools is not None:
             model_kwargs["tools"] = [tools] if not isinstance(tools, list) else tools
 
-        model = self._genai.GenerativeModel(**model_kwargs)
+        model = GenerativeModel(**model_kwargs)
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
-            gen_kwargs["generation_config"] = self._genai.GenerationConfig(
+            gen_kwargs["generation_config"] = GenerationConfig(
                 **generation_config
             )
 
@@ -262,10 +285,7 @@ class LLMGateway:
         )
 
         try:
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, lambda: model.generate_content(prompt, **gen_kwargs)
-            )
+            response = await model.generate_content_async(prompt, **gen_kwargs)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -297,26 +317,22 @@ class LLMGateway:
         """
         Multimodal generation: text prompt + PIL Image objects.
 
-        Args:
-            prompt:            The text prompt.
-            images:            List of PIL.Image objects.
-            model_name:        Gemini model (default: GEMINI_VISION_MODEL).
-            generation_config: Optional GenerationConfig dict.
-            trace:             Langfuse trace.
-            span_name:         Label for the Langfuse span.
-
-        Returns:
-            The raw GenerateContentResponse from Gemini.
+        Uses Vertex AI native async (generate_content_async).
         """
+        from vertexai.generative_models import (  # type: ignore[import]
+            GenerationConfig,
+            GenerativeModel,
+        )
+
         from app.core.config import settings
 
         trace = trace or _NoOpTrace()
         model_name = model_name or settings.GEMINI_VISION_MODEL
-        model = self._genai.GenerativeModel(model_name)
+        model = GenerativeModel(model_name)
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
-            gen_kwargs["generation_config"] = self._genai.GenerationConfig(
+            gen_kwargs["generation_config"] = GenerationConfig(
                 **generation_config
             )
 
@@ -330,9 +346,8 @@ class LLMGateway:
         )
 
         try:
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, lambda: model.generate_content(content_parts, **gen_kwargs)
+            response = await model.generate_content_async(
+                content_parts, **gen_kwargs
             )
 
             usage = self._extract_usage(response)
@@ -354,7 +369,7 @@ class LLMGateway:
 
     @staticmethod
     def _extract_usage(response: Any) -> Optional[Dict[str, int]]:
-        """Extract token usage from a Gemini response."""
+        """Extract token usage from a Vertex AI response."""
         meta = getattr(response, "usage_metadata", None)
         if meta:
             return {
@@ -366,7 +381,7 @@ class LLMGateway:
 
     @staticmethod
     def _extract_text_safe(response: Any) -> str:
-        """Safely extract text from a Gemini response (won't raise on function calls)."""
+        """Safely extract text from a Vertex AI response (won't raise on function calls)."""
         try:
             return response.text
         except (ValueError, AttributeError):
@@ -378,12 +393,21 @@ class LLMGateway:
 
     def flush(self) -> None:
         """
-        Flush any buffered Langfuse events.
+        Flush any buffered Langfuse events and clean up temp credentials.
         Call this on application shutdown (e.g. FastAPI `lifespan` teardown).
         """
         if self._langfuse_enabled and self._langfuse is not None:
             self._langfuse.flush()
             logger.info("Langfuse events flushed.")
+
+        if self._credentials_tmp_path:
+            import os
+
+            try:
+                os.unlink(self._credentials_tmp_path)
+                logger.info("Temp credentials file cleaned up.")
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------

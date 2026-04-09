@@ -10,11 +10,7 @@ import logging
 from typing import Any, Dict
 
 import httpx
-from google.ai.generativelanguage import (  # type: ignore[import]
-    FunctionDeclaration,
-    Schema,
-    Type,
-)
+from vertexai.generative_models import FunctionDeclaration  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 from app.core import backend_client
@@ -36,16 +32,16 @@ class GetListingDetailTool(BaseTool):
         return FunctionDeclaration(
             name=self.name,
             description=self.description,
-            parameters=Schema(
-                type=Type.OBJECT,
-                properties={
-                    "listingId": Schema(
-                        type=Type.STRING,
-                        description="The listing ID returned by search_listings.",
-                    ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "listingId": {
+                        "type": "string",
+                        "description": "The listing ID returned by search_listings.",
+                    },
                 },
-                required=["listingId"],
-            ),
+                "required": ["listingId"],
+            },
         )
 
     async def execute(self, **kwargs: Any) -> Dict[str, Any]:
