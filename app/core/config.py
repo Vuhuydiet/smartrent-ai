@@ -24,8 +24,10 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    # AI Configuration
-    GEMINI_API_KEY: str = ""
+    # Google Cloud / Vertex AI Configuration
+    GCP_CREDENTIALS_BASE64: str = ""  # Base64-encoded service account JSON
+    GCP_PROJECT_ID: str = ""
+    GCP_LOCATION: str = "us-central1"
     GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
     GEMINI_VISION_MODEL: str = (
         "gemini-2.5-flash"  # Model used for listing verification (vision + text)

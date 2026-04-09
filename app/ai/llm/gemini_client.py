@@ -1,6 +1,6 @@
 import logging
 
-import google.generativeai as genai  # type: ignore
+from vertexai.generative_models import GenerativeModel  # type: ignore[import]
 
 from app.core.config import settings
 
@@ -10,18 +10,15 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient(BaseLLM):
-    """Gemini AI client implementation."""
+    """Gemini AI client implementation via Vertex AI."""
 
     def __init__(self, model_name: str = ""):
         """Initialize the Gemini client."""
         model_name = model_name or settings.GEMINI_CHAT_MODEL
         super().__init__(model_name)
 
-        if not settings.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not configured")
-
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(model_name)
+        # Vertex AI must already be initialised by LLMGateway singleton
+        self.model = GenerativeModel(model_name)
 
         # System prompt for SmartRent context
         self.system_prompt = """
@@ -39,11 +36,17 @@ If you don't know something specific about SmartRent, acknowledge it and provide
 """
 
     async def generate_response(self, conversation_context: str) -> str:
-        """Generate response using Gemini API."""
+        """Generate response using Vertex AI Gemini API."""
         try:
-            # Generate response
-            response = self.model.generate_content(conversation_context)
-            return response.text
+            response = await self.model.generate_content_async(conversation_context)
+            try:
+                return response.text
+            except ValueError:
+                # Vertex AI raises ValueError when response contains non-text parts
+                for part in response.candidates[0].content.parts:
+                    if part.text:
+                        return part.text
+                return ""
 
         except Exception as e:
             logger.error(f"Error generating response from Gemini: {str(e)}")

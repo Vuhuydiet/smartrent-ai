@@ -26,12 +26,12 @@ class ToolRegistry:
         self._tools[tool.name] = tool
         logger.debug("Registered tool: %s", tool.name)
 
-    def get_gemini_tool(self) -> Any:
+    def get_tool(self) -> Any:
         """
-        Build and return a Gemini `Tool` object containing all registered
+        Build and return a Vertex AI `Tool` object containing all registered
         FunctionDeclarations. Pass this directly to `GenerativeModel(tools=[...])`.
         """
-        from google.ai.generativelanguage import Tool  # type: ignore[import]
+        from vertexai.generative_models import Tool  # type: ignore[import]
 
         declarations = [t.to_function_declaration() for t in self._tools.values()]
         return Tool(function_declarations=declarations)

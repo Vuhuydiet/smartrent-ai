@@ -17,10 +17,9 @@ class BaseTool(ABC):
     @abstractmethod
     def to_function_declaration(self) -> Any:
         """
-        Return a Gemini FunctionDeclaration describing this tool.
+        Return a Vertex AI FunctionDeclaration describing this tool.
 
         The declaration is used by the LLM to decide when and how to call the tool.
-        Return type is `Any` because google.ai.generativelanguage lacks complete stubs.
         """
         ...
 

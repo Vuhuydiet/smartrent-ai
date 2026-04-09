@@ -6,7 +6,7 @@ Flow per request
 1. Create Langfuse trace
 2. RAG: retrieve per-query context (location codes, amenity IDs, relevant FAQ)
 3. Build Gemini model with fully resolved system_instruction (base + static prefix + dynamic context)
-4. Convert prior history to Gemini Content objects
+4. Convert prior history to Vertex AI Content objects
 5. Agentic loop (max MAX_TOOL_ROUNDS rounds):
    a. Send message → LLM
    b. Extract ALL function calls from response
@@ -23,11 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from google.ai.generativelanguage import (  # type: ignore[import]
-    Content,
-    FunctionResponse,
-    Part,
-)
+from vertexai.generative_models import Content, Part  # type: ignore[import]
 
 from app.agent.rag.retriever import RAGRetriever
 from app.agent.tools.registry import ToolRegistry
@@ -235,11 +231,11 @@ class AgentOrchestrator:
             model = self._gateway.build_model(
                 model_name=settings.GEMINI_CHAT_MODEL,
                 system_instruction=system_instruction,
-                tools=self._tools.get_gemini_tool(),
+                tools=self._tools.get_tool(),
             )
 
             # ── 4. Build chat session with prior history ───────────────────
-            history = _to_gemini_history(messages[:-1])
+            history = _to_vertex_history(messages[:-1])
             chat = self._gateway.start_chat(model, history)
 
             # ── 5. Agentic loop ────────────────────────────────────────────
@@ -262,7 +258,7 @@ class AgentOrchestrator:
                 function_calls = [
                     p.function_call
                     for p in parts
-                    if hasattr(p, "function_call") and p.function_call.name
+                    if p.function_call is not None and p.function_call.name
                 ]
 
                 if not function_calls:
@@ -275,7 +271,7 @@ class AgentOrchestrator:
                 # Execute all tool calls and build a single tool-response Content
                 tool_response_parts: List[Any] = []
                 for fc in function_calls:
-                    args = dict(fc.args)
+                    args = dict(fc.args) if fc.args else {}
                     logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
 
                     tool_span = trace.span(name=f"tool-{fc.name}", input=args)
@@ -308,16 +304,14 @@ class AgentOrchestrator:
                     tools_used.append(fc.name)
 
                     tool_response_parts.append(
-                        Part(
-                            function_response=FunctionResponse(
-                                name=fc.name,
-                                response=result,
-                            )
+                        Part.from_function_response(
+                            name=fc.name,
+                            response=result,
                         )
                     )
 
                 # Feed all tool results back to the model in one turn
-                message_to_send = Content(parts=tool_response_parts)
+                message_to_send = Content(role="user", parts=tool_response_parts)
 
             # ── 6. Extract final text ──────────────────────────────────────
             final_text = _extract_text(response)
@@ -353,20 +347,18 @@ class AgentOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _to_gemini_history(messages: List[ChatMessage]) -> List[Dict[str, Any]]:
-    """Convert ChatMessage list to the dict format expected by ChatSession."""
-    return [
-        {
-            "role": "user" if msg.role == "user" else "model",
-            "parts": [msg.content],
-        }
-        for msg in messages
-    ]
+def _to_vertex_history(messages: List[ChatMessage]) -> List[Content]:
+    """Convert ChatMessage list to Vertex AI Content objects."""
+    history: List[Content] = []
+    for msg in messages:
+        role = "user" if msg.role == "user" else "model"
+        history.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+    return history
 
 
 def _extract_text(response: Any) -> str:
     """
-    Safely pull text from a Gemini GenerateContentResponse.
+    Safely pull text from a Vertex AI GenerateContentResponse.
 
     The simple `.text` accessor raises ValueError when the response contains
     function calls or is otherwise multi-part, so we fall back to iterating parts.
