@@ -76,8 +76,8 @@ SỬ DỤNG CÔNG CỤ:
 - Khi người dùng hỏi thông tin liên hệ, số điện thoại, hoặc muốn liên hệ chủ nhà → GỌI get_listing_detail. Giao diện sẽ TỰ ĐỘNG hiển thị thẻ liên hệ từ dữ liệu trả về. Bạn CHỈ CẦN viết text ngắn gọn, ví dụ: "Đây là thông tin liên hệ của tin đăng này:" hoặc nếu contactAvailable=false thì nói "Chủ nhà chưa cung cấp thông tin liên hệ."
 - Khi người dùng hỏi giá thị trường hoặc muốn so sánh giá → GỌI get_price_estimate.
 - Giá tính bằng VND. Mặc định listingType="RENT" nếu không được chỉ định.
-- Sau khi nhận kết quả tìm kiếm, trình bày tối đa {max_listings} BĐS phù hợp nhất. Mô tả giá, diện tích, vị trí và điểm nổi bật của từng căn.
-- QUAN TRỌNG: Khi trình bày kết quả, LUÔN ghi kèm mã tin (listingId) ở mỗi BĐS, ví dụ: "[Mã tin: abc123]". Điều này giúp bạn tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.
+- Sau khi nhận kết quả tìm kiếm, CHỈ viết 1-2 câu tổng quan ngắn gọn, ví dụ: "Tìm thấy 90 kết quả ở Cần Thơ. Đây là {max_listings} BĐS phù hợp nhất cho bạn." KHÔNG liệt kê chi tiết từng BĐS (giá, diện tích, nội thất...) trong text vì giao diện sẽ TỰ ĐỘNG hiển thị thẻ listing từ dữ liệu trả về.
+- Ghi nhớ listingId từ kết quả search để tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.
 
 PHÂN TRANG:
 - Khi người dùng nói "xem thêm", "tìm tiếp", "còn nữa không", "trang tiếp" → GỌI lại search_listings với cùng tiêu chí nhưng tăng page lên 1. Nhớ giữ nguyên tất cả filter từ lần search trước.
@@ -103,7 +103,17 @@ TIN MỚI ĐĂNG:
 
 HỎI LẠI KHI THIẾU THÔNG TIN:
 - Nếu người dùng yêu cầu tìm BĐS nhưng KHÔNG nêu vị trí (tỉnh/thành, quận/huyện) → HỎI LẠI vị trí trước khi search. Không bao giờ search mà không có ít nhất một tiêu chí vị trí hoặc keyword.
-- Nếu yêu cầu quá mơ hồ (ví dụ: "tìm phòng") → hỏi thêm: vị trí nào? ngân sách bao nhiêu?\
+- Nếu yêu cầu quá mơ hồ (ví dụ: "tìm phòng") → hỏi thêm: vị trí nào? ngân sách bao nhiêu?
+
+KHÔNG BỊA THÔNG TIN:
+- Bạn KHÔNG biết hệ thống đang có listing ở những thành phố nào. KHÔNG BAO GIỜ tự liệt kê hay khẳng định danh sách thành phố có sẵn.
+- Khi người dùng hỏi "hệ thống có listing ở đâu?" → trả lời: "Bạn có thể thử tìm kiếm ở tỉnh/thành phố cụ thể, tôi sẽ kiểm tra giúp bạn."
+- KHÔNG BAO GIỜ bịa đặt thông tin mà bạn không có dữ liệu.
+
+KHÔNG CÓ KẾT QUẢ:
+- Khi search_listings trả về 0 kết quả → BÁO THẲNG cho user: "Hiện tại không tìm thấy BĐS phù hợp tại [vị trí]."
+- KHÔNG TỰ Ý tìm ở thành phố/vị trí khác khi user đã chỉ định rõ vị trí.
+- Chỉ gợi ý mở rộng tìm kiếm nếu user đồng ý: "Bạn có muốn tôi thử tìm ở khu vực lân cận không?"\
 """
 
 
@@ -111,16 +121,22 @@ def _build_system_instruction(
     static_prefix: str,
     dynamic_context: str,
     max_listings: int,
+    base_prompt: Optional[str] = None,
 ) -> str:
     """
     Assemble the final system instruction for a single request.
 
     Structure:
-        [Base rules + tool usage guide]
+        [Base rules + tool usage guide]  — from Langfuse or local fallback
         [Static RAG prefix: all province codes + common amenity IDs]
         [Dynamic RAG context: district codes / FAQ relevant to this specific query]
     """
-    parts = [_SYSTEM_BASE.format(max_listings=max_listings)]
+    template = base_prompt if base_prompt is not None else _SYSTEM_BASE
+    # Langfuse uses {{var}} (Mustache), local fallback uses {var}
+    resolved = template.replace("{{max_listings}}", str(max_listings))
+    # Also handle local fallback's single-brace format
+    resolved = resolved.replace("{max_listings}", str(max_listings))
+    parts = [resolved]
 
     if static_prefix:
         parts.append(static_prefix)
@@ -222,11 +238,17 @@ class AgentOrchestrator:
                 }
             )
 
-            # ── 3. Build model with fully resolved system instruction ───────
+            # ── 3. Fetch prompt from Langfuse (cached) & build system instruction
+            base_prompt, prompt_obj = self._gateway.get_prompt(
+                "smartrent-chat-system",
+                label="production",
+                fallback=_SYSTEM_BASE,
+            )
             system_instruction = _build_system_instruction(
                 self._static_prefix,
                 dynamic_context,
                 settings.MAX_LISTINGS_RETURN,
+                base_prompt=base_prompt,
             )
             model = self._gateway.build_model(
                 model_name=settings.GEMINI_CHAT_MODEL,
@@ -250,7 +272,11 @@ class AgentOrchestrator:
                     "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
                 )
                 response = await self._gateway.send_message(
-                    chat, message_to_send, trace, span_name
+                    chat,
+                    message_to_send,
+                    trace,
+                    span_name,
+                    prompt=prompt_obj if round_num == 0 else None,
                 )
 
                 # Collect every function call the model requested in this round

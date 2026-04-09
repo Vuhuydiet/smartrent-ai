@@ -53,8 +53,9 @@ class GetListingDetailTool(BaseTool):
                 return {"status": "error", "error": data["error"]}
 
             # Compact summary for LLM — keeps token usage low
-            listing_for_llm = {
-                "listingId": data.get("listingId"),
+            addr = data.get("address") or {}
+            listing_for_llm: Dict[str, Any] = {
+                "listingId": str(data.get("listingId", "")),
                 "title": data.get("title", ""),
                 "description": (data.get("description") or "")[
                     :_MAX_DESCRIPTION_LENGTH
@@ -62,25 +63,35 @@ class GetListingDetailTool(BaseTool):
                 "price": data.get("price"),
                 "priceUnit": data.get("priceUnit", ""),
                 "area": data.get("area"),
-                "bedrooms": data.get("bedrooms"),
-                "bathrooms": data.get("bathrooms"),
-                "address": data.get("address", ""),
-                "wardName": data.get("wardName", ""),
-                "districtName": data.get("districtName", ""),
-                "provinceName": data.get("provinceName", ""),
-                "propertyType": data.get("propertyType", ""),
+                "address": addr.get("fullAddress", ""),
+                "wardName": addr.get("wardName", ""),
+                "districtName": addr.get("districtName", ""),
+                "provinceName": addr.get("provinceName", ""),
+                "productType": data.get("productType", ""),
                 "listingType": data.get("listingType", ""),
-                "furnishing": data.get("furnishing", ""),
-                "direction": data.get("direction", ""),
-                "floor": data.get("floor"),
-                "totalFloors": data.get("totalFloors"),
-                "amenities": data.get("amenities", []),
+                "amenities": [
+                    a.get("name") for a in data.get("amenities", []) if a.get("name")
+                ],
                 "contactName": data.get("contactName") or "",
                 "contactPhone": data.get("contactPhone") or "",
                 "contactAvailable": data.get("contactAvailable", False),
-                "postedAt": data.get("postedAt", ""),
-                "expiredAt": data.get("expiredAt", ""),
+                "postDate": data.get("postDate", ""),
             }
+            # Optional fields — only include when present to save tokens
+            for key in (
+                "bedrooms",
+                "bathrooms",
+                "furnishing",
+                "direction",
+                "waterPrice",
+                "electricityPrice",
+                "internetPrice",
+                "serviceFee",
+                "ownerZaloLink",
+            ):
+                val = data.get(key)
+                if val is not None:
+                    listing_for_llm[key] = val
 
             return {
                 "status": "success",
