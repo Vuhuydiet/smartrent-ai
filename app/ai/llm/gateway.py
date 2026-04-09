@@ -207,6 +207,50 @@ class LLMGateway:
         return _NoOpTrace()
 
     # ------------------------------------------------------------------
+    # Prompt management
+    # ------------------------------------------------------------------
+
+    def get_prompt(
+        self,
+        name: str,
+        *,
+        label: Optional[str] = None,
+        fallback: Optional[str] = None,
+        cache_ttl_seconds: int = 300,
+    ) -> tuple[Optional[str], Optional[Any]]:
+        """
+        Fetch a text prompt from Langfuse Prompt Management.
+
+        Args:
+            name: Prompt name (e.g. "smartrent-chat-system").
+            label: Optional label like "production" or "latest".
+            fallback: Returned when Langfuse is disabled or the fetch fails.
+            cache_ttl_seconds: Client-side cache TTL (default 5 min).
+
+        Returns:
+            Tuple of (prompt_text, prompt_object).
+            prompt_object can be linked to a Langfuse generation for version tracking.
+            On failure, returns (fallback, None).
+        """
+        if not self._langfuse_enabled or self._langfuse is None:
+            logger.debug("Langfuse disabled — using fallback prompt for '%s'", name)
+            return fallback, None
+
+        try:
+            kwargs: Dict[str, Any] = {"cache_ttl_seconds": cache_ttl_seconds}
+            if label:
+                kwargs["label"] = label
+            prompt_obj = self._langfuse.get_prompt(name, **kwargs)
+            return prompt_obj.prompt, prompt_obj  # type: ignore[union-attr]
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch prompt '%s' from Langfuse: %s — using fallback",
+                name,
+                e,
+            )
+            return fallback, None
+
+    # ------------------------------------------------------------------
     # Model / chat construction (used by AgentOrchestrator)
     # ------------------------------------------------------------------
 
@@ -257,20 +301,27 @@ class LLMGateway:
         message: Any,
         trace: Any,
         span_name: str = "llm-call",
+        prompt: Optional[Any] = None,
     ) -> Any:
         """
         Send a message through an active ChatSession, wrapped in a Langfuse span.
         Uses Vertex AI native async (send_message_async).
+
+        Args:
+            prompt: Optional Langfuse prompt object for version tracking.
         """
-        generation = trace.generation(
-            name=span_name,
-            model=getattr(
+        gen_kwargs: Dict[str, Any] = {
+            "name": span_name,
+            "model": getattr(
                 getattr(chat, "_model", None),
                 "model_name",
                 getattr(getattr(chat, "_model", None), "_model_name", "unknown"),
             ),
-            input=str(message)[:2000],
-        )
+            "input": str(message)[:2000],
+        }
+        if prompt is not None:
+            gen_kwargs["prompt"] = prompt
+        generation = trace.generation(**gen_kwargs)
         try:
             response = await _retry_on_quota(chat.send_message_async, message)
 
