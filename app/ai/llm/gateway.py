@@ -82,6 +82,7 @@ class LLMGateway:
             raise ValueError("GCP_PROJECT_ID is not configured")
 
         # Decode base64 service account JSON → temp file → set env var
+        self._credentials_tmp_path: Optional[str] = None
         if settings.GCP_CREDENTIALS_BASE64:
             credentials_json = base64.b64decode(settings.GCP_CREDENTIALS_BASE64)
             tmp = tempfile.NamedTemporaryFile(
@@ -90,10 +91,9 @@ class LLMGateway:
             tmp.write(credentials_json)
             tmp.close()
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
-            self._credentials_tmp_path: Optional[str] = tmp.name
+            self._credentials_tmp_path = tmp.name
             logger.info("GCP credentials loaded from base64 env var.")
         else:
-            self._credentials_tmp_path: Optional[str] = None
             logger.warning(
                 "GCP_CREDENTIALS_BASE64 not set — falling back to "
                 "GOOGLE_APPLICATION_CREDENTIALS or application default credentials."
