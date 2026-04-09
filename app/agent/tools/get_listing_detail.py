@@ -79,9 +79,15 @@ class GetListingDetailTool(BaseTool):
             }
             # Optional fields — only include when present to save tokens
             for key in (
-                "bedrooms", "bathrooms", "furnishing", "direction",
-                "waterPrice", "electricityPrice", "internetPrice",
-                "serviceFee", "ownerZaloLink",
+                "bedrooms",
+                "bathrooms",
+                "furnishing",
+                "direction",
+                "waterPrice",
+                "electricityPrice",
+                "internetPrice",
+                "serviceFee",
+                "ownerZaloLink",
             ):
                 val = data.get(key)
                 if val is not None:
