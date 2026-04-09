@@ -217,7 +217,11 @@ class LLMGateway:
         """
         generation = trace.generation(
             name=span_name,
-            model=getattr(getattr(chat, "_model", None), "model_name", getattr(getattr(chat, "_model", None), "_model_name", "unknown")),
+            model=getattr(
+                getattr(chat, "_model", None),
+                "model_name",
+                getattr(getattr(chat, "_model", None), "_model_name", "unknown"),
+            ),
             input=str(message)[:2000],
         )
         try:
@@ -274,9 +278,7 @@ class LLMGateway:
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
-            gen_kwargs["generation_config"] = GenerationConfig(
-                **generation_config
-            )
+            gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
 
         generation = trace.generation(
             name=span_name,
@@ -332,9 +334,7 @@ class LLMGateway:
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
-            gen_kwargs["generation_config"] = GenerationConfig(
-                **generation_config
-            )
+            gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
 
         content_parts: List[Any] = [prompt] + images
 
@@ -346,9 +346,7 @@ class LLMGateway:
         )
 
         try:
-            response = await model.generate_content_async(
-                content_parts, **gen_kwargs
-            )
+            response = await model.generate_content_async(content_parts, **gen_kwargs)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
