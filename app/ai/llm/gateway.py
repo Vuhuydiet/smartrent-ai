@@ -13,10 +13,43 @@ Used by:
 - PricePredictionService (one-shot generate)
 """
 
+import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+from google.api_core.exceptions import ResourceExhausted  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Retry helper for 429 / RESOURCE_EXHAUSTED
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES = 3
+_BASE_DELAY = 15  # seconds — generous because free-tier quota is ~5 RPM
+
+
+async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """
+    Call an async function with exponential backoff on RESOURCE_EXHAUSTED (429).
+    """
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return await fn(*args, **kwargs)
+        except ResourceExhausted:
+            if attempt == _MAX_RETRIES:
+                logger.error(
+                    "Quota exhausted after %d retries — giving up.", _MAX_RETRIES
+                )
+                raise
+            delay = _BASE_DELAY * (2**attempt)
+            logger.warning(
+                "429 RESOURCE_EXHAUSTED — retry %d/%d in %ds",
+                attempt + 1,
+                _MAX_RETRIES,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 # ---------------------------------------------------------------------------
@@ -99,14 +132,22 @@ class LLMGateway:
                 "GOOGLE_APPLICATION_CREDENTIALS or application default credentials."
             )
 
+        location = settings.GCP_LOCATION or "us-central1"
+
+        # Force the API endpoint to match the configured location
+        # This prevents requests from being routed to a wrong region
+        api_endpoint = f"{location}-aiplatform.googleapis.com"
+
         vertexai.init(
             project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_LOCATION,
+            location=location,
+            api_endpoint=api_endpoint,
         )
         logger.info(
-            "Vertex AI initialised (project=%s, location=%s)",
+            "Vertex AI initialised (project=%s, location=%s, endpoint=%s)",
             settings.GCP_PROJECT_ID,
-            settings.GCP_LOCATION,
+            location,
+            api_endpoint,
         )
 
         # Langfuse is optional — gracefully disabled when keys are absent
@@ -187,8 +228,14 @@ class LLMGateway:
         if tools is not None:
             kwargs["tools"] = [tools]
 
-        logger.debug("Building model '%s' (tools=%s)", model_name, tools is not None)
-        return GenerativeModel(**kwargs)
+        model = GenerativeModel(**kwargs)
+        logger.debug(
+            "Building model '%s' (tools=%s, location=%s)",
+            model_name,
+            tools is not None,
+            getattr(model, "_location", "unknown"),
+        )
+        return model
 
     def start_chat(
         self,
@@ -225,7 +272,7 @@ class LLMGateway:
             input=str(message)[:2000],
         )
         try:
-            response = await chat.send_message_async(message)
+            response = await _retry_on_quota(chat.send_message_async, message)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -287,7 +334,9 @@ class LLMGateway:
         )
 
         try:
-            response = await model.generate_content_async(prompt, **gen_kwargs)
+            response = await _retry_on_quota(
+                model.generate_content_async, prompt, **gen_kwargs
+            )
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -346,7 +395,9 @@ class LLMGateway:
         )
 
         try:
-            response = await model.generate_content_async(content_parts, **gen_kwargs)
+            response = await _retry_on_quota(
+                model.generate_content_async, content_parts, **gen_kwargs
+            )
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
