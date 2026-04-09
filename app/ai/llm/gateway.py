@@ -13,10 +13,43 @@ Used by:
 - PricePredictionService (one-shot generate)
 """
 
+import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+from google.api_core.exceptions import ResourceExhausted  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Retry helper for 429 / RESOURCE_EXHAUSTED
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES = 3
+_BASE_DELAY = 15  # seconds — generous because free-tier quota is ~5 RPM
+
+
+async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """
+    Call an async function with exponential backoff on RESOURCE_EXHAUSTED (429).
+    """
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return await fn(*args, **kwargs)
+        except ResourceExhausted:
+            if attempt == _MAX_RETRIES:
+                logger.error(
+                    "Quota exhausted after %d retries — giving up.", _MAX_RETRIES
+                )
+                raise
+            delay = _BASE_DELAY * (2**attempt)
+            logger.warning(
+                "429 RESOURCE_EXHAUSTED — retry %d/%d in %ds",
+                attempt + 1,
+                _MAX_RETRIES,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +272,7 @@ class LLMGateway:
             input=str(message)[:2000],
         )
         try:
-            response = await chat.send_message_async(message)
+            response = await _retry_on_quota(chat.send_message_async, message)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -301,7 +334,9 @@ class LLMGateway:
         )
 
         try:
-            response = await model.generate_content_async(prompt, **gen_kwargs)
+            response = await _retry_on_quota(
+                model.generate_content_async, prompt, **gen_kwargs
+            )
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -360,7 +395,9 @@ class LLMGateway:
         )
 
         try:
-            response = await model.generate_content_async(content_parts, **gen_kwargs)
+            response = await _retry_on_quota(
+                model.generate_content_async, content_parts, **gen_kwargs
+            )
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
