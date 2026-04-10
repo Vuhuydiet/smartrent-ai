@@ -23,8 +23,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Flush Langfuse events on shutdown so no traces are lost."""
+    """Init Vertex AI / Langfuse on startup, flush traces on shutdown."""
+    # Eagerly construct the LLM gateway so vertexai.init() runs before any
+    # request is served. Without this, the first endpoint to construct a
+    # GenerativeModel directly (e.g. /api/v1/completion/) crashes with
+    # GoogleAuthError because Vertex AI has no project configured yet.
+    try:
+        from app.ai.llm.gateway import get_gateway
+
+        get_gateway()
+    except Exception as e:
+        logger.error("Failed to initialise LLMGateway on startup: %s", e, exc_info=True)
+
     yield
+
     try:
         from app.ai.llm.gateway import _gateway_instance
 

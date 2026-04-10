@@ -234,14 +234,19 @@ pytest tests/test_listing_verification.py --cov=app.service.listing_verification
 ## Configuration
 
 ### Environment Variables
-- `GEMINI_API_KEY`: Your Google Gemini API key (required)
+- `GCP_PROJECT_ID`: GCP project ID (required)
+- `GCP_CREDENTIALS_BASE64`: Base64-encoded service account JSON (required)
+- `GCP_LOCATION`: Vertex AI region (default `us-central1`)
+- `GEMINI_VISION_MODEL`: Model used by this service (default `gemini-2.5-flash`)
+- `LANGFUSE_SECRET_KEY` / `LANGFUSE_PUBLIC_KEY`: Optional — enables tracing
 
 ### Model Configuration
-The service uses:
-- **Gemini 2.0 Flash Experimental** for multimodal analysis (images + text)
-- **Gemini 2.5 Pro** for text-only analysis
+The service uses Vertex AI Gemini (configured via `GEMINI_VISION_MODEL`) for
+both multimodal (images + text) and text-only analysis. Default settings:
 - Low temperature (0.1) for consistent results
 - JSON response format for structured output
+- Max 8 images per request, auto-resized to 2048px on the longest edge
+- Downloaded concurrently via `httpx.AsyncClient` (non-blocking)
 
 ## Architecture
 

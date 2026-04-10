@@ -363,7 +363,7 @@ class LLMGateway:
 
         from app.core.config import settings
 
-        trace = trace or _NoOpTrace()
+        active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_CHAT_MODEL
 
         model_kwargs: Dict[str, Any] = {"model_name": model_name}
@@ -378,7 +378,7 @@ class LLMGateway:
         if generation_config:
             gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
 
-        generation = trace.generation(
+        generation = active_trace.generation(
             name=span_name,
             model=model_name,
             input=prompt[:2000],
@@ -428,7 +428,7 @@ class LLMGateway:
 
         from app.core.config import settings
 
-        trace = trace or _NoOpTrace()
+        active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_VISION_MODEL
         model = GenerativeModel(model_name)
 
@@ -438,7 +438,7 @@ class LLMGateway:
 
         content_parts: List[Any] = [prompt] + images
 
-        generation = trace.generation(
+        generation = active_trace.generation(
             name=span_name,
             model=model_name,
             input=prompt[:2000],
