@@ -215,7 +215,7 @@ Be thorough but CONCISE. Keep all text fields short and focused.
                     content = resp.content
 
                     def _decode() -> Image.Image:
-                        img = Image.open(BytesIO(content))
+                        img: Image.Image = Image.open(BytesIO(content))
                         if img.mode != "RGB":
                             img = img.convert("RGB")
                         if img.width > 2048 or img.height > 2048:
