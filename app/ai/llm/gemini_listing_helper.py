@@ -188,9 +188,7 @@ Be thorough but CONCISE. Keep all text fields short and focused.
         return ""
 
     @staticmethod
-    async def _download_images(
-        image_urls: List[str], max_images: int = 8
-    ) -> List[Any]:
+    async def _download_images(image_urls: List[str], max_images: int = 8) -> List[Any]:
         """
         Download and preprocess images from URLs concurrently.
 
