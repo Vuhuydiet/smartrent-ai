@@ -1,10 +1,11 @@
+import asyncio
 import json
 import logging
 import re
 from io import BytesIO
 from typing import Any, Dict, List
 
-import requests  # type: ignore[import-untyped]
+import httpx
 from PIL import Image
 
 from app.ai.llm.gateway import get_gateway
@@ -33,7 +34,7 @@ class GeminiListingVerificationHelper:
         Analyze images along with text content for comprehensive listing verification.
         """
         try:
-            image_objects = self._download_images(images)
+            image_objects = await self._download_images(images)
             if not image_objects:
                 raise ValueError("No valid images could be processed")
 
@@ -63,7 +64,7 @@ class GeminiListingVerificationHelper:
                 span_name="verify-images-text",
             )
 
-            return self._handle_api_response(response.text.strip())
+            return self._handle_api_response(self._response_text(response))
 
         except Exception as e:
             return self._handle_generation_error(str(e))
@@ -98,7 +99,7 @@ class GeminiListingVerificationHelper:
                 span_name="verify-text",
             )
 
-            return self._handle_api_response(response.text.strip())
+            return self._handle_api_response(self._response_text(response))
 
         except Exception as e:
             return self._handle_generation_error(str(e))
@@ -165,30 +166,76 @@ Be thorough but CONCISE. Keep all text fields short and focused.
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _download_images(image_urls: List[str], max_images: int = 8) -> List[Any]:
-        """Download and preprocess images from URLs."""
-        image_objects = []
-        for i, image_url in enumerate(image_urls[:max_images]):
-            try:
-                resp = requests.get(image_url, timeout=10)
-                if resp.status_code != 200:
-                    logger.warning(
-                        "Failed to download image %d: HTTP %s", i + 1, resp.status_code
-                    )
-                    continue
+    def _response_text(response: Any) -> str:
+        """
+        Safely extract text from a Vertex AI response.
 
-                pil_image: Image.Image = Image.open(BytesIO(resp.content))
-                if pil_image.mode != "RGB":
-                    pil_image = pil_image.convert("RGB")
-                if pil_image.width > 2048 or pil_image.height > 2048:
-                    pil_image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+        `response.text` raises ValueError when the response contains no
+        text parts (safety filter, empty candidate, function call).
+        Fall back to iterating parts and return empty string if nothing.
+        """
+        try:
+            text = response.text
+            return text.strip() if text else ""
+        except (ValueError, AttributeError):
+            pass
+        try:
+            for part in response.candidates[0].content.parts:
+                if getattr(part, "text", None):
+                    return part.text.strip()
+        except (AttributeError, IndexError):
+            pass
+        return ""
 
-                image_objects.append(pil_image)
-                logger.info("Successfully processed image %d", i + 1)
-            except Exception as e:
-                logger.error("Error processing image %d: %s", i + 1, e)
+    @staticmethod
+    async def _download_images(
+        image_urls: List[str], max_images: int = 8
+    ) -> List[Any]:
+        """
+        Download and preprocess images from URLs concurrently.
 
-        return image_objects
+        Uses httpx.AsyncClient so we don't block the event loop while waiting
+        on network IO, and PIL decoding is offloaded to a worker thread so the
+        loop keeps serving other requests during CPU-bound image resizing.
+        """
+        urls = image_urls[:max_images]
+        if not urls:
+            return []
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+
+            async def _fetch_and_decode(i: int, url: str) -> Any:
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "Failed to download image %d: HTTP %s",
+                            i + 1,
+                            resp.status_code,
+                        )
+                        return None
+                    content = resp.content
+
+                    def _decode() -> Image.Image:
+                        img = Image.open(BytesIO(content))
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        if img.width > 2048 or img.height > 2048:
+                            img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+                        return img
+
+                    pil_image = await asyncio.to_thread(_decode)
+                    logger.info("Successfully processed image %d", i + 1)
+                    return pil_image
+                except Exception as e:
+                    logger.error("Error processing image %d: %s", i + 1, e)
+                    return None
+
+            results = await asyncio.gather(
+                *(_fetch_and_decode(i, url) for i, url in enumerate(urls))
+            )
+
+        return [img for img in results if img is not None]
 
     @staticmethod
     def _parse_json_response(response_text: str) -> Dict[str, Any]:

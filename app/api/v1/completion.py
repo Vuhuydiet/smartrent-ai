@@ -3,10 +3,10 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
-from app.ai import get_llm_instance
-from app.ai.llm.base_llm import BaseLLM
+from app.ai.llm.gateway import get_gateway
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,45 +25,61 @@ class CompletionResponse(BaseModel):
     model_used: str
 
 
-def get_llm() -> BaseLLM:
-    try:
-        return get_llm_instance()
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"LLM service not available: {str(e)}",
-        )
-
-
 @router.post("/", response_model=CompletionResponse, status_code=status.HTTP_200_OK)
-async def completion(
-    request: CompletionRequest,
-    llm: BaseLLM = Depends(get_llm),
-) -> CompletionResponse:
+async def completion(request: CompletionRequest) -> CompletionResponse:
     """
-    Raw completion endpoint: sends a prompt directly to the configured LLM and returns the generated text and token usage.
-
-    - **prompt**: The text prompt to send to the model
-    - **model**: Optional model override (currently informational only)
-    - **max_tokens**, **temperature**: Optional tuning params (not all LLM implementations use these yet)
+    Raw completion endpoint: sends a prompt directly to Gemini via the shared
+    LLMGateway (so all calls are traced through Langfuse and benefit from
+    quota retry). Used by backend to generate listing descriptions.
     """
     if not request.prompt or not request.prompt.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Prompt cannot be empty"
         )
 
-    try:
-        # Currently the BaseLLM interface expects a single string and returns (text, token_usage)
-        text = await llm.generate_response(request.prompt)
+    gateway = get_gateway()
+    model_name = request.model or settings.GEMINI_CHAT_MODEL
 
-        return CompletionResponse(
-            text=text, model_used=getattr(llm, "model_name", request.model or "unknown")
+    generation_config: dict = {}
+    if request.temperature is not None:
+        generation_config["temperature"] = request.temperature
+    if request.max_tokens is not None:
+        generation_config["max_output_tokens"] = request.max_tokens
+
+    trace = gateway.create_trace(
+        name="completion",
+        input=request.prompt[:500],
+        metadata={"model": model_name},
+    )
+
+    try:
+        response = await gateway.generate(
+            prompt=request.prompt,
+            model_name=model_name,
+            generation_config=generation_config or None,
+            trace=trace,
+            span_name="completion-generate",
         )
+
+        # Safe text extraction — response.text raises ValueError on non-text parts
+        try:
+            text = response.text
+        except (ValueError, AttributeError):
+            text = ""
+            for part in response.candidates[0].content.parts:
+                if getattr(part, "text", None):
+                    text = part.text
+                    break
+
+        trace.update(output={"text": text[:500]})
+
+        return CompletionResponse(text=text, model_used=model_name)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error calling completion endpoint: {str(e)}")
+        logger.error("Error calling completion endpoint: %s", e, exc_info=True)
+        trace.update(output={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while generating completion",

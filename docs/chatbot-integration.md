@@ -1,241 +1,185 @@
-# SmartRent AI - Gemini Chatbot Integration
+# SmartRent Chatbot Integration
 
-This document describes the Gemini AI chatbot integration for the SmartRent AI platform.
+SmartRent's conversational AI is an agent that helps users search and discuss
+real estate listings. It runs on Vertex AI Gemini through the shared
+`LLMGateway` (see [llm-integration.md](llm-integration.md)) and uses function
+calling to invoke backend tools.
 
-## Overview
+## What the agent can do
 
-The SmartRent AI platform now includes an intelligent chatbot powered by Google's Gemini AI model. The chatbot can assist users with:
+- Search for listings by location, price, area, amenities, etc.
+- Fetch full details (including contact info) for a specific listing
+- Estimate fair market rent for a property
+- Compare multiple listings
+- Answer general questions about the SmartRent platform
 
-- Property management questions
-- Rental inquiries
-- Smart home features
-- Tenant services
-- Maintenance requests
-- Payment and billing questions
+It is **scope-constrained**: it refuses off-topic requests (cooking, sports,
+programming, etc.) and always replies in Vietnamese.
 
 ## Setup
 
-### 1. Install Dependencies
-
-The required dependency is already added to `requirements.txt`:
+### 1. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-### 2. Configure API Key
+### 2. Configure environment
 
-1. Get your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-3. Update the `.env` file with your API key:
-   ```
-   GEMINI_API_KEY=your_actual_api_key_here
-   ```
+Copy `.env.example` to `.env` and fill in:
 
-### 3. Start the Application
+```env
+# Vertex AI (required)
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_CREDENTIALS_BASE64=<base64 of your service account JSON>
+GCP_LOCATION=us-central1
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+
+# Langfuse observability (optional but recommended)
+LANGFUSE_SECRET_KEY=sk-...
+LANGFUSE_PUBLIC_KEY=pk-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+
+# Backend
+SMARTRENT_BACKEND_URL=http://localhost:8080
+```
+
+There is **no `GEMINI_API_KEY`** — the project uses Vertex AI with GCP
+service account authentication.
+
+### 3. Run the service
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## API Endpoints
+At startup `LLMGateway` is eagerly initialised, so any misconfiguration in
+GCP credentials surfaces immediately in the logs (not on the first request).
 
-### POST `/api/v1/chat/chat`
+## API
 
-Send a message to the AI chatbot.
+### `POST /api/v1/chat`
 
-**Request Body:**
+Sends the full conversation history for one user turn. The client is
+responsible for carrying the history forward; the server is stateless.
 
-```json
-{
-  "message": "How do I submit a maintenance request?",
-  "conversation_id": "optional-conversation-id",
-  "context": "optional-additional-context"
-}
-```
-
-**Response:**
+**Request body:**
 
 ```json
 {
-  "message": "To submit a maintenance request, you can...",
-  "conversation_id": "uuid-conversation-id",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "model_used": "gemini-2.5-flash"
-}
-```
-
-### GET `/api/v1/chat/conversation/{conversation_id}`
-
-Retrieve conversation history.
-
-**Response:**
-
-```json
-{
-  "conversation_id": "uuid-conversation-id",
   "messages": [
-    {
-      "role": "user",
-      "content": "How do I submit a maintenance request?",
-      "timestamp": "2024-01-15T10:30:00Z"
-    },
-    {
-      "role": "assistant",
-      "content": "To submit a maintenance request, you can...",
-      "timestamp": "2024-01-15T10:30:05Z"
-    }
-  ],
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-15T10:30:05Z"
+    { "role": "user", "content": "Tôi muốn tìm phòng trọ ở Quận 1, TP.HCM dưới 5 triệu" }
+  ]
 }
 ```
 
-### DELETE `/api/v1/chat/conversation/{conversation_id}`
+Constraints: `messages` must be non-empty and the last item must have
+`role: "user"`.
 
-Clear conversation history.
-
-**Response:**
+**Response body:**
 
 ```json
 {
-  "message": "Conversation cleared successfully"
+  "message": {
+    "role": "assistant",
+    "content": "Tìm thấy 12 kết quả ở Quận 1. Đây là 5 BĐS phù hợp nhất cho bạn."
+  },
+  "metadata": {
+    "model": "gemini-2.5-flash",
+    "tools_used": ["search_listings"],
+    "rag_context_injected": true
+  },
+  "listings": {
+    "listings": [/* raw backend listing objects */],
+    "totalCount": 5,
+    "selectedFromTotal": 12,
+    "currentPage": 1,
+    "pageSize": 5,
+    "totalPages": 1
+  }
 }
 ```
 
-### GET `/api/v1/chat/conversations`
+When the user is not searching, `listings` is `null`.
 
-List all conversation IDs.
+### `GET /api/v1/health`
 
-**Response:**
-
-```json
-["uuid-conversation-id-1", "uuid-conversation-id-2"]
-```
-
-### GET `/api/v1/chat/health`
-
-Check chatbot service health.
-
-**Response:**
-
-```json
-{
-  "status": "healthy",
-  "service": "chatbot"
-}
-```
-
-## Usage Examples
-
-### Basic Chat
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/chat/chat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Hello, I need help with my smart lock"
-  }'
-```
-
-### Continue Conversation
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/chat/chat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "The lock is not responding to my app",
-    "conversation_id": "your-conversation-id-here"
-  }'
-```
-
-### With Additional Context
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/chat/chat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "I need help with my lease",
-    "context": "User is a tenant in Building A, Unit 205, lease expires in 3 months"
-  }'
-```
+Chat service health check. Returns `200` when the agent can be initialised.
 
 ## Architecture
 
-The chatbot integration follows the existing project architecture:
+```
+app/
+├── api/v1/chat.py                     # FastAPI router
+├── service/chat_service.py            # Thin wrapper → AgentOrchestrator
+├── agent/
+│   ├── orchestrator.py                # Agent loop (function calling)
+│   ├── tools/
+│   │   ├── registry.py                # ToolRegistry (builds Gemini Tool)
+│   │   ├── search_listings.py         # SmartRent backend search
+│   │   ├── get_listing_detail.py      # Fetch full listing
+│   │   └── get_price_estimate.py      # XGBoost + rule-based estimator
+│   └── rag/
+│       ├── retriever.py               # Dynamic per-query RAG context
+│       └── knowledge_base/            # Province codes, amenities, FAQ
+└── ai/llm/gateway.py                  # Vertex AI + Langfuse entry point
+```
 
-- **DTOs**: `app/dto/chat.py` - Data transfer objects for chat requests/responses
-- **Service**: `app/ai/chatbot_service.py` - Core chatbot logic and Gemini integration
-- **API**: `app/api/v1/chat.py` - FastAPI endpoints for chat functionality
-- **Config**: `app/core/config.py` - Configuration management including API key
+### Per-request flow
+
+1. `ChatService` delegates to the `AgentOrchestrator` singleton
+2. `AgentOrchestrator.run()`:
+   - Creates a Langfuse `chat-request` trace
+   - Runs RAG retrieval (`retriever.retrieve(user_message)`)
+   - Fetches the `smartrent-chat-system` prompt from Langfuse (with local
+     fallback) and assembles the system instruction
+   - Builds the Gemini model with `system_instruction` + registered tools
+   - Seeds a chat session with the prior turns from the request
+   - Runs up to **5 tool-call rounds**: call the LLM → extract any
+     `function_call` parts → dispatch via `ToolRegistry` → feed results back
+   - Extracts the final assistant text and builds the listings payload from
+     any raw listings collected during tool execution
+3. Returns `AgentResult` → `ChatService` maps to `ChatResponse`
+
+### Stateless session handling
+
+The server does **not** store conversations. Every request must include the
+full `messages` array. To continue a conversation, the client appends the
+assistant's response and the next user turn and posts the full list again.
 
 ## Features
 
-### Conversation Management
-
-- Maintains conversation history in memory
-- Supports multiple concurrent conversations
-- Conversation IDs for session management
-
-### Smart Context Handling
-
-- System prompt optimized for SmartRent domain
-- Conversation history included in context
-- Optional additional context per request
-- Token limit management (last 10 messages)
-
-### Error Handling
-
-- Comprehensive error handling and logging
-- Graceful fallbacks for API failures
-- Input validation and sanitization
-
-### Health Monitoring
-
-- Health check endpoint for service monitoring
-- API key validation on service initialization
-
-## Testing
-
-Run the chatbot tests:
-
-```bash
-pytest tests/test_chatbot.py -v
-```
-
-## Security Considerations
-
-1. **API Key Security**: Store the Gemini API key securely in environment variables
-2. **Input Validation**: All user inputs are validated and sanitized
-3. **Rate Limiting**: Consider implementing rate limiting for production use
-4. **Conversation Storage**: Current implementation stores conversations in memory - consider database storage for production
-
-## Production Considerations
-
-1. **Database Storage**: Replace in-memory conversation storage with database persistence
-2. **Caching**: Implement Redis or similar for conversation caching
-3. **Rate Limiting**: Add rate limiting to prevent abuse
-4. **Monitoring**: Add comprehensive logging and monitoring
-5. **Scaling**: Consider implementing conversation partitioning for horizontal scaling
+- **Function calling** — the agent decides when to call `search_listings`,
+  `get_listing_detail`, or `get_price_estimate` instead of hallucinating.
+- **RAG context** — static (province codes, amenity IDs) + dynamic
+  (district lookup, FAQ matches for the current query) context is injected
+  into every `system_instruction`.
+- **Langfuse tracing** — every chat call produces a full trace with
+  per-round spans, tool spans, token usage, and linked prompt version.
+- **Prompt management** — the system prompt is fetched from Langfuse
+  (`smartrent-chat-system` / label `production`) and is editable without a
+  redeploy. Falls back to a local constant if Langfuse is unreachable.
+- **Quota retry** — 429 `ResourceExhausted` errors are retried with
+  exponential backoff (`_retry_on_quota` in the gateway).
+- **Request timeout** — 120 s overall per request; the agent loop is capped
+  at 5 tool rounds to prevent runaway function calling.
 
 ## Troubleshooting
 
-### Common Issues
+1. **`GoogleAuthError: Unable to find your project`**
+   - `GCP_PROJECT_ID` is not set, or `GCP_CREDENTIALS_BASE64` is missing /
+     invalid. Check startup logs for `Vertex AI initialised (project=...)`.
 
-1. **"GEMINI_API_KEY is not configured"**
+2. **Agent ignores tools and answers from memory**
+   - Usually a prompt regression. Check the active version of
+     `smartrent-chat-system` in Langfuse.
 
-   - Ensure your `.env` file contains a valid API key
-   - Check that the environment variable is loaded correctly
+3. **429 `RESOURCE_EXHAUSTED` after retries**
+   - You've hit the Vertex quota for the configured project/region. Either
+     raise the quota or reduce traffic. The retry logic waits up to
+     ~1 minute before giving up.
 
-2. **"Import 'google.generativeai' could not be resolved"**
-
-   - Run `pip install google-generativeai==0.3.2`
-   - Verify the package is installed in your virtual environment
-
-3. **API Rate Limits**
-   - Google has rate limits on the Gemini API
-   - Implement exponential backoff for retries
-   - Consider upgrading your API quota if needed
+4. **Langfuse traces missing**
+   - `LANGFUSE_SECRET_KEY` / `LANGFUSE_PUBLIC_KEY` not set, or network
+     blocked. The gateway silently uses no-op traces when Langfuse is
+     unavailable — check startup logs for `Langfuse tracing enabled`.

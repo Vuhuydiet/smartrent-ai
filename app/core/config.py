@@ -28,12 +28,12 @@ class Settings(BaseSettings):
     GCP_CREDENTIALS_BASE64: str = ""  # Base64-encoded service account JSON
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "us-central1"
-    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash-ga"  # Model used for chat responses
+    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
     GEMINI_VISION_MODEL: str = (
-        "gemini-2.5-flash-ga"  # Model used for listing verification (vision + text)
+        "gemini-2.5-flash"  # Model used for listing verification (vision + text)
     )
     GEMINI_PRICE_MODEL: str = (
-        "gemini-2.5-flash-ga"  # Model used for price prediction (function calling)
+        "gemini-2.5-flash"  # Model used for price prediction (function calling)
     )
 
     # SmartRent Backend Configuration
