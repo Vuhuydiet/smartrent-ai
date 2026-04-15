@@ -26,7 +26,13 @@ class SimilarListingRequest(BaseModel):
     target: ListingFeature
     candidates: List[ListingFeature]
     top_n: int = 8
-    alpha: float = 0.4  # CF weight vs CBF weight
+    alpha: float = 0.4  # CF weight vs CBF weight (unused for similar, kept for compat)
+    user_interactions: Optional[
+        List[InteractionEntry]
+    ] = None  # Optional: user interaction weights
+    interaction_features: Optional[
+        List[ListingFeature]
+    ] = None  # Data for historical listings to build profile vector
 
 
 class PersonalizedFeedRequest(BaseModel):
@@ -38,6 +44,7 @@ class PersonalizedFeedRequest(BaseModel):
     candidates: List[ListingFeature]
     top_n: int = 20
     alpha: float = 0.4  # CF vs CBF weighting
+    interaction_features: Optional[List[ListingFeature]] = None
 
 
 class RecommendationItem(BaseModel):

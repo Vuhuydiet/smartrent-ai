@@ -29,46 +29,97 @@ class RecommendationService:
         if not req.candidates:
             return []
 
-        # Feature engineering
+        # Feature matrix — includes target, candidates, and historical interaction features
+        all_listings_for_matrix = [req.target] + req.candidates
+        if req.interaction_features:
+            all_listings_for_matrix += req.interaction_features
+
         features_matrix, id_to_index = self._build_feature_matrix(
-            [req.target] + req.candidates
+            all_listings_for_matrix
         )
         target_vec = features_matrix[id_to_index[req.target.listing_id]]
 
+        # --- Build user profile vector (for personalization) ---
+        has_personalization = (
+            req.user_interactions is not None and len(req.user_interactions) > 0
+        )
+        profile_vector = np.zeros(features_matrix.shape[1])
+        if has_personalization and req.user_interactions is not None:
+            total_weight = 0.0
+            for interaction in req.user_interactions:
+                if interaction.listing_id in id_to_index:
+                    w = interaction.weight
+                    profile_vector += (
+                        w * features_matrix[id_to_index[interaction.listing_id]]
+                    )
+                    total_weight += w
+            if total_weight > 0:
+                profile_vector /= total_weight
+            else:
+                has_personalization = False
+
+        # --- Score each candidate ---
         results = []
         for candidate in req.candidates:
             candidate_vec = features_matrix[id_to_index[candidate.listing_id]]
-            # Cosine similarity (1D vectors -> reshape to 2D)
-            cbf_score = cosine_similarity(
-                target_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
-            )[0][0]
 
-            # Boost based on VIP type and freshness
-            vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
-            freshness_boost = max(
-                0, 1 - (candidate.post_date_days_ago * 0.01)
-            )  # Decays over 100 days
+            # 1. Similarity score
+            similarity_score = self._compute_similarity_with_penalty(
+                target_vec, candidate_vec, req.target, candidate
+            )
 
-            hybrid_score = cbf_score * vip_boost * (1 + 0.1 * freshness_boost)
+            # 2. Personalization score
+            personalization_score = 0.0
+            if has_personalization:
+                personalization_score = cosine_similarity(
+                    profile_vector.reshape(1, -1), candidate_vec.reshape(1, -1)
+                )[0][0]
+
+            # 3. Blended & Boosted final score
+            final_score = self._calculate_final_score(
+                similarity_score, personalization_score, candidate, has_personalization
+            )
 
             results.append(
                 RecommendationItem(
                     listing_id=candidate.listing_id,
-                    score=round(hybrid_score, 4),
-                    cf_score=0.0,
-                    cbf_score=round(cbf_score, 4),
+                    score=round(final_score, 4),
+                    cf_score=round(personalization_score, 4),
+                    cbf_score=round(similarity_score, 4),
                 )
             )
 
-        # Sort by VIP Status descending (Hard priority), then by hybrid score descending
-        vip_rank_dict = {
-            c.listing_id: self.VIP_RANKS.get(c.vip_type.upper(), 1)
-            for c in req.candidates
-        }
-        results.sort(
-            key=lambda x: (vip_rank_dict.get(x.listing_id, 1), x.score), reverse=True
-        )
+        results.sort(key=lambda x: x.score, reverse=True)
         return results[: req.top_n]
+
+    def _compute_similarity_with_penalty(
+        self, target_vec, candidate_vec, target_feat, candidate_feat
+    ) -> float:
+        similarity_score = cosine_similarity(
+            target_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
+        )[0][0]
+
+        if candidate_feat.province_code != target_feat.province_code:
+            similarity_score *= 0.1
+        elif (
+            target_feat.district_id
+            and candidate_feat.district_id
+            and candidate_feat.district_id != target_feat.district_id
+        ):
+            similarity_score *= 0.8
+        return float(similarity_score)
+
+    def _calculate_final_score(
+        self, sim_score, pers_score, candidate, has_pers
+    ) -> float:
+        if has_pers:
+            blended = (0.9 * sim_score) + (0.1 * pers_score)
+        else:
+            blended = sim_score
+
+        vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
+        freshness_boost = max(0, 1 - (candidate.post_date_days_ago * 0.01))
+        return float(blended * vip_boost * (1 + 0.1 * freshness_boost))
 
     async def get_personalized_feed(
         self, req: PersonalizedFeedRequest
@@ -76,74 +127,113 @@ class RecommendationService:
         if not req.candidates:
             return []
 
-        # Feature matrix for candidates
-        features_matrix, id_to_index = self._build_feature_matrix(req.candidates)
+        # Feature matrix
+        all_listings_for_matrix = req.candidates
+        if req.interaction_features:
+            all_listings_for_matrix = req.interaction_features + req.candidates
 
-        profile_vector = np.zeros(features_matrix.shape[1])
-        total_weight = 0.0
+        features_matrix, id_to_index = self._build_feature_matrix(
+            all_listings_for_matrix
+        )
 
-        # We don't have the full features of the user's past interacted listings here,
-        # but the backend candidate list might contain some of them.
-        for interaction in req.user_interactions:
-            if interaction.listing_id in id_to_index:
-                weight = interaction.weight
-                idx = id_to_index[interaction.listing_id]
-                profile_vector += weight * features_matrix[idx]
-                total_weight += weight
+        # Build Profile
+        profile_vec, total_w = self._build_user_profile(
+            req.user_interactions, features_matrix, id_to_index
+        )
 
-        if total_weight > 0:
-            profile_vector /= total_weight
+        # Preferred Location
+        pref_prov, pref_dist = self._detect_preferred_location(req.interaction_features)
 
-        # CF Computation setup
+        # CF Computation
         cf_scores = self._compute_cf_scores(
-            req.user_interactions,
-            req.all_interactions,
+            req.user_interactions or [],
+            req.all_interactions or [],
             [c.listing_id for c in req.candidates],
         )
 
         results = []
         for candidate in req.candidates:
-            # CBF Score
-            idx = id_to_index[candidate.listing_id]
-            candidate_vec = features_matrix[idx]
-            cbf_score = 0.0
-            if total_weight > 0:
-                cbf_score = cosine_similarity(
-                    profile_vector.reshape(1, -1), candidate_vec.reshape(1, -1)
-                )[0][0]
-
-            # CF Score
-            cf_score = cf_scores.get(candidate.listing_id, 0.0)
-
-            # Combine
-            vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
-            freshness_boost = max(0, 1 - (candidate.post_date_days_ago * 0.01))
-
-            # Hybrid
-            alpha = (
-                req.alpha if total_weight > 0 else 1.0
-            )  # purely CF or default sort if no profile
-            base_score = (alpha * cf_score) + ((1 - alpha) * cbf_score)
-            final_score = base_score * vip_boost * (1 + 0.1 * freshness_boost)
-
-            results.append(
-                RecommendationItem(
-                    listing_id=candidate.listing_id,
-                    score=round(final_score, 4),
-                    cf_score=round(cf_score, 4),
-                    cbf_score=round(cbf_score, 4),
-                )
+            score_data = self._score_personalized_candidate(
+                candidate,
+                features_matrix[id_to_index[candidate.listing_id]],
+                profile_vec,
+                total_w,
+                cf_scores.get(candidate.listing_id, 0.0),
+                pref_prov,
+                pref_dist,
             )
+            results.append(score_data)
 
-        # Sort by VIP Status descending (Hard priority), then by hybrid score descending
-        vip_rank_dict = {
-            c.listing_id: self.VIP_RANKS.get(c.vip_type.upper(), 1)
-            for c in req.candidates
-        }
-        results.sort(
-            key=lambda x: (vip_rank_dict.get(x.listing_id, 1), x.score), reverse=True
-        )
+        results.sort(key=lambda x: x.score, reverse=True)
         return results[: req.top_n]
+
+    def _build_user_profile(
+        self, interactions, features_matrix, id_to_index
+    ) -> Tuple[np.ndarray, float]:
+        profile_vector = np.zeros(features_matrix.shape[1])
+        total_weight = 0.0
+        if interactions:
+            for interaction in interactions:
+                if interaction.listing_id in id_to_index:
+                    w = interaction.weight
+                    profile_vector += (
+                        w * features_matrix[id_to_index[interaction.listing_id]]
+                    )
+                    total_weight += w
+        if total_weight > 0:
+            profile_vector /= total_weight
+        return profile_vector, total_weight
+
+    def _score_personalized_candidate(
+        self,
+        candidate,
+        candidate_vec,
+        profile_vec,
+        total_w,
+        cf_score,
+        pref_prov,
+        pref_dist,
+    ) -> RecommendationItem:
+        # 1. CBF Score
+        cbf_score = 0.0
+        if total_w > 0:
+            cbf_score = cosine_similarity(
+                profile_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
+            )[0][0]
+
+        # Geographic Penalty
+        if pref_prov and candidate.province_code != pref_prov:
+            cbf_score *= 0.5
+        elif pref_dist and candidate.district_id != pref_dist:
+            cbf_score *= 0.9
+
+        # 2. Hybrid Base
+        base_score = (
+            (0.4 * cf_score) + (0.6 * cbf_score) if cf_score > 0 else cbf_score * 0.9
+        )
+
+        # 3. Boosts
+        vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
+        freshness_boost = max(0, 1 - (candidate.post_date_days_ago * 0.01))
+        final_score = base_score * vip_boost * (1 + 0.1 * freshness_boost)
+
+        return RecommendationItem(
+            listing_id=candidate.listing_id,
+            score=round(float(final_score), 4),
+            cf_score=round(float(cf_score), 4),
+            cbf_score=round(float(cbf_score), 4),
+        )
+
+    def _detect_preferred_location(self, interaction_features):
+        if not interaction_features:
+            return None, None
+        provinces = [f.province_code for f in interaction_features if f.province_code]
+        districts = [f.district_id for f in interaction_features if f.district_id]
+        from collections import Counter
+
+        pref_prov = Counter(provinces).most_common(1)[0][0] if provinces else None
+        pref_dist = Counter(districts).most_common(1)[0][0] if districts else None
+        return pref_prov, pref_dist
 
     def _build_feature_matrix(
         self, listings: List[ListingFeature]
@@ -166,11 +256,18 @@ class RecommendationService:
         product_types = ["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"]
         listing_types = ["RENT", "SALE", "SHARE"]
 
+        # Location features
+        province_codes = [listing.province_code or "UNKNOWN" for listing in listings]
+
+        # Unique province codes for one-hot
+        unique_provinces = list(set(province_codes))
+
         matrix = []
         id_to_index = {}
         for idx, listing in enumerate(listings):
             id_to_index[listing.listing_id] = idx
 
+            # Base features: price, area, bedrooms (normalized)
             row = [prices_norm[idx][0], areas_norm[idx][0], bedrooms_norm[idx][0]]
 
             # Add one-hot product type
@@ -180,6 +277,16 @@ class RecommendationService:
             # Add one-hot listing type
             row.extend(
                 [1.0 if listing.listing_type == lt else 0.0 for lt in listing_types]
+            )
+
+            # Location features (one-hot or direct match)
+            # We use a simple approach: if we have 100+ provinces, one-hot might be too wide.
+            # But here we focus on the target vs candidates.
+            # Let's add province match as a high-weight feature implicitly by the matrix
+            # or we can handle it in the distance calculation.
+            # For now, let's add them to the matrix to allow cosine similarity to see them.
+            row.extend(
+                [1.0 if province_codes[idx] == p else 0.0 for p in unique_provinces]
             )
 
             matrix.append(row)
