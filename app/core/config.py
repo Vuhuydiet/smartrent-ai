@@ -48,7 +48,11 @@ class Settings(BaseSettings):
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
 
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True,
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
