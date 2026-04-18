@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from . import (
     chat,
     completion,
+    duplicate_check,
     listing_verification,
     price_suggestion,
     recommendation,
@@ -29,4 +30,9 @@ api_router.include_router(
     recommendation.router,
     prefix="/api/v1/recommendations",
     tags=["Recommendations"],
+)
+api_router.include_router(
+    duplicate_check.router,
+    prefix="/api/v1/listings",
+    tags=["Duplicate Detection"],
 )
