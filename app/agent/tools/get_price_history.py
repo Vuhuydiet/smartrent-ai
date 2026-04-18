@@ -99,7 +99,9 @@ class GetPriceHistoryTool(BaseTool):
                 return {"status": "error", "error": f"Unknown action: {action}"}
 
         except httpx.HTTPStatusError as e:
-            logger.error("Backend HTTP %s for get_price_history", e.response.status_code)
+            logger.error(
+                "Backend HTTP %s for get_price_history", e.response.status_code
+            )
             return {
                 "status": "error",
                 "error": f"Backend returned HTTP {e.response.status_code}",
@@ -110,7 +112,10 @@ class GetPriceHistoryTool(BaseTool):
 
     async def _get_history(self, listing_id: str | None) -> Dict[str, Any]:
         if not listing_id:
-            return {"status": "error", "error": "listingId is required for 'history' action."}
+            return {
+                "status": "error",
+                "error": "listingId is required for 'history' action.",
+            }
 
         data = await backend_client.get_pricing_history(int(listing_id))
         if "error" in data:
@@ -142,7 +147,10 @@ class GetPriceHistoryTool(BaseTool):
 
     async def _get_statistics(self, listing_id: str | None) -> Dict[str, Any]:
         if not listing_id:
-            return {"status": "error", "error": "listingId is required for 'statistics' action."}
+            return {
+                "status": "error",
+                "error": "listingId is required for 'statistics' action.",
+            }
 
         data = await backend_client.get_price_statistics(int(listing_id))
         if "error" in data:

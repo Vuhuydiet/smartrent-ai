@@ -124,9 +124,7 @@ class GetRecommendationsTool(BaseTool):
             "_raw_listings": listings,
         }
 
-    async def _personalized(
-        self, top_n: int, token: str | None
-    ) -> Dict[str, Any]:
+    async def _personalized(self, top_n: int, token: str | None) -> Dict[str, Any]:
         """Get personalized recommendations. Falls back to search if not authenticated."""
         if not token:
             return {

@@ -136,13 +136,15 @@ class GetUserInfoTool(BaseTool):
             for item in saved_items:
                 listing = item.get("listing", item)
                 addr = listing.get("address") or {}
-                listings.append({
-                    "listingId": str(listing.get("listingId", "")),
-                    "title": listing.get("title", ""),
-                    "price": listing.get("price"),
-                    "districtName": addr.get("districtName", ""),
-                    "productType": listing.get("productType", ""),
-                })
+                listings.append(
+                    {
+                        "listingId": str(listing.get("listingId", "")),
+                        "title": listing.get("title", ""),
+                        "price": listing.get("price"),
+                        "districtName": addr.get("districtName", ""),
+                        "productType": listing.get("productType", ""),
+                    }
+                )
             return {
                 "status": "success",
                 "count": len(listings),
