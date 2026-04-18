@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Chat Configuration
     MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user
 
+    # Google Maps (for nearby places / distance calculation)
+    GOOGLE_MAPS_API_KEY: str = ""
+
     # Langfuse Observability
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""

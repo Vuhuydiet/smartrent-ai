@@ -1,5 +1,6 @@
 from app.agent.tools.base_tool import BaseTool
 from app.agent.tools.get_listing_detail import GetListingDetailTool
+from app.agent.tools.get_nearby_places import GetNearbyPlacesTool
 from app.agent.tools.get_price_estimate import GetPriceEstimateTool
 from app.agent.tools.get_price_history import GetPriceHistoryTool
 from app.agent.tools.get_recommendations import GetRecommendationsTool
@@ -16,6 +17,7 @@ def build_default_registry() -> ToolRegistry:
     registry.register(GetListingDetailTool())
     registry.register(GetPriceEstimateTool())
     registry.register(GetPriceHistoryTool())
+    registry.register(GetNearbyPlacesTool())
     registry.register(GetRecommendationsTool())
     registry.register(GetUserInfoTool())
     registry.register(SaveListingTool())
@@ -27,6 +29,7 @@ __all__ = [
     "ToolRegistry",
     "SearchListingsTool",
     "GetListingDetailTool",
+    "GetNearbyPlacesTool",
     "GetPriceEstimateTool",
     "GetPriceHistoryTool",
     "GetRecommendationsTool",
