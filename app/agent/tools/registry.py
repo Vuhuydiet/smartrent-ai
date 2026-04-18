@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.agent.tools.base_tool import BaseTool
 
@@ -36,13 +36,20 @@ class ToolRegistry:
         declarations = [t.to_function_declaration() for t in self._tools.values()]
         return Tool(function_declarations=declarations)
 
-    async def execute(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(
+        self,
+        name: str,
+        args: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Dispatch a tool call by name.
 
         Args:
             name: Tool name as returned by the LLM function call.
             args: Keyword arguments extracted from the function call.
+            context: Optional execution context (e.g. user_id, auth_token)
+                     passed through to the tool's execute() as a "context" kwarg.
 
         Returns:
             Tool result dict. Always contains "status": "success" | "error".
@@ -54,7 +61,10 @@ class ToolRegistry:
 
         logger.info("Executing tool '%s' with args: %s", name, args)
         try:
-            result = await tool.execute(**args)
+            kwargs = {**args}
+            if context is not None:
+                kwargs["context"] = context
+            result = await tool.execute(**kwargs)
             logger.info("Tool '%s' completed successfully.", name)
             return result
         except Exception as e:

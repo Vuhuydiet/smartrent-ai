@@ -29,7 +29,7 @@ from app.agent.rag.retriever import RAGRetriever
 from app.agent.tools.registry import ToolRegistry
 from app.ai.llm.gateway import LLMGateway, get_gateway
 from app.core.config import settings
-from app.dto.chat import ChatMessage
+from app.dto.chat import ChatMessage, LastListingRef
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +61,16 @@ Bạn là trợ lý AI của SmartRent - nền tảng cho thuê và mua bán b�
 PHẠM VI HỖ TRỢ - Bạn CHỈ được hỗ trợ các chủ đề sau:
 1. Tìm kiếm, tra cứu bất động sản cho thuê hoặc mua bán (căn hộ, nhà, phòng trọ, văn phòng, studio)
 2. Thông tin về giá thuê/bán, diện tích, vị trí, tiện nghi của bất động sản
-3. Hỏi đáp về cách sử dụng nền tảng SmartRent (đăng tin, xem tin, liên hệ chủ nhà, thanh toán)
-4. Kinh nghiệm và lời khuyên về thuê/mua nhà tại Việt Nam
+3. Hỏi đáp về cách sử dụng nền tảng SmartRent: đăng tin, xem tin, liên hệ chủ nhà, thanh toán, gói VIP/membership, quản lý tài khoản, lưu tin yêu thích, báo cáo tin vi phạm, bộ lọc tìm kiếm, chia sẻ tin, thông báo, gia hạn tin, và mọi tính năng khác của nền tảng
+4. Kinh nghiệm và lời khuyên về thuê/mua nhà tại Việt Nam, an toàn giao dịch
 5. Các câu hỏi liên quan đến hợp đồng thuê nhà, pháp lý bất động sản cơ bản
+6. Gợi ý BĐS phù hợp, thông tin tài khoản người dùng, tin đã lưu
 
 QUY TẮC BẮT BUỘC:
 - Nếu người dùng hỏi bất kỳ điều gì NGOÀI phạm vi trên (ví dụ: nấu ăn, thể thao, lập trình, toán học, giải trí, chính trị...) bạn PHẢI từ chối nhẹ nhàng bằng tiếng Việt và nhắc người dùng về những gì bạn có thể giúp.
 - KHÔNG bao giờ cố gắng trả lời câu hỏi ngoài chủ đề, dù người dùng yêu cầu.
 - Luôn trả lời bằng TIẾNG VIỆT.
+- Khi có THÔNG TIN THAM KHẢO hoặc HƯỚNG DẪN SỬ DỤNG được cung cấp bên dưới, bạn PHẢI sử dụng thông tin đó để trả lời. KHÔNG ĐƯỢC nói "tôi không có thông tin" nếu thông tin đã được cung cấp.
 
 SỬ DỤNG CÔNG CỤ:
 - Khi người dùng muốn tìm BĐS → GỌI search_listings với tiêu chí phù hợp. Luôn truyền provinceCode khi người dùng đề cập tỉnh/thành. Dùng districtId (số nguyên) cho quận/huyện, productType cho loại BĐS.
@@ -76,8 +78,13 @@ SỬ DỤNG CÔNG CỤ:
 - Khi người dùng hỏi thông tin liên hệ, số điện thoại, hoặc muốn liên hệ chủ nhà → GỌI get_listing_detail. Giao diện sẽ TỰ ĐỘNG hiển thị thẻ liên hệ từ dữ liệu trả về. Bạn CHỈ CẦN viết text ngắn gọn, ví dụ: "Đây là thông tin liên hệ của tin đăng này:" hoặc nếu contactAvailable=false thì nói "Chủ nhà chưa cung cấp thông tin liên hệ."
 - Khi người dùng hỏi giá thị trường hoặc muốn so sánh giá → GỌI get_price_estimate.
 - Giá tính bằng VND. Mặc định listingType="RENT" nếu không được chỉ định.
-- Sau khi nhận kết quả tìm kiếm, CHỈ viết 1-2 câu tổng quan ngắn gọn, ví dụ: "Tìm thấy 90 kết quả ở Cần Thơ. Đây là {max_listings} BĐS phù hợp nhất cho bạn." KHÔNG liệt kê chi tiết từng BĐS (giá, diện tích, nội thất...) trong text vì giao diện sẽ TỰ ĐỘNG hiển thị thẻ listing từ dữ liệu trả về.
-- Ghi nhớ listingId từ kết quả search để tra cứu chi tiết ở các lượt hội thoại sau mà không cần hỏi lại user.
+- Sau khi nhận kết quả tìm kiếm, viết 1-2 câu tổng quan ngắn gọn, sau đó LIỆT KÊ NGẮN GỌN danh sách kết quả theo thứ tự gồm listingId và tiêu đề, ví dụ:
+  "Tìm thấy 90 kết quả ở Cần Thơ. Đây là {max_listings} BĐS phù hợp nhất:
+  1. [ID:35201] Phòng trọ Bình Thạnh 17m²
+  2. [ID:35202] Căn hộ Q1 50m²
+  ..."
+  KHÔNG liệt kê chi tiết (giá, diện tích, nội thất...) vì giao diện sẽ TỰ ĐỘNG hiển thị thẻ listing. Chỉ cần ID + tiêu đề ngắn để bạn có thể tra cứu chi tiết khi user hỏi "cái thứ 2", "trọ đầu tiên"...
+- Khi user hỏi "chi tiết trọ thứ 2", "cái đầu tiên" → TRA listingId từ danh sách đã liệt kê ở tin nhắn trước rồi GỌI get_listing_detail. KHÔNG BAO GIỜ bịa listingId.
 
 PHÂN TRANG:
 - Khi người dùng nói "xem thêm", "tìm tiếp", "còn nữa không", "trang tiếp" → GỌI lại search_listings với cùng tiêu chí nhưng tăng page lên 1. Nhớ giữ nguyên tất cả filter từ lần search trước.
@@ -95,11 +102,33 @@ TIỆN NGHI:
 ĐÁNH GIÁ GIÁ:
 - Khi người dùng hỏi "giá này đắt hay rẻ?", "giá có hợp lý không?" về một BĐS cụ thể → GỌI get_listing_detail để lấy thông tin (giá, diện tích, vị trí, loại BĐS), sau đó GỌI get_price_estimate với askingPrice = giá BĐS đó để đánh giá so với thị trường.
 
+LỊCH SỬ GIÁ:
+- Khi người dùng hỏi "tin này có giảm giá không?", "lịch sử giá", "giá thay đổi thế nào?" → GỌI get_price_history với action="history" và listingId.
+- Khi người dùng muốn xem thống kê giá (giá thấp nhất, cao nhất, trung bình) → GỌI get_price_history với action="statistics" và listingId.
+- Khi người dùng hỏi "có tin nào mới giảm giá không?", "tin giảm giá gần đây" → GỌI get_price_history với action="recent_changes" và daysBack phù hợp (mặc định 7).
+- Sau khi nhận danh sách listingIds từ recent_changes, GỌI search_listings hoặc get_listing_detail để lấy thông tin chi tiết các tin đó.
+
 TÌM THEO VỊ TRÍ GẦN:
 - Khi người dùng muốn tìm BĐS quanh một vị trí cụ thể (gần trường, gần chợ, tọa độ GPS) → dùng latitude, longitude và radiusKm trong search_listings.
 
 TIN MỚI ĐĂNG:
 - Khi người dùng muốn xem tin mới đăng gần đây → dùng postedWithinDays (ví dụ: 7 = trong 7 ngày qua) hoặc sortBy=NEWEST.
+
+GỢI Ý BĐS:
+- Khi người dùng muốn gợi ý, đề xuất, hoặc nói "gợi ý cho tôi", "tìm giúp tôi phòng phù hợp", "đề xuất phòng" → GỌI get_recommendations.
+- Nếu người dùng đề cập một BĐS cụ thể và muốn tìm tương tự → GỌI get_recommendations với listingId.
+- Nếu hệ thống trả về lỗi chưa đăng nhập → sử dụng thông tin sở thích từ cuộc hội thoại và dùng search_listings thay thế.
+
+THÔNG TIN TÀI KHOẢN:
+- Khi người dùng hỏi về tài khoản, hồ sơ cá nhân → GỌI get_user_info với infoType="profile".
+- Khi người dùng hỏi về gói dịch vụ, membership, VIP → GỌI get_user_info với infoType="membership".
+- Khi người dùng hỏi về tin đã lưu, tin yêu thích → GỌI get_user_info với infoType="saved_listings".
+- Nếu chưa đăng nhập → nhắc người dùng đăng nhập.
+
+LƯU TIN:
+- Khi người dùng muốn lưu tin, thêm vào yêu thích → GỌI save_listing với action="save" và listingId từ kết quả search.
+- Khi người dùng muốn bỏ lưu → GỌI save_listing với action="unsave".
+- Nếu chưa đăng nhập → nhắc người dùng đăng nhập.
 
 HỎI LẠI KHI THIẾU THÔNG TIN:
 - Nếu người dùng yêu cầu tìm BĐS nhưng KHÔNG nêu vị trí (tỉnh/thành, quận/huyện) → HỎI LẠI vị trí trước khi search. Không bao giờ search mà không có ít nhất một tiêu chí vị trí hoặc keyword.
@@ -122,6 +151,7 @@ def _build_system_instruction(
     dynamic_context: str,
     max_listings: int,
     base_prompt: Optional[str] = None,
+    last_listings: Optional[List[LastListingRef]] = None,
 ) -> str:
     """
     Assemble the final system instruction for a single request.
@@ -130,6 +160,7 @@ def _build_system_instruction(
         [Base rules + tool usage guide]  — from Langfuse or local fallback
         [Static RAG prefix: all province codes + common amenity IDs]
         [Dynamic RAG context: district codes / FAQ relevant to this specific query]
+        [Last listings context: listing IDs from previous response for reference]
     """
     template = base_prompt if base_prompt is not None else _SYSTEM_BASE
     # Langfuse uses {{var}} (Mustache), local fallback uses {var}
@@ -143,6 +174,14 @@ def _build_system_instruction(
 
     if dynamic_context:
         parts.append(f"THÔNG TIN BỔ SUNG CHO TRUY VẤN NÀY:\n{dynamic_context}")
+
+    if last_listings:
+        lines = [
+            "KẾT QUẢ TÌM KIẾM GẦN NHẤT (dùng listingId khi user hỏi chi tiết):"
+        ]
+        for ref in last_listings:
+            lines.append(f"  {ref.position}. listingId={ref.listingId} — {ref.title}")
+        parts.append("\n".join(lines))
 
     return "\n\n".join(parts)
 
@@ -179,6 +218,9 @@ class AgentOrchestrator:
         self,
         messages: List[ChatMessage],
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        last_listings: Optional[List[LastListingRef]] = None,
     ) -> AgentResult:
         """
         Execute the full agent pipeline for one user turn.
@@ -186,6 +228,8 @@ class AgentOrchestrator:
         Args:
             messages: Full conversation history (the last item must be role=user).
             session_id: Optional ID for grouping traces in Langfuse.
+            user_id: Optional authenticated user ID (for personalized features).
+            auth_token: Optional JWT token (for calling authenticated backend APIs).
 
         Returns:
             AgentResult with the assistant message, optional listings, and metadata.
@@ -194,7 +238,10 @@ class AgentOrchestrator:
 
         try:
             return await asyncio.wait_for(
-                self._run_pipeline(messages, user_message, session_id),
+                self._run_pipeline(
+                    messages, user_message, session_id,
+                    user_id, auth_token, last_listings,
+                ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -213,6 +260,9 @@ class AgentOrchestrator:
         messages: List[ChatMessage],
         user_message: str,
         session_id: Optional[str],
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        last_listings: Optional[List[LastListingRef]] = None,
     ) -> AgentResult:
         """Inner pipeline — separated so run() can wrap it with a timeout."""
 
@@ -249,6 +299,7 @@ class AgentOrchestrator:
                 dynamic_context,
                 settings.MAX_LISTINGS_RETURN,
                 base_prompt=base_prompt,
+                last_listings=last_listings,
             )
             model = self._gateway.build_model(
                 model_name=settings.GEMINI_CHAT_MODEL,
@@ -294,6 +345,14 @@ class AgentOrchestrator:
                     )
                     break
 
+                # Build execution context for tools that need user identity
+                tool_context: Optional[Dict[str, Any]] = None
+                if user_id or auth_token:
+                    tool_context = {
+                        "user_id": user_id,
+                        "auth_token": auth_token,
+                    }
+
                 # Execute all tool calls and build a single tool-response Content
                 tool_response_parts: List[Any] = []
                 for fc in function_calls:
@@ -301,25 +360,15 @@ class AgentOrchestrator:
                     logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
 
                     tool_span = trace.span(name=f"tool-{fc.name}", input=args)
-                    result = await self._tools.execute(fc.name, args)
+                    result = await self._tools.execute(fc.name, args, context=tool_context)
 
-                    # Search results: separate raw listings (for API payload) from the
-                    # compact summary sent back to the LLM.
-                    if (
-                        fc.name == "search_listings"
-                        and result.get("status") == "success"
-                    ):
-                        raw = result.pop("_raw_listings", [])
-                        all_raw_listings.extend(raw)
-
-                    # Detail result: send raw backend object (with user object)
-                    # to frontend, compact summary stays in result for LLM.
-                    if (
-                        fc.name == "get_listing_detail"
-                        and result.get("status") == "success"
-                    ):
-                        raw = result.pop("_raw_listing", result["listing"])
-                        all_raw_listings.append(raw)
+                    # Extract raw listings for the API response payload.
+                    # The compact summary stays in `result` and is sent back to the LLM.
+                    if result.get("status") == "success":
+                        if "_raw_listings" in result:
+                            all_raw_listings.extend(result.pop("_raw_listings"))
+                        if "_raw_listing" in result:
+                            all_raw_listings.append(result.pop("_raw_listing"))
 
                     tool_span.end(
                         output={
@@ -417,16 +466,29 @@ def _build_listings_payload(
     Build the `listings` field for ChatResponse from raw listing objects
     collected during tool execution.
 
+    Deduplicates by listingId — when the same listing appears from both
+    search_listings and get_listing_detail, the later (more detailed) version wins.
+
     Returns None when no listings were found (non-search conversations).
     """
     if not raw_listings:
         return None
 
-    top = raw_listings[: settings.MAX_LISTINGS_RETURN]
+    # Deduplicate: later entries override earlier ones (detail > search card)
+    seen: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for listing in raw_listings:
+        lid = str(listing.get("listingId", id(listing)))
+        if lid not in seen:
+            order.append(lid)
+        seen[lid] = listing  # later version wins (get_listing_detail overrides search)
+
+    unique = [seen[lid] for lid in order]
+    top = unique[: settings.MAX_LISTINGS_RETURN]
     return {
         "listings": top,
         "totalCount": len(top),
-        "selectedFromTotal": len(raw_listings),
+        "selectedFromTotal": len(unique),
         "currentPage": 1,
         "pageSize": len(top),
         "totalPages": 1,

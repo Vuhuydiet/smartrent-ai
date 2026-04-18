@@ -205,10 +205,13 @@ class SearchListingsTool(BaseTool):
         try:
             logger.info("search_listings request params: %s", params)
             data = await backend_client.search_listings(params)
+            raw_listings = data.get("listings", [])
+            listing_ids = [str(l.get("listingId", "?")) for l in raw_listings]
             logger.info(
-                "search_listings response: %d listings, totalCount=%s",
-                len(data.get("listings", [])),
+                "search_listings response: %d listings, totalCount=%s, IDs=%s",
+                len(raw_listings),
                 data.get("totalCount"),
+                listing_ids,
             )
 
             if "error" in data:
