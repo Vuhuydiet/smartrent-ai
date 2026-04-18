@@ -48,9 +48,9 @@ class GetListingDetailTool(BaseTool):
         # Gemini may pass numeric IDs as float (123.0) — normalize to clean string
         raw_id = kwargs["listingId"]
         try:
-            listingId: str = str(int(float(raw_id)))  # noqa: N806
+            listingId = str(int(float(raw_id)))  # noqa: N806
         except (ValueError, TypeError):
-            listingId: str = str(raw_id)  # noqa: N806
+            listingId = str(raw_id)  # noqa: N806
         try:
             data = await backend_client.get_listing(listingId)
 
