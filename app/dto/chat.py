@@ -24,7 +24,9 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     user_id: Optional[str] = None  # Authenticated user ID
     auth_token: Optional[str] = None  # JWT for backend API calls
-    last_listings: Optional[List[LastListingRef]] = None  # Listings from previous response
+    last_listings: Optional[
+        List[LastListingRef]
+    ] = None  # Listings from previous response
 
 
 class ChatResponse(BaseModel):

@@ -89,7 +89,12 @@ _SYNONYMS: Dict[str, List[str]] = {
     "vip": ["goi tin", "nang cap", "subscription", "goi dich vu", "membership"],
     "dang tin": ["tao tin", "post listing", "dang bai", "cho thue phong"],
     "lien he": ["goi dien", "nhan tin", "contact", "so dien thoai", "zalo"],
-    "doi mat khau": ["thay mat khau", "change password", "reset password", "quen mat khau"],
+    "doi mat khau": [
+        "thay mat khau",
+        "change password",
+        "reset password",
+        "quen mat khau",
+    ],
     "xoa tai khoan": ["huy tai khoan", "delete account", "dong tai khoan"],
     "luu tin": ["save", "bookmark", "yeu thich", "quan tam"],
     "bao cao": ["report", "to cao", "tin gia", "lua dao", "vi pham", "khieu nai"],

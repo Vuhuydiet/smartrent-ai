@@ -206,7 +206,7 @@ class SearchListingsTool(BaseTool):
             logger.info("search_listings request params: %s", params)
             data = await backend_client.search_listings(params)
             raw_listings = data.get("listings", [])
-            listing_ids = [str(l.get("listingId", "?")) for l in raw_listings]
+            listing_ids = [str(item.get("listingId", "?")) for item in raw_listings]
             logger.info(
                 "search_listings response: %d listings, totalCount=%s, IDs=%s",
                 len(raw_listings),

@@ -176,9 +176,7 @@ def _build_system_instruction(
         parts.append(f"THÔNG TIN BỔ SUNG CHO TRUY VẤN NÀY:\n{dynamic_context}")
 
     if last_listings:
-        lines = [
-            "KẾT QUẢ TÌM KIẾM GẦN NHẤT (dùng listingId khi user hỏi chi tiết):"
-        ]
+        lines = ["KẾT QUẢ TÌM KIẾM GẦN NHẤT (dùng listingId khi user hỏi chi tiết):"]
         for ref in last_listings:
             lines.append(f"  {ref.position}. listingId={ref.listingId} — {ref.title}")
         parts.append("\n".join(lines))
@@ -239,8 +237,12 @@ class AgentOrchestrator:
         try:
             return await asyncio.wait_for(
                 self._run_pipeline(
-                    messages, user_message, session_id,
-                    user_id, auth_token, last_listings,
+                    messages,
+                    user_message,
+                    session_id,
+                    user_id,
+                    auth_token,
+                    last_listings,
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
@@ -360,7 +362,9 @@ class AgentOrchestrator:
                     logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
 
                     tool_span = trace.span(name=f"tool-{fc.name}", input=args)
-                    result = await self._tools.execute(fc.name, args, context=tool_context)
+                    result = await self._tools.execute(
+                        fc.name, args, context=tool_context
+                    )
 
                     # Extract raw listings for the API response payload.
                     # The compact summary stays in `result` and is sent back to the LLM.

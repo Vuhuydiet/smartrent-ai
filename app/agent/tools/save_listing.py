@@ -86,9 +86,7 @@ class SaveListingTool(BaseTool):
             }
 
         except httpx.HTTPStatusError as e:
-            logger.error(
-                "Backend HTTP %s for save_listing", e.response.status_code
-            )
+            logger.error("Backend HTTP %s for save_listing", e.response.status_code)
             return {
                 "status": "error",
                 "error": f"Backend returned HTTP {e.response.status_code}",
