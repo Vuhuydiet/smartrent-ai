@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 _KB_DIR = Path(__file__).parent / "knowledge_base"
 
 # How many FAQ entries to include per query at most
-_MAX_FAQ = 2
+_MAX_FAQ = 3
+# How many platform guide entries to include per query at most
+_MAX_GUIDES = 1
 # How many amenity matches to include
 _MAX_AMENITIES = 8
 # Minimum keyword match score to include an FAQ entry
@@ -76,9 +78,52 @@ def _normalise(text: str) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
+# ---------------------------------------------------------------------------
+# Synonym expansion — maps normalised terms to semantic equivalents so that
+# "tien phai tra truoc" matches the "dat coc" FAQ, etc.
+# ---------------------------------------------------------------------------
+
+_SYNONYMS: Dict[str, List[str]] = {
+    "dat coc": ["tien phai tra truoc", "tien tam ung", "prepay", "tien giu cho"],
+    "hop dong": ["contract", "lease", "ky ket", "giay to thue"],
+    "vip": ["goi tin", "nang cap", "subscription", "goi dich vu", "membership"],
+    "dang tin": ["tao tin", "post listing", "dang bai", "cho thue phong"],
+    "lien he": ["goi dien", "nhan tin", "contact", "so dien thoai", "zalo"],
+    "doi mat khau": ["thay mat khau", "change password", "reset password", "quen mat khau"],
+    "xoa tai khoan": ["huy tai khoan", "delete account", "dong tai khoan"],
+    "luu tin": ["save", "bookmark", "yeu thich", "quan tam"],
+    "bao cao": ["report", "to cao", "tin gia", "lua dao", "vi pham", "khieu nai"],
+    "gia han": ["renew", "dang lai", "gia han tin", "gia han vip"],
+    "goi y": ["de xuat", "recommendation", "tu van", "phu hop"],
+    "an toan": ["safety", "can than", "phong tranh", "bao ve"],
+    "thong bao": ["notification", "alert", "canh bao", "nhac nho"],
+    "chia se": ["share", "gui tin", "gui link"],
+    "bo loc": ["filter", "loc tim kiem", "tim kiem nang cao"],
+    "thanh toan": ["payment", "nap tien", "chuyen tien", "phi"],
+    "xac minh": ["verify", "xac thuc", "otp"],
+    "tranh chap": ["dispute", "khieu nai", "giai quyet", "phan nan"],
+}
+
+
 def _keyword_score(query_norm: str, keywords: List[str]) -> int:
-    """Count how many keywords (normalised) appear in the normalised query."""
-    return sum(1 for kw in keywords if _normalise(kw) in query_norm)
+    """
+    Count how many keywords (normalised) appear in the normalised query.
+    Also checks synonym groups: if a keyword belongs to a synonym group and
+    any synonym from that group appears in the query, it counts as a match.
+    """
+    score = 0
+    for kw in keywords:
+        kw_norm = _normalise(kw)
+        if kw_norm in query_norm:
+            score += 1
+            continue
+        # Check if any synonym of this keyword appears in the query
+        for _canonical, synonyms in _SYNONYMS.items():
+            group = [_canonical] + synonyms
+            if kw_norm in group and any(syn in query_norm for syn in group):
+                score += 1
+                break
+    return score
 
 
 # ---------------------------------------------------------------------------
@@ -98,17 +143,20 @@ class RAGRetriever:
         raw_areas = _load_json("area_codes.json")
         raw_amenities = _load_json("amenities.json")
         raw_faq = _load_json("faq.json")
+        raw_guides = _load_json("platform_guide.json")
 
         self._provinces: List[Dict] = raw_areas.get("provinces", [])
         self._districts: Dict[str, List[Dict]] = raw_areas.get("districts", {})
         self._amenities: List[Dict] = raw_amenities.get("amenities", [])
         self._faq: List[Dict] = raw_faq.get("entries", [])
+        self._guides: List[Dict] = raw_guides.get("features", [])
 
         logger.info(
-            "RAGRetriever loaded: %d provinces, %d amenities, %d FAQ entries",
+            "RAGRetriever loaded: %d provinces, %d amenities, %d FAQ entries, %d guides",
             len(self._provinces),
             len(self._amenities),
             len(self._faq),
+            len(self._guides),
         )
 
     # ------------------------------------------------------------------
@@ -137,6 +185,10 @@ class RAGRetriever:
         faq_ctx = self._faq_context(query_norm)
         if faq_ctx:
             parts.append(faq_ctx)
+
+        guide_ctx = self._guide_context(query_norm)
+        if guide_ctx:
+            parts.append(guide_ctx)
 
         return "\n\n".join(parts)
 
@@ -308,11 +360,65 @@ class RAGRetriever:
 
         # Sort by score descending, take top N
         scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[:_MAX_FAQ]
+
+        # Deduplicate by category — prefer highest-scoring entry per category,
+        # but allow a second entry from the same category only if we haven't
+        # filled _MAX_FAQ slots with unique categories yet.
+        seen_categories: set = set()
+        top: List[Tuple[int, Dict]] = []
+        deferred: List[Tuple[int, Dict]] = []
+        for item in scored:
+            cat = item[1].get("category", "")
+            if cat not in seen_categories:
+                top.append(item)
+                seen_categories.add(cat)
+            else:
+                deferred.append(item)
+            if len(top) >= _MAX_FAQ:
+                break
+        # Fill remaining slots with deferred (same-category) entries
+        for item in deferred:
+            if len(top) >= _MAX_FAQ:
+                break
+            top.append(item)
 
         lines = ["[THÔNG TIN THAM KHẢO]"]
         for _, entry in top:
             lines.append(f'  Q: {entry["question"]}')
             lines.append(f'  A: {entry["answer"]}')
+
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Private — Platform guide matching
+    # ------------------------------------------------------------------
+
+    def _guide_context(self, query_norm: str) -> str:
+        """
+        Find the most relevant platform guide and return step-by-step instructions.
+        Returns at most _MAX_GUIDES entries to keep the system prompt manageable.
+        """
+        scored: List[Tuple[int, Dict]] = []
+        for guide in self._guides:
+            score = _keyword_score(query_norm, guide.get("keywords", []))
+            if score >= _FAQ_MIN_SCORE:
+                scored.append((score, guide))
+
+        if not scored:
+            return ""
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:_MAX_GUIDES]
+
+        lines = ["[HƯỚNG DẪN SỬ DỤNG]"]
+        for _, guide in top:
+            lines.append(f'  {guide["name"]}:')
+            for i, step in enumerate(guide.get("steps", []), 1):
+                lines.append(f"    Bước {i}: {step}")
+            tips = guide.get("tips", [])
+            if tips:
+                lines.append("  Mẹo:")
+                for tip in tips[:2]:
+                    lines.append(f"    - {tip}")
 
         return "\n".join(lines)

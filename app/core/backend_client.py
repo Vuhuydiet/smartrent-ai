@@ -8,7 +8,7 @@ All backend API calls go through this module so that:
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -68,3 +68,248 @@ async def get_listing(listing_id: str) -> Dict[str, Any]:
         "error": result.get("message", "Listing not found"),
         "code": result.get("code"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Recommendation endpoints
+# ---------------------------------------------------------------------------
+
+
+async def get_similar_listings(
+    listing_id: int, top_n: int = 8, token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    GET /v1/recommendations/similar/{listingId}?topN=N
+
+    Returns similar listings. Auth optional (provides personalization if present).
+    """
+    headers = _auth_headers(token)
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/recommendations/similar/{listing_id}",
+            params={"topN": top_n},
+            headers=headers,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {
+        "error": result.get("message", "Failed to get similar listings"),
+        "code": result.get("code"),
+    }
+
+
+async def get_personalized_recommendations(
+    top_n: int = 20, token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    GET /v1/recommendations/personalized?topN=N
+
+    Returns personalized feed based on user's browsing history. Requires auth.
+    """
+    headers = _auth_headers(token)
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/recommendations/personalized",
+            params={"topN": top_n},
+            headers=headers,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {
+        "error": result.get("message", "Failed to get personalized recommendations"),
+        "code": result.get("code"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# User endpoints
+# ---------------------------------------------------------------------------
+
+
+async def get_user_profile(token: str) -> Dict[str, Any]:
+    """
+    GET /v1/users
+
+    Returns authenticated user's profile.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/users",
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {"error": result.get("message", "Failed to get user profile")}
+
+
+async def get_saved_listings(
+    token: str, page: int = 1, size: int = 10
+) -> Dict[str, Any]:
+    """
+    GET /v1/saved-listings/my-saved
+
+    Returns paginated saved listings for authenticated user.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings/my-saved",
+            params={"page": page, "size": size},
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {"error": result.get("message", "Failed to get saved listings")}
+
+
+async def save_listing(listing_id: Any, token: str) -> Dict[str, Any]:
+    """
+    POST /v1/saved-listings
+
+    Save a listing to user's favorites.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings",
+            json={"listingId": listing_id},
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999":
+        return result.get("data", {"status": "saved"})
+
+    return {"error": result.get("message", "Failed to save listing")}
+
+
+async def unsave_listing(listing_id: Any, token: str) -> Dict[str, Any]:
+    """
+    DELETE /v1/saved-listings/{listingId}
+
+    Remove a listing from user's favorites.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.delete(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings/{listing_id}",
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999":
+        return result.get("data", {"status": "unsaved"})
+
+    return {"error": result.get("message", "Failed to unsave listing")}
+
+
+async def get_user_membership(token: str) -> Dict[str, Any]:
+    """
+    GET /v1/memberships/my-membership
+
+    Returns current active membership/subscription.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/memberships/my-membership",
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {"error": result.get("message", "No active membership found")}
+
+
+# ---------------------------------------------------------------------------
+# Pricing history endpoints
+# ---------------------------------------------------------------------------
+
+
+async def get_pricing_history(listing_id: int) -> Dict[str, Any]:
+    """
+    GET /v1/listings/{listingId}/pricing-history
+
+    Returns full price change history for a listing.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/pricing-history",
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return {"history": result["data"]}
+
+    return {"error": result.get("message", "Failed to get pricing history")}
+
+
+async def get_price_statistics(listing_id: int) -> Dict[str, Any]:
+    """
+    GET /v1/listings/{listingId}/price-statistics
+
+    Returns min/max/avg price and change counts for a listing.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/price-statistics",
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {"error": result.get("message", "Failed to get price statistics")}
+
+
+async def get_recent_price_changes(
+    days_back: int = 7, page: int = 1, size: int = 20
+) -> Dict[str, Any]:
+    """
+    GET /v1/listings/recent-price-changes
+
+    Returns listing IDs with recent price changes.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/recent-price-changes",
+            params={"daysBack": days_back, "page": page, "size": size},
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {"error": result.get("message", "Failed to get recent price changes")}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _auth_headers(token: Optional[str] = None) -> Dict[str, str]:
+    """Build Authorization header if token is provided."""
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}

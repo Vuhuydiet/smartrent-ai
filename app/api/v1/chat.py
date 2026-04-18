@@ -57,7 +57,12 @@ async def chat(
                 detail="Last message must be from user",
             )
 
-        response = await chat_service.process_chat(chat_request.messages)
+        response = await chat_service.process_chat(
+            chat_request.messages,
+            user_id=chat_request.user_id,
+            auth_token=chat_request.auth_token,
+            last_listings=chat_request.last_listings,
+        )
         return response
 
     except HTTPException:
@@ -66,7 +71,7 @@ async def chat(
         logger.error(
             f"Error in chat endpoint: {type(e).__name__}: {str(e)}",
             exc_info=True,
-            extra={"request": chat_request.model_dump()},
+            extra={"message_count": len(chat_request.messages)},
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
