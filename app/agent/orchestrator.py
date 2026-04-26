@@ -21,7 +21,7 @@ Flow per request
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from vertexai.generative_models import Content, Part  # type: ignore[import]
 
@@ -419,6 +419,206 @@ class AgentOrchestrator:
             trace.update(output={"error": str(e)})
             logger.error("AgentOrchestrator.run failed: %s", e, exc_info=True)
             raise
+
+    # ------------------------------------------------------------------
+    # Streaming entry point (SSE — ChatService.process_chat_stream)
+    # ------------------------------------------------------------------
+
+    async def run_stream(
+        self,
+        messages: List[ChatMessage],
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        last_listings: Optional[List[LastListingRef]] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Streaming variant of run() — yields SSE-shaped events as the agent
+        progresses through tool calls and LLM responses.
+
+        Events yielded (dicts with "event" + "data"):
+            {"event": "status",   "data": {"phase": "thinking", "round": int}}
+            {"event": "status",   "data": {"phase": "tool_call", "tool": str}}
+            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str}}
+            {"event": "text",     "data": {"delta": str}}
+            {"event": "listings", "data": {...listings payload...}}
+            {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
+            {"event": "error",    "data": {"message": str}}
+        """
+        user_message = messages[-1].content
+
+        trace = self._gateway.create_trace(
+            name="chat-stream",
+            session_id=session_id,
+            input={"message": user_message},
+            metadata={
+                "model": settings.GEMINI_CHAT_MODEL,
+                "turns": len(messages),
+                "streamed": True,
+            },
+        )
+
+        tools_used: List[str] = []
+        all_raw_listings: List[Dict[str, Any]] = []
+
+        try:
+            # ── RAG ──────────────────────────────────────────────────────
+            rag_span = trace.span(name="rag-retrieve", input={"query": user_message})
+            dynamic_context = self._rag.retrieve(user_message)
+            rag_span.end(
+                output={
+                    "has_context": bool(dynamic_context),
+                    "context_length": len(dynamic_context),
+                }
+            )
+
+            # ── System instruction + model + chat ────────────────────────
+            base_prompt, prompt_obj = self._gateway.get_prompt(
+                "smartrent-chat-system",
+                label="production",
+                fallback=_SYSTEM_BASE,
+            )
+            system_instruction = _build_system_instruction(
+                self._static_prefix,
+                dynamic_context,
+                settings.MAX_LISTINGS_RETURN,
+                base_prompt=base_prompt,
+                last_listings=last_listings,
+            )
+            model = self._gateway.build_model(
+                model_name=settings.GEMINI_CHAT_MODEL,
+                system_instruction=system_instruction,
+                tools=self._tools.get_tool(),
+            )
+            history = _to_vertex_history(messages[:-1])
+            chat = self._gateway.start_chat(model, history)
+
+            # ── Agentic loop ─────────────────────────────────────────────
+            message_to_send: Any = user_message
+            any_text_streamed = False
+
+            for round_num in range(MAX_TOOL_ROUNDS):
+                logger.info(
+                    "Stream loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS
+                )
+                yield {
+                    "event": "status",
+                    "data": {"phase": "thinking", "round": round_num + 1},
+                }
+
+                span_name = (
+                    "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
+                )
+                function_calls: List[Any] = []
+
+                async for chunk in self._gateway.send_message_stream(
+                    chat,
+                    message_to_send,
+                    trace,
+                    span_name=span_name,
+                    prompt=prompt_obj if round_num == 0 else None,
+                ):
+                    if chunk["type"] == "text_delta":
+                        any_text_streamed = True
+                        yield {
+                            "event": "text",
+                            "data": {"delta": chunk["delta"]},
+                        }
+                    elif chunk["type"] == "final":
+                        function_calls = chunk["function_calls"]
+
+                if not function_calls:
+                    logger.info(
+                        "Round %d: no function calls — end of stream.", round_num + 1
+                    )
+                    break
+
+                # ── Tool execution ──────────────────────────────────────
+                tool_context: Optional[Dict[str, Any]] = None
+                if user_id or auth_token:
+                    tool_context = {
+                        "user_id": user_id,
+                        "auth_token": auth_token,
+                    }
+
+                tool_response_parts: List[Any] = []
+                for fc in function_calls:
+                    args = dict(fc.args) if fc.args else {}
+                    logger.info(
+                        "Calling tool '%s' args=%s", fc.name, list(args.keys())
+                    )
+                    yield {
+                        "event": "status",
+                        "data": {"phase": "tool_call", "tool": fc.name},
+                    }
+
+                    tool_span = trace.span(name=f"tool-{fc.name}", input=args)
+                    result = await self._tools.execute(
+                        fc.name, args, context=tool_context
+                    )
+
+                    if result.get("status") == "success":
+                        if "_raw_listings" in result:
+                            all_raw_listings.extend(result.pop("_raw_listings"))
+                        if "_raw_listing" in result:
+                            all_raw_listings.append(result.pop("_raw_listing"))
+
+                    tool_span.end(
+                        output={
+                            "status": result.get("status"),
+                            "count": result.get("count"),
+                        }
+                    )
+                    tools_used.append(fc.name)
+
+                    yield {
+                        "event": "status",
+                        "data": {
+                            "phase": "tool_result",
+                            "tool": fc.name,
+                            "status": result.get("status"),
+                        },
+                    }
+
+                    tool_response_parts.append(
+                        Part.from_function_response(name=fc.name, response=result)
+                    )
+
+                message_to_send = Content(role="user", parts=tool_response_parts)
+
+            # ── Fallback text if model ended without prose ───────────────
+            if not any_text_streamed:
+                fallback = "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
+                yield {"event": "text", "data": {"delta": fallback}}
+
+            # ── Listings payload ────────────────────────────────────────
+            listings_payload = _build_listings_payload(all_raw_listings)
+            if listings_payload:
+                yield {"event": "listings", "data": listings_payload}
+
+            # ── Done ────────────────────────────────────────────────────
+            metadata = {
+                "model": settings.GEMINI_CHAT_MODEL,
+                "tools_used": tools_used,
+                "rag_context_injected": bool(dynamic_context),
+            }
+            trace.update(metadata={"tools_used": tools_used})
+            yield {
+                "event": "done",
+                "data": {"metadata": metadata, "tools_used": tools_used},
+            }
+
+        except asyncio.CancelledError:
+            logger.info("run_stream cancelled (client disconnect)")
+            trace.update(output={"cancelled": True})
+            raise
+        except Exception as e:
+            trace.update(output={"error": str(e)})
+            logger.error("AgentOrchestrator.run_stream failed: %s", e, exc_info=True)
+            yield {
+                "event": "error",
+                "data": {"message": "Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại."},
+            }
 
 
 # ---------------------------------------------------------------------------
