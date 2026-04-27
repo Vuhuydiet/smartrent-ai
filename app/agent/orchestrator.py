@@ -19,6 +19,7 @@ Flow per request
 """
 
 import asyncio
+import functools
 import logging
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -69,7 +70,7 @@ PHẠM VI HỖ TRỢ - Bạn CHỈ được hỗ trợ các chủ đề sau:
 QUY TẮC BẮT BUỘC:
 - Nếu người dùng hỏi bất kỳ điều gì NGOÀI phạm vi trên (ví dụ: nấu ăn, thể thao, lập trình, toán học, giải trí, chính trị...) bạn PHẢI từ chối nhẹ nhàng bằng tiếng Việt và nhắc người dùng về những gì bạn có thể giúp.
 - KHÔNG bao giờ cố gắng trả lời câu hỏi ngoài chủ đề, dù người dùng yêu cầu.
-- Luôn trả lời bằng TIẾNG VIỆT.
+- Trả lời bằng đúng ngôn ngữ người dùng đang dùng. Nếu user viết tiếng Việt → trả lời tiếng Việt. Nếu user viết tiếng Anh → trả lời tiếng Anh. Match the user's language exactly: Vietnamese in → Vietnamese out, English in → English out.
 - Khi có THÔNG TIN THAM KHẢO hoặc HƯỚNG DẪN SỬ DỤNG được cung cấp bên dưới, bạn PHẢI sử dụng thông tin đó để trả lời. KHÔNG ĐƯỢC nói "tôi không có thông tin" nếu thông tin đã được cung cấp.
 
 SỬ DỤNG CÔNG CỤ:
@@ -146,31 +147,47 @@ KHÔNG CÓ KẾT QUẢ:
 """
 
 
-def _build_system_instruction(
+@functools.lru_cache(maxsize=8)
+def _build_static_system_instruction(
+    base_prompt: str,
     static_prefix: str,
-    dynamic_context: str,
     max_listings: int,
-    base_prompt: Optional[str] = None,
+) -> str:
+    """
+    Assemble the STABLE system instruction reused across every request.
+
+    This deliberately excludes per-request data (RAG context, last_listings) so
+    the resulting string is byte-identical across calls — letting Gemini's
+    implicit cache hit and enabling explicit CachedContent registration later.
+
+    Structure:
+        [Base rules + tool usage guide]            — from Langfuse or local fallback
+        [Static RAG prefix: provinces + amenities] — same for every user/turn
+
+    Cached via lru_cache keyed on (base_prompt, static_prefix, max_listings).
+    Both inputs are process-stable, so the cache effectively holds one entry.
+    """
+    resolved = base_prompt.replace("{{max_listings}}", str(max_listings))
+    resolved = resolved.replace("{max_listings}", str(max_listings))
+    parts = [resolved]
+    if static_prefix:
+        parts.append(static_prefix)
+    return "\n\n".join(parts)
+
+
+def _build_dynamic_context_block(
+    dynamic_context: str,
     last_listings: Optional[List[LastListingRef]] = None,
 ) -> str:
     """
-    Assemble the final system instruction for a single request.
+    Build the per-request context block prepended to the user's first message.
 
-    Structure:
-        [Base rules + tool usage guide]  — from Langfuse or local fallback
-        [Static RAG prefix: all province codes + common amenity IDs]
-        [Dynamic RAG context: district codes / FAQ relevant to this specific query]
-        [Last listings context: listing IDs from previous response for reference]
+    Kept OUT of system_instruction so the system_instruction stays cache-stable.
+    The model still sees this content — just on the user side of the turn.
+
+    Returns an empty string when there is nothing to inject.
     """
-    template = base_prompt if base_prompt is not None else _SYSTEM_BASE
-    # Langfuse uses {{var}} (Mustache), local fallback uses {var}
-    resolved = template.replace("{{max_listings}}", str(max_listings))
-    # Also handle local fallback's single-brace format
-    resolved = resolved.replace("{max_listings}", str(max_listings))
-    parts = [resolved]
-
-    if static_prefix:
-        parts.append(static_prefix)
+    parts: List[str] = []
 
     if dynamic_context:
         parts.append(f"THÔNG TIN BỔ SUNG CHO TRUY VẤN NÀY:\n{dynamic_context}")
@@ -290,18 +307,16 @@ class AgentOrchestrator:
                 }
             )
 
-            # ── 3. Fetch prompt from Langfuse (cached) & build system instruction
+            # ── 3. Fetch prompt from Langfuse (cached) & build STABLE system instruction
             base_prompt, prompt_obj = self._gateway.get_prompt(
                 "smartrent-chat-system",
                 label="production",
                 fallback=_SYSTEM_BASE,
             )
-            system_instruction = _build_system_instruction(
+            system_instruction = _build_static_system_instruction(
+                base_prompt or _SYSTEM_BASE,
                 self._static_prefix,
-                dynamic_context,
                 settings.MAX_LISTINGS_RETURN,
-                base_prompt=base_prompt,
-                last_listings=last_listings,
             )
             model = self._gateway.build_model(
                 model_name=settings.GEMINI_CHAT_MODEL,
@@ -314,7 +329,14 @@ class AgentOrchestrator:
             chat = self._gateway.start_chat(model, history)
 
             # ── 5. Agentic loop ────────────────────────────────────────────
-            message_to_send: Any = user_message
+            # Per-request RAG context rides on the user message so the
+            # system_instruction prefix stays cache-stable across requests.
+            context_block = _build_dynamic_context_block(dynamic_context, last_listings)
+            message_to_send: Any = (
+                f"{context_block}\n\n---\n\n{user_message}"
+                if context_block
+                else user_message
+            )
             tools_used: List[str] = []
             all_raw_listings: List[Dict[str, Any]] = []
             response: Any = None
@@ -478,12 +500,10 @@ class AgentOrchestrator:
                 label="production",
                 fallback=_SYSTEM_BASE,
             )
-            system_instruction = _build_system_instruction(
+            system_instruction = _build_static_system_instruction(
+                base_prompt or _SYSTEM_BASE,
                 self._static_prefix,
-                dynamic_context,
                 settings.MAX_LISTINGS_RETURN,
-                base_prompt=base_prompt,
-                last_listings=last_listings,
             )
             model = self._gateway.build_model(
                 model_name=settings.GEMINI_CHAT_MODEL,
@@ -494,13 +514,18 @@ class AgentOrchestrator:
             chat = self._gateway.start_chat(model, history)
 
             # ── Agentic loop ─────────────────────────────────────────────
-            message_to_send: Any = user_message
+            # Per-request RAG context rides on the user message so the
+            # system_instruction prefix stays cache-stable across requests.
+            context_block = _build_dynamic_context_block(dynamic_context, last_listings)
+            message_to_send: Any = (
+                f"{context_block}\n\n---\n\n{user_message}"
+                if context_block
+                else user_message
+            )
             any_text_streamed = False
 
             for round_num in range(MAX_TOOL_ROUNDS):
-                logger.info(
-                    "Stream loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS
-                )
+                logger.info("Stream loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS)
                 yield {
                     "event": "status",
                     "data": {"phase": "thinking", "round": round_num + 1},
@@ -544,9 +569,7 @@ class AgentOrchestrator:
                 tool_response_parts: List[Any] = []
                 for fc in function_calls:
                     args = dict(fc.args) if fc.args else {}
-                    logger.info(
-                        "Calling tool '%s' args=%s", fc.name, list(args.keys())
-                    )
+                    logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
                     yield {
                         "event": "status",
                         "data": {"phase": "tool_call", "tool": fc.name},
@@ -617,7 +640,9 @@ class AgentOrchestrator:
             logger.error("AgentOrchestrator.run_stream failed: %s", e, exc_info=True)
             yield {
                 "event": "error",
-                "data": {"message": "Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại."},
+                "data": {
+                    "message": "Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại."
+                },
             }
 
 
