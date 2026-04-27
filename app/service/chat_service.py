@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from app.agent.orchestrator import get_orchestrator
 from app.dto.chat import ChatMessage, ChatResponse, LastListingRef
@@ -38,4 +38,19 @@ class ChatService:
             message=ChatMessage(role="assistant", content=result.message),
             metadata=result.metadata,
             listings=result.listings,
+        )
+
+    def process_chat_stream(
+        self,
+        messages: List[ChatMessage],
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        last_listings: Optional[List[LastListingRef]] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Delegate to AgentOrchestrator.run_stream — yields SSE-shaped events."""
+        return self._orchestrator.run_stream(
+            messages,
+            user_id=user_id,
+            auth_token=auth_token,
+            last_listings=last_listings,
         )

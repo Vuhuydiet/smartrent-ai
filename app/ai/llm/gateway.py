@@ -337,6 +337,85 @@ class LLMGateway:
             raise
 
     # ------------------------------------------------------------------
+    # Instrumented streaming send (chat mode — AgentOrchestrator)
+    # ------------------------------------------------------------------
+
+    async def send_message_stream(
+        self,
+        chat: Any,
+        message: Any,
+        trace: Any,
+        span_name: str = "llm-stream",
+        prompt: Optional[Any] = None,
+    ):
+        """
+        Streaming variant of send_message — yields incremental events as Vertex AI
+        produces them.
+
+        Event shape (dicts yielded):
+            {"type": "text_delta", "delta": str}       — incremental text
+            {"type": "final", "text": str,             — emitted once at end
+                              "function_calls": list,
+                              "response": GenerationResponse | None}
+
+        The Langfuse generation span is closed once the stream completes with
+        the accumulated text and token usage from the last chunk.
+        """
+        gen_kwargs: Dict[str, Any] = {
+            "name": span_name,
+            "model": getattr(
+                getattr(chat, "_model", None),
+                "model_name",
+                getattr(getattr(chat, "_model", None), "_model_name", "unknown"),
+            ),
+            "input": str(message)[:2000],
+        }
+        if prompt is not None:
+            gen_kwargs["prompt"] = prompt
+        generation = trace.generation(**gen_kwargs)
+
+        accumulated: List[str] = []
+        function_calls: List[Any] = []
+        last_chunk: Any = None
+
+        try:
+            stream = await _retry_on_quota(
+                chat.send_message_async, message, stream=True
+            )
+            async for chunk in stream:
+                last_chunk = chunk
+                try:
+                    parts = chunk.candidates[0].content.parts
+                except (AttributeError, IndexError):
+                    continue
+
+                for part in parts:
+                    text = getattr(part, "text", None)
+                    if text:
+                        accumulated.append(text)
+                        yield {"type": "text_delta", "delta": text}
+
+                    fc = getattr(part, "function_call", None)
+                    if fc is not None and getattr(fc, "name", None):
+                        function_calls.append(fc)
+
+            full_text = "".join(accumulated)
+            yield {
+                "type": "final",
+                "text": full_text,
+                "function_calls": function_calls,
+                "response": last_chunk,
+            }
+
+            usage = self._extract_usage(last_chunk) if last_chunk is not None else None
+            generation.end(output=full_text or "(function call)", usage=usage)
+
+        except Exception as e:
+            generation.end(level="ERROR", status_message=str(e))
+            logger.error("LLM stream failed [%s]: %s", span_name, e, exc_info=True)
+            raise
+
+    # ------------------------------------------------------------------
     # One-shot generate (text only — PricePrediction, future services)
     # ------------------------------------------------------------------
 
