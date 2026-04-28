@@ -12,6 +12,8 @@ class ListingFeature(BaseModel):
     bedrooms: Optional[int] = 0
     province_code: str  # legacyProvinceId string or new province code
     district_id: Optional[int] = None
+    ward_id: Optional[int] = None
+    ward_code: Optional[str] = None
     vip_type: str  # NORMAL | SILVER | GOLD | DIAMOND
     post_date_days_ago: int  # freshness
 

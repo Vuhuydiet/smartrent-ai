@@ -106,7 +106,17 @@ class RecommendationService:
             and candidate_feat.district_id
             and candidate_feat.district_id != target_feat.district_id
         ):
-            similarity_score *= 0.8
+            similarity_score *= 0.7
+        elif (
+            target_feat.ward_id
+            and candidate_feat.ward_id
+            and candidate_feat.ward_id != target_feat.ward_id
+        ) or (
+            target_feat.ward_code
+            and candidate_feat.ward_code
+            and candidate_feat.ward_code != target_feat.ward_code
+        ):
+            similarity_score *= 0.9
         return float(similarity_score)
 
     def _calculate_final_score(
@@ -142,7 +152,22 @@ class RecommendationService:
         )
 
         # Preferred Location
-        pref_prov, pref_dist = self._detect_preferred_location(req.interaction_features)
+        (
+            pref_prov,
+            pref_dist,
+            pref_ward_id,
+            pref_ward_code,
+        ) = self._detect_preferred_location(req.interaction_features)
+
+        # Shift Detection
+        (
+            shift_prov,
+            shift_dist,
+            shift_ward_id,
+            shift_ward_code,
+        ) = self._detect_shift_location(
+            req.interaction_features, pref_prov, pref_dist, pref_ward_id, pref_ward_code
+        )
 
         # CF Computation
         cf_scores = self._compute_cf_scores(
@@ -161,10 +186,57 @@ class RecommendationService:
                 cf_scores.get(candidate.listing_id, 0.0),
                 pref_prov,
                 pref_dist,
+                pref_ward_id,
+                pref_ward_code,
+                shift_prov,
+                shift_dist,
+                shift_ward_id,
+                shift_ward_code,
             )
             results.append(score_data)
 
         results.sort(key=lambda x: x.score, reverse=True)
+
+        # Position Pinning
+        # If there is a shift, find the top 3 candidates that match the shift location and pin them to pos 8,9,10
+        if shift_ward_id or shift_ward_code or shift_dist or shift_prov:
+            pinned: List[RecommendationItem] = []
+            non_pinned: List[RecommendationItem] = []
+            for item in results:
+                c = next(
+                    cand
+                    for cand in req.candidates
+                    if cand.listing_id == item.listing_id
+                )
+                match = False
+                if shift_ward_id and c.ward_id == shift_ward_id:
+                    match = True
+                elif shift_ward_code and c.ward_code == shift_ward_code:
+                    match = True
+                elif (
+                    shift_dist
+                    and not shift_ward_id
+                    and not shift_ward_code
+                    and c.district_id == shift_dist
+                ):
+                    match = True
+                elif (
+                    shift_prov
+                    and not shift_dist
+                    and not shift_ward_id
+                    and not shift_ward_code
+                    and c.province_code == shift_prov
+                ):
+                    match = True
+
+                if match and len(pinned) < 3:
+                    pinned.append(item)
+                else:
+                    non_pinned.append(item)
+
+            final_results = non_pinned[:7] + pinned + non_pinned[7:]
+            return final_results[: req.top_n]
+
         return results[: req.top_n]
 
     def _build_user_profile(
@@ -193,6 +265,12 @@ class RecommendationService:
         cf_score,
         pref_prov,
         pref_dist,
+        pref_ward_id,
+        pref_ward_code,
+        shift_prov,
+        shift_dist,
+        shift_ward_id,
+        shift_ward_code,
     ) -> RecommendationItem:
         # 1. CBF Score
         cbf_score = 0.0
@@ -201,11 +279,31 @@ class RecommendationService:
                 profile_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
             )[0][0]
 
-        # Geographic Penalty
-        if pref_prov and candidate.province_code != pref_prov:
+        # Geographic Penalty (uses preferred location unless there's a shift)
+        target_prov = shift_prov or pref_prov
+        target_dist = shift_dist or pref_dist
+        target_ward_id = shift_ward_id or pref_ward_id
+        target_ward_code = shift_ward_code or pref_ward_code
+
+        if target_prov and candidate.province_code != target_prov:
             cbf_score *= 0.5
-        elif pref_dist and candidate.district_id != pref_dist:
+        elif target_dist and candidate.district_id != target_dist:
+            cbf_score *= 0.7
+        elif (
+            target_ward_id and candidate.ward_id and candidate.ward_id != target_ward_id
+        ) or (
+            target_ward_code
+            and candidate.ward_code
+            and candidate.ward_code != target_ward_code
+        ):
             cbf_score *= 0.9
+
+        # Feature Weighting is applied via the _build_feature_matrix (weights were applied conceptually there,
+        # or we can apply it on the base cbf score if product_type matches but matrix takes care of one-hot similarity)
+        # To specifically boost product_type and price:
+        # Product type one-hot is in the matrix, price is in the matrix.
+        # We can add explicit boost if we know what product type is preferred.
+        # The user profile vector naturally has higher values for the mode product type.
 
         # 2. Hybrid Base
         base_score = (
@@ -226,14 +324,75 @@ class RecommendationService:
 
     def _detect_preferred_location(self, interaction_features):
         if not interaction_features:
-            return None, None
+            return None, None, None, None
         provinces = [f.province_code for f in interaction_features if f.province_code]
         districts = [f.district_id for f in interaction_features if f.district_id]
+        wards_id = [f.ward_id for f in interaction_features if f.ward_id]
+        wards_code = [f.ward_code for f in interaction_features if f.ward_code]
         from collections import Counter
 
         pref_prov = Counter(provinces).most_common(1)[0][0] if provinces else None
         pref_dist = Counter(districts).most_common(1)[0][0] if districts else None
-        return pref_prov, pref_dist
+        pref_ward_id = Counter(wards_id).most_common(1)[0][0] if wards_id else None
+        pref_ward_code = (
+            Counter(wards_code).most_common(1)[0][0] if wards_code else None
+        )
+        return pref_prov, pref_dist, pref_ward_id, pref_ward_code
+
+    def _detect_shift_location(
+        self, interaction_features, pref_prov, pref_dist, pref_ward_id, pref_ward_code
+    ):
+        if not interaction_features or len(interaction_features) == 0:
+            return None, None, None, None
+
+        weights = [0.5, 0.3, 0.2]
+        recent_features = interaction_features[:3]
+
+        prov_weights = {}
+        dist_weights = {}
+        ward_id_weights = {}
+        ward_code_weights = {}
+
+        for i, f in enumerate(recent_features):
+            w = weights[i] if i < len(weights) else 0.0
+            if f.province_code:
+                prov_weights[f.province_code] = (
+                    prov_weights.get(f.province_code, 0.0) + w
+                )
+            if f.district_id:
+                dist_weights[f.district_id] = dist_weights.get(f.district_id, 0.0) + w
+            if f.ward_id:
+                ward_id_weights[f.ward_id] = ward_id_weights.get(f.ward_id, 0.0) + w
+            if f.ward_code:
+                ward_code_weights[f.ward_code] = (
+                    ward_code_weights.get(f.ward_code, 0.0) + w
+                )
+
+        # Highest precision first: Ward > District > Province
+        for ward_id, weight in ward_id_weights.items():
+            if weight > 0.7 and ward_id != pref_ward_id:
+                ward_code = next(
+                    (f.ward_code for f in recent_features if f.ward_id == ward_id), None
+                )
+                return None, None, ward_id, ward_code
+
+        for ward_code, weight in ward_code_weights.items():
+            if weight > 0.7 and ward_code != pref_ward_code:
+                ward_id = next(
+                    (f.ward_id for f in recent_features if f.ward_code == ward_code),
+                    None,
+                )
+                return None, None, ward_id, ward_code
+
+        for district_id, weight in dist_weights.items():
+            if weight > 0.7 and district_id != pref_dist:
+                return None, district_id, None, None
+
+        for province_code, weight in prov_weights.items():
+            if weight > 0.7 and province_code != pref_prov:
+                return province_code, None, None, None
+
+        return None, None, None, None
 
     def _build_feature_matrix(
         self, listings: List[ListingFeature]
@@ -268,13 +427,18 @@ class RecommendationService:
             id_to_index[listing.listing_id] = idx
 
             # Base features: price, area, bedrooms (normalized)
-            row = [prices_norm[idx][0], areas_norm[idx][0], bedrooms_norm[idx][0]]
+            # Apply weights: Price 1.2x, Area 1.0x, Bedrooms 1.0x
+            row = [
+                prices_norm[idx][0] * 1.2,
+                areas_norm[idx][0] * 1.0,
+                bedrooms_norm[idx][0] * 1.0,
+            ]
 
-            # Add one-hot product type
+            # Add one-hot product type (Weight: 1.5x)
             row.extend(
-                [1.0 if listing.product_type == pt else 0.0 for pt in product_types]
+                [1.5 if listing.product_type == pt else 0.0 for pt in product_types]
             )
-            # Add one-hot listing type
+            # Add one-hot listing type (Weight 1.0)
             row.extend(
                 [1.0 if listing.listing_type == lt else 0.0 for lt in listing_types]
             )
