@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vertexai.generative_models import Content, Part  # type: ignore[import]
+from google.genai import types  # type: ignore[import]
 
 from app.agent.rag.retriever import RAGRetriever
 from app.agent.tools.registry import ToolRegistry
@@ -36,6 +36,31 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 5  # safety cap — prevents infinite loops on misbehaving models
 REQUEST_TIMEOUT_SECONDS = 120  # overall timeout for one orchestrator.run() call
+
+# Sliding window — bounds LLM payload regardless of session length.
+# 12 messages ≈ 6 user/assistant pairs ≈ ~3-4K tokens of history.
+# Older turns are dropped; entity continuity is preserved separately via
+# the `last_listings` field on ChatRequest, so follow-ups like
+# "details of #2" still work even after the original search message is evicted.
+MAX_HISTORY_MESSAGES = 12
+
+
+def _trim_history(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """
+    Apply a sliding window over conversation history.
+
+    Keeps the most recent MAX_HISTORY_MESSAGES messages. Always preserves the
+    last message (the current user query). Ensures the trimmed window starts
+    with a user message — Vertex AI Gemini requires this when seeding chat
+    history.
+    """
+    if len(messages) <= MAX_HISTORY_MESSAGES:
+        return messages
+    trimmed = messages[-MAX_HISTORY_MESSAGES:]
+    # Drop leading assistant turns; conversation must start with user
+    while trimmed and trimmed[0].role != "user":
+        trimmed = trimmed[1:]
+    return trimmed
 
 # ---------------------------------------------------------------------------
 # Result type
@@ -249,6 +274,14 @@ class AgentOrchestrator:
         Returns:
             AgentResult with the assistant message, optional listings, and metadata.
         """
+        original_count = len(messages)
+        messages = _trim_history(messages)
+        if len(messages) < original_count:
+            logger.info(
+                "Sliding window: trimmed history %d → %d messages",
+                original_count,
+                len(messages),
+            )
         user_message = messages[-1].content
 
         try:
@@ -318,15 +351,14 @@ class AgentOrchestrator:
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            model = self._gateway.build_model(
+            # ── 4. Build chat session with prior history ───────────────────
+            history = _to_vertex_history(messages[:-1])
+            chat = self._gateway.start_chat(
                 model_name=settings.GEMINI_CHAT_MODEL,
                 system_instruction=system_instruction,
                 tools=self._tools.get_tool(),
+                history=history,
             )
-
-            # ── 4. Build chat session with prior history ───────────────────
-            history = _to_vertex_history(messages[:-1])
-            chat = self._gateway.start_chat(model, history)
 
             # ── 5. Agentic loop ────────────────────────────────────────────
             # Per-request RAG context rides on the user message so the
@@ -405,14 +437,15 @@ class AgentOrchestrator:
                     tools_used.append(fc.name)
 
                     tool_response_parts.append(
-                        Part.from_function_response(
+                        types.Part.from_function_response(
                             name=fc.name,
                             response=result,
                         )
                     )
 
                 # Feed all tool results back to the model in one turn
-                message_to_send = Content(role="user", parts=tool_response_parts)
+                # New SDK: pass the list of Parts directly; chat session adds role=user
+                message_to_send = tool_response_parts
 
             # ── 6. Extract final text ──────────────────────────────────────
             final_text = _extract_text(response)
@@ -446,7 +479,7 @@ class AgentOrchestrator:
     # Streaming entry point (SSE — ChatService.process_chat_stream)
     # ------------------------------------------------------------------
 
-    async def run_stream(
+    async def run_stream(  # noqa: C901
         self,
         messages: List[ChatMessage],
         session_id: Optional[str] = None,
@@ -461,12 +494,20 @@ class AgentOrchestrator:
         Events yielded (dicts with "event" + "data"):
             {"event": "status",   "data": {"phase": "thinking", "round": int}}
             {"event": "status",   "data": {"phase": "tool_call", "tool": str}}
-            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str}}
+            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str, "error"?: str}}
             {"event": "text",     "data": {"delta": str}}
             {"event": "listings", "data": {...listings payload...}}
             {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
             {"event": "error",    "data": {"message": str}}
         """
+        original_count = len(messages)
+        messages = _trim_history(messages)
+        if len(messages) < original_count:
+            logger.info(
+                "Sliding window: trimmed history %d → %d messages",
+                original_count,
+                len(messages),
+            )
         user_message = messages[-1].content
 
         trace = self._gateway.create_trace(
@@ -475,7 +516,8 @@ class AgentOrchestrator:
             input={"message": user_message},
             metadata={
                 "model": settings.GEMINI_CHAT_MODEL,
-                "turns": len(messages),
+                "turns_original": original_count,
+                "turns_used": len(messages),
                 "streamed": True,
             },
         )
@@ -505,13 +547,13 @@ class AgentOrchestrator:
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            model = self._gateway.build_model(
+            history = _to_vertex_history(messages[:-1])
+            chat = self._gateway.start_chat(
                 model_name=settings.GEMINI_CHAT_MODEL,
                 system_instruction=system_instruction,
                 tools=self._tools.get_tool(),
+                history=history,
             )
-            history = _to_vertex_history(messages[:-1])
-            chat = self._gateway.start_chat(model, history)
 
             # ── Agentic loop ─────────────────────────────────────────────
             # Per-request RAG context rides on the user message so the
@@ -594,20 +636,25 @@ class AgentOrchestrator:
                     )
                     tools_used.append(fc.name)
 
-                    yield {
-                        "event": "status",
-                        "data": {
-                            "phase": "tool_result",
-                            "tool": fc.name,
-                            "status": result.get("status"),
-                        },
+                    tool_result_data: Dict[str, Any] = {
+                        "phase": "tool_result",
+                        "tool": fc.name,
+                        "status": result.get("status"),
                     }
+                    # Surface the error message to FE when a tool fails so
+                    # the UI can show it instead of a generic "tool failed".
+                    if result.get("status") == "error" and result.get("error"):
+                        tool_result_data["error"] = str(result["error"])[:500]
+                    yield {"event": "status", "data": tool_result_data}
 
                     tool_response_parts.append(
-                        Part.from_function_response(name=fc.name, response=result)
+                        types.Part.from_function_response(
+                            name=fc.name, response=result
+                        )
                     )
 
-                message_to_send = Content(role="user", parts=tool_response_parts)
+                # New SDK: pass the list of Parts directly; chat session adds role=user
+                message_to_send = tool_response_parts
 
             # ── Fallback text if model ended without prose ───────────────
             if not any_text_streamed:
@@ -651,12 +698,14 @@ class AgentOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _to_vertex_history(messages: List[ChatMessage]) -> List[Content]:
-    """Convert ChatMessage list to Vertex AI Content objects."""
-    history: List[Content] = []
+def _to_vertex_history(messages: List[ChatMessage]) -> List[Any]:
+    """Convert ChatMessage list to google-genai Content objects."""
+    history: List[Any] = []
     for msg in messages:
         role = "user" if msg.role == "user" else "model"
-        history.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+        history.append(
+            types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
+        )
     return history
 
 

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -109,16 +110,44 @@ async def chat_stream(
         )
 
     async def event_generator():
+        # SSE comment padding on the first write to defeat kernel-level
+        # write batching. 2KB was empirically insufficient on Windows +
+        # uvicorn — the kernel held outgoing bytes for ~5 seconds until
+        # ~4KB accumulated. 16KB exceeds the threshold and forces immediate
+        # flush of headers + padding so the FE's `onopen` fires within
+        # ~100ms instead of 5 seconds.
+        # Browsers and proxies discard SSE comments per spec (RFC 6202),
+        # so this padding is invisible to FE event handlers.
+        gen_start = time.perf_counter()
+        logger.info("SSE [chat-stream] generator started")
+        yield ":" + (" " * 16384) + "\n\n"
+        await asyncio.sleep(0)
+        logger.info(
+            "SSE [chat-stream] padding yielded at +%.0fms",
+            (time.perf_counter() - gen_start) * 1000,
+        )
+
         try:
+            event_count = 0
             async for event in chat_service.process_chat_stream(
                 chat_request.messages,
                 user_id=chat_request.user_id,
                 auth_token=chat_request.auth_token,
                 last_listings=chat_request.last_listings,
             ):
+                event_count += 1
                 name = event["event"]
                 data = json.dumps(event["data"], ensure_ascii=False)
                 yield f"event: {name}\ndata: {data}\n\n"
+                # Yield to the event loop so uvicorn can drain the
+                # ASGI send queue to the socket between events.
+                await asyncio.sleep(0)
+                logger.info(
+                    "SSE [chat-stream] yielded event #%d (%s) at +%.0fms",
+                    event_count,
+                    name,
+                    (time.perf_counter() - gen_start) * 1000,
+                )
         except asyncio.CancelledError:
             logger.info("Client disconnected from /chat/stream")
             raise

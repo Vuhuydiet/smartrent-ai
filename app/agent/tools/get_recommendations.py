@@ -16,7 +16,7 @@ import logging
 from typing import Any, Dict
 
 import httpx
-from vertexai.generative_models import FunctionDeclaration  # type: ignore[import]
+from google.genai import types  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 from app.core import backend_client
@@ -55,7 +55,7 @@ class GetRecommendationsTool(BaseTool):
     )
 
     def to_function_declaration(self) -> Any:
-        return FunctionDeclaration(
+        return types.FunctionDeclaration(
             name=self.name,
             description=self.description,
             parameters={

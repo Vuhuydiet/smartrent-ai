@@ -1,21 +1,28 @@
 """
-LLM Gateway — central point for ALL Gemini model interactions via Vertex AI.
+LLM Gateway — central point for ALL Gemini model interactions.
+
+Migrated from the deprecated `vertexai.generative_models` SDK to the unified
+`google-genai` SDK (https://googleapis.github.io/python-genai/). The deprecated
+SDK is removed on 2026-06-24; this migration is required to keep the service
+running past that date.
 
 Every LLM call in the application goes through this class so that:
 - Langfuse observability spans are created automatically
-- Model construction is consistent (system_instruction, tools)
+- Client construction is consistent (project, location, credentials)
 - Token usage is captured in one place
 - Failures surface with structured logging
 
 Used by:
 - AgentOrchestrator (chat with function calling)
 - ListingVerificationService (vision + text)
-- PricePredictionService (one-shot generate)
+- PricePredictionService (one-shot generate with tools)
+- /api/v1/completion (raw generate)
 """
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional
+import time
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 
 from google.api_core.exceptions import ResourceExhausted  # type: ignore[import]
 
@@ -25,13 +32,17 @@ logger = logging.getLogger(__name__)
 # Retry helper for 429 / RESOURCE_EXHAUSTED
 # ---------------------------------------------------------------------------
 
-_MAX_RETRIES = 3
-_BASE_DELAY = 15  # seconds — generous because free-tier quota is ~5 RPM
+_MAX_RETRIES = 1  # quota retries — fail fast for chat UX
+_BASE_DELAY = 3  # seconds
 
 
 async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """
-    Call an async function with exponential backoff on RESOURCE_EXHAUSTED (429).
+    Call an async function with bounded retry on RESOURCE_EXHAUSTED (429).
+
+    Conservative retry policy: 1 retry with 3-second backoff. Long retries
+    (15-105s) hurt user-perceived latency more than they help; for chat
+    workloads it is better to surface a friendly error fast.
     """
     for attempt in range(_MAX_RETRIES + 1):
         try:
@@ -42,7 +53,7 @@ async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> 
                     "Quota exhausted after %d retries — giving up.", _MAX_RETRIES
                 )
                 raise
-            delay = _BASE_DELAY * (2**attempt)
+            delay = _BASE_DELAY
             logger.warning(
                 "429 RESOURCE_EXHAUSTED — retry %d/%d in %ds",
                 attempt + 1,
@@ -81,7 +92,7 @@ class _NoOpTrace:
 
 class LLMGateway:
     """
-    Thin orchestration layer between application services and the Vertex AI SDK.
+    Thin orchestration layer between application services and the google-genai SDK.
 
     Usage patterns:
 
@@ -89,11 +100,15 @@ class LLMGateway:
 
         # --- Chat with function calling (AgentOrchestrator) ---
         trace    = gateway.create_trace("chat-request", session_id=..., input=msg)
-        model    = gateway.build_model(settings.GEMINI_CHAT_MODEL, system_prompt, tools)
-        chat     = gateway.start_chat(model, history)
+        chat     = gateway.start_chat(
+            model_name=settings.GEMINI_CHAT_MODEL,
+            system_instruction=system_prompt,
+            tools=tools,
+            history=history,
+        )
         response = await gateway.send_message(chat, user_message, trace)
 
-        # --- One-shot text generation (PricePrediction, etc.) ---
+        # --- One-shot text generation (PricePrediction, completion) ---
         trace    = gateway.create_trace("price-prediction", input=prompt)
         response = await gateway.generate(prompt, model_name=..., trace=trace)
 
@@ -107,7 +122,7 @@ class LLMGateway:
         import os
         import tempfile
 
-        import vertexai  # type: ignore[import]
+        from google import genai  # type: ignore[import]
 
         from app.core.config import settings
 
@@ -115,6 +130,7 @@ class LLMGateway:
             raise ValueError("GCP_PROJECT_ID is not configured")
 
         # Decode base64 service account JSON → temp file → set env var
+        # google-genai picks up GOOGLE_APPLICATION_CREDENTIALS automatically.
         self._credentials_tmp_path: Optional[str] = None
         if settings.GCP_CREDENTIALS_BASE64:
             credentials_json = base64.b64decode(settings.GCP_CREDENTIALS_BASE64)
@@ -134,20 +150,16 @@ class LLMGateway:
 
         location = settings.GCP_LOCATION or "us-central1"
 
-        # Force the API endpoint to match the configured location
-        # This prevents requests from being routed to a wrong region
-        api_endpoint = f"{location}-aiplatform.googleapis.com"
-
-        vertexai.init(
+        # Single shared client for both sync and async calls (use .aio.* for async).
+        self._client = genai.Client(
+            vertexai=True,
             project=settings.GCP_PROJECT_ID,
             location=location,
-            api_endpoint=api_endpoint,
         )
         logger.info(
-            "Vertex AI initialised (project=%s, location=%s, endpoint=%s)",
+            "google-genai client initialised (project=%s, location=%s, vertexai=True)",
             settings.GCP_PROJECT_ID,
             location,
-            api_endpoint,
         )
 
         # Langfuse is optional — gracefully disabled when keys are absent
@@ -221,16 +233,7 @@ class LLMGateway:
         """
         Fetch a text prompt from Langfuse Prompt Management.
 
-        Args:
-            name: Prompt name (e.g. "smartrent-chat-system").
-            label: Optional label like "production" or "latest".
-            fallback: Returned when Langfuse is disabled or the fetch fails.
-            cache_ttl_seconds: Client-side cache TTL (default 5 min).
-
-        Returns:
-            Tuple of (prompt_text, prompt_object).
-            prompt_object can be linked to a Langfuse generation for version tracking.
-            On failure, returns (fallback, None).
+        Returns (prompt_text, prompt_object). On failure, returns (fallback, None).
         """
         if not self._langfuse_enabled or self._langfuse is None:
             logger.debug("Langfuse disabled — using fallback prompt for '%s'", name)
@@ -251,45 +254,37 @@ class LLMGateway:
             return fallback, None
 
     # ------------------------------------------------------------------
-    # Model / chat construction (used by AgentOrchestrator)
+    # Chat construction (used by AgentOrchestrator)
     # ------------------------------------------------------------------
 
-    def build_model(
+    def start_chat(
         self,
         model_name: str,
         system_instruction: str,
         tools: Optional[Any] = None,
-    ) -> Any:
-        """
-        Build a Vertex AI GenerativeModel with a proper system_instruction.
-        """
-        from vertexai.generative_models import GenerativeModel  # type: ignore[import]
-
-        kwargs: Dict[str, Any] = {
-            "model_name": model_name,
-            "system_instruction": system_instruction,
-        }
-        if tools is not None:
-            kwargs["tools"] = [tools]
-
-        model = GenerativeModel(**kwargs)
-        logger.debug(
-            "Building model '%s' (tools=%s, location=%s)",
-            model_name,
-            tools is not None,
-            getattr(model, "_location", "unknown"),
-        )
-        return model
-
-    def start_chat(
-        self,
-        model: Any,
         history: Optional[List[Any]] = None,
     ) -> Any:
         """
-        Start a stateful chat session, optionally seeding it with prior history.
+        Create a stateful AsyncChat session pre-configured with the given
+        system instruction, tools, and seeded history.
+
+        Replaces the old (build_model + start_chat) two-step pattern from the
+        deprecated SDK. Returns an async chat object that supports
+        `send_message(message=...)` and `send_message_stream(message=...)`.
         """
-        return model.start_chat(history=history or [])
+        from google.genai import types  # type: ignore[import]
+
+        config_kwargs: Dict[str, Any] = {"system_instruction": system_instruction}
+        if tools is not None:
+            # `tools` may be either a single Tool or list — normalise to list.
+            config_kwargs["tools"] = tools if isinstance(tools, list) else [tools]
+
+        config = types.GenerateContentConfig(**config_kwargs)
+        return self._client.aio.chats.create(
+            model=model_name,
+            history=history or [],
+            config=config,
+        )
 
     # ------------------------------------------------------------------
     # Instrumented send (chat mode — AgentOrchestrator)
@@ -304,26 +299,18 @@ class LLMGateway:
         prompt: Optional[Any] = None,
     ) -> Any:
         """
-        Send a message through an active ChatSession, wrapped in a Langfuse span.
-        Uses Vertex AI native async (send_message_async).
-
-        Args:
-            prompt: Optional Langfuse prompt object for version tracking.
+        Send a message through an active AsyncChat, wrapped in a Langfuse span.
         """
         gen_kwargs: Dict[str, Any] = {
             "name": span_name,
-            "model": getattr(
-                getattr(chat, "_model", None),
-                "model_name",
-                getattr(getattr(chat, "_model", None), "_model_name", "unknown"),
-            ),
+            "model": getattr(chat, "_model", "unknown"),
             "input": str(message)[:2000],
         }
         if prompt is not None:
             gen_kwargs["prompt"] = prompt
         generation = trace.generation(**gen_kwargs)
         try:
-            response = await _retry_on_quota(chat.send_message_async, message)
+            response = await _retry_on_quota(self._send_message_call, chat, message)
 
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
@@ -336,6 +323,11 @@ class LLMGateway:
             logger.error("LLM call failed [%s]: %s", span_name, e, exc_info=True)
             raise
 
+    @staticmethod
+    async def _send_message_call(chat: Any, message: Any) -> Any:
+        """Bridge for _retry_on_quota — google-genai uses keyword arg `message`."""
+        return await chat.send_message(message=message)
+
     # ------------------------------------------------------------------
     # Instrumented streaming send (chat mode — AgentOrchestrator)
     # ------------------------------------------------------------------
@@ -347,27 +339,19 @@ class LLMGateway:
         trace: Any,
         span_name: str = "llm-stream",
         prompt: Optional[Any] = None,
-    ):
+    ) -> AsyncIterator[Dict[str, Any]]:
         """
-        Streaming variant of send_message — yields incremental events as Vertex AI
-        produces them.
+        Streaming variant of send_message — yields incremental events.
 
         Event shape (dicts yielded):
             {"type": "text_delta", "delta": str}       — incremental text
             {"type": "final", "text": str,             — emitted once at end
                               "function_calls": list,
-                              "response": GenerationResponse | None}
-
-        The Langfuse generation span is closed once the stream completes with
-        the accumulated text and token usage from the last chunk.
+                              "response": GenerateContentResponse | None}
         """
         gen_kwargs: Dict[str, Any] = {
             "name": span_name,
-            "model": getattr(
-                getattr(chat, "_model", None),
-                "model_name",
-                getattr(getattr(chat, "_model", None), "_model_name", "unknown"),
-            ),
+            "model": getattr(chat, "_model", "unknown"),
             "input": str(message)[:2000],
         }
         if prompt is not None:
@@ -378,26 +362,52 @@ class LLMGateway:
         function_calls: List[Any] = []
         last_chunk: Any = None
 
+        # Diagnostic counters — to distinguish "Gemini sent 1 big chunk"
+        # (model behavior, not a bug) from "pipeline is buffering".
+        sdk_chunks_received = 0
+        text_deltas_yielded = 0
+        stream_start = time.perf_counter()
+
         try:
-            stream = await _retry_on_quota(
-                chat.send_message_async, message, stream=True
-            )
+            stream = await chat.send_message_stream(message=message)
             async for chunk in stream:
+                sdk_chunks_received += 1
+                # Timestamp each chunk arrival from the SDK. If chunks arrive
+                # spread over time → SDK is streaming (downstream buffering).
+                # If they all arrive bunched at the end → SDK is buffering.
+                logger.info(
+                    "Stream [%s] SDK chunk #%d arrived at +%.0fms",
+                    span_name,
+                    sdk_chunks_received,
+                    (time.perf_counter() - stream_start) * 1000,
+                )
                 last_chunk = chunk
                 try:
                     parts = chunk.candidates[0].content.parts
-                except (AttributeError, IndexError):
+                except (AttributeError, IndexError, TypeError):
+                    continue
+
+                if not parts:
                     continue
 
                 for part in parts:
                     text = getattr(part, "text", None)
                     if text:
                         accumulated.append(text)
+                        text_deltas_yielded += 1
                         yield {"type": "text_delta", "delta": text}
 
                     fc = getattr(part, "function_call", None)
                     if fc is not None and getattr(fc, "name", None):
                         function_calls.append(fc)
+
+            logger.info(
+                "Stream [%s]: SDK chunks=%d, text deltas yielded=%d, total chars=%d",
+                span_name,
+                sdk_chunks_received,
+                text_deltas_yielded,
+                sum(len(s) for s in accumulated),
+            )
 
             full_text = "".join(accumulated)
             yield {
@@ -416,7 +426,7 @@ class LLMGateway:
             raise
 
     # ------------------------------------------------------------------
-    # One-shot generate (text only — PricePrediction, future services)
+    # One-shot generate (text only — PricePrediction, completion)
     # ------------------------------------------------------------------
 
     async def generate(
@@ -432,30 +442,34 @@ class LLMGateway:
     ) -> Any:
         """
         One-shot text generation (no chat session).
-
-        Uses Vertex AI native async (generate_content_async).
         """
-        from vertexai.generative_models import (  # type: ignore[import]
-            GenerationConfig,
-            GenerativeModel,
-        )
+        from google.genai import types  # type: ignore[import]
 
         from app.core.config import settings
 
         active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_CHAT_MODEL
 
-        model_kwargs: Dict[str, Any] = {"model_name": model_name}
+        config_kwargs: Dict[str, Any] = {}
         if system_instruction:
-            model_kwargs["system_instruction"] = system_instruction
+            config_kwargs["system_instruction"] = system_instruction
         if tools is not None:
-            model_kwargs["tools"] = [tools] if not isinstance(tools, list) else tools
-
-        model = GenerativeModel(**model_kwargs)
-
-        gen_kwargs: Dict[str, Any] = {}
+            config_kwargs["tools"] = tools if isinstance(tools, list) else [tools]
         if generation_config:
-            gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
+            # Map old keys → new SDK names where they differ.
+            mapped = dict(generation_config)
+            if "max_output_tokens" in mapped:
+                config_kwargs["max_output_tokens"] = mapped.pop("max_output_tokens")
+            if "temperature" in mapped:
+                config_kwargs["temperature"] = mapped.pop("temperature")
+            if "top_p" in mapped:
+                config_kwargs["top_p"] = mapped.pop("top_p")
+            if "top_k" in mapped:
+                config_kwargs["top_k"] = mapped.pop("top_k")
+            # Pass through any remaining keys; new SDK will reject unknowns
+            config_kwargs.update(mapped)
+
+        config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
         generation = active_trace.generation(
             name=span_name,
@@ -465,7 +479,7 @@ class LLMGateway:
 
         try:
             response = await _retry_on_quota(
-                model.generate_content_async, prompt, **gen_kwargs
+                self._generate_content_call, model_name, prompt, config
             )
 
             usage = self._extract_usage(response)
@@ -480,6 +494,16 @@ class LLMGateway:
             generation.end(level="ERROR", status_message=str(e))
             logger.error("generate failed [%s]: %s", span_name, e, exc_info=True)
             raise
+
+    async def _generate_content_call(
+        self, model_name: str, contents: Any, config: Any
+    ) -> Any:
+        """Bridge for _retry_on_quota."""
+        return await self._client.aio.models.generate_content(
+            model=model_name,
+            contents=contents,
+            config=config,
+        )
 
     # ------------------------------------------------------------------
     # Vision generate (images + text — ListingVerification)
@@ -496,26 +520,52 @@ class LLMGateway:
         span_name: str = "vision-generate",
     ) -> Any:
         """
-        Multimodal generation: text prompt + PIL Image objects.
+        Multimodal generation: text prompt + PIL Image objects (or already-Part inputs).
 
-        Uses Vertex AI native async (generate_content_async).
+        PIL images are encoded as PNG bytes and wrapped in `types.Part.from_bytes`.
+        Items already shaped as Part objects pass through unchanged.
         """
-        from vertexai.generative_models import (  # type: ignore[import]
-            GenerationConfig,
-            GenerativeModel,
-        )
+        import io
+
+        from google.genai import types  # type: ignore[import]
 
         from app.core.config import settings
 
         active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_VISION_MODEL
-        model = GenerativeModel(model_name)
 
-        gen_kwargs: Dict[str, Any] = {}
+        # Build content list: prompt as plain string, images converted to Parts.
+        contents: List[Any] = [prompt]
+        for img in images:
+            # Already a genai Part — pass through.
+            if hasattr(img, "inline_data") or isinstance(img, types.Part):
+                contents.append(img)
+                continue
+            # PIL image — encode to PNG bytes.
+            if hasattr(img, "save"):
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                contents.append(
+                    types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
+                )
+                continue
+            # Raw bytes — assume PNG.
+            if isinstance(img, (bytes, bytearray)):
+                contents.append(
+                    types.Part.from_bytes(data=bytes(img), mime_type="image/png")
+                )
+                continue
+            logger.warning("generate_with_images: unsupported image type %r", type(img))
+
+        config_kwargs: Dict[str, Any] = {}
         if generation_config:
-            gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
+            mapped = dict(generation_config)
+            for k in ("max_output_tokens", "temperature", "top_p", "top_k"):
+                if k in mapped:
+                    config_kwargs[k] = mapped.pop(k)
+            config_kwargs.update(mapped)
 
-        content_parts: List[Any] = [prompt] + images
+        config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
         generation = active_trace.generation(
             name=span_name,
@@ -526,7 +576,7 @@ class LLMGateway:
 
         try:
             response = await _retry_on_quota(
-                model.generate_content_async, content_parts, **gen_kwargs
+                self._generate_content_call, model_name, contents, config
             )
 
             usage = self._extract_usage(response)
@@ -548,23 +598,39 @@ class LLMGateway:
 
     @staticmethod
     def _extract_usage(response: Any) -> Optional[Dict[str, int]]:
-        """Extract token usage from a Vertex AI response."""
+        """Extract token usage from a google-genai response."""
         meta = getattr(response, "usage_metadata", None)
         if meta:
             return {
-                "input": getattr(meta, "prompt_token_count", 0),
-                "output": getattr(meta, "candidates_token_count", 0),
-                "total": getattr(meta, "total_token_count", 0),
+                "input": getattr(meta, "prompt_token_count", 0) or 0,
+                "output": getattr(meta, "candidates_token_count", 0) or 0,
+                "total": getattr(meta, "total_token_count", 0) or 0,
             }
         return None
 
     @staticmethod
     def _extract_text_safe(response: Any) -> str:
-        """Safely extract text from a Vertex AI response (won't raise on function calls)."""
+        """
+        Safely extract text from a google-genai response.
+
+        `.text` may raise or return None when the response contains only
+        function calls; iterate parts as a fallback.
+        """
         try:
-            return response.text
+            text = response.text
+            if text:
+                return text
         except (ValueError, AttributeError):
-            return ""
+            pass
+
+        try:
+            for part in response.candidates[0].content.parts:
+                if getattr(part, "text", None):
+                    return part.text
+        except (AttributeError, IndexError, TypeError):
+            pass
+
+        return ""
 
     # ------------------------------------------------------------------
     # Lifecycle

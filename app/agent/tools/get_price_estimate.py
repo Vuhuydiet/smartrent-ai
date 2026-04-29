@@ -21,7 +21,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from vertexai.generative_models import FunctionDeclaration  # type: ignore[import]
+from google.genai import types  # type: ignore[import]
 
 from app.agent.tools.base_tool import BaseTool
 
@@ -172,7 +172,7 @@ class GetPriceEstimateTool(BaseTool):
     )
 
     def to_function_declaration(self) -> Any:
-        return FunctionDeclaration(
+        return types.FunctionDeclaration(
             name=self.name,
             description=self.description,
             parameters={

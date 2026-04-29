@@ -28,13 +28,13 @@ class ToolRegistry:
 
     def get_tool(self) -> Any:
         """
-        Build and return a Vertex AI `Tool` object containing all registered
-        FunctionDeclarations. Pass this directly to `GenerativeModel(tools=[...])`.
+        Build and return a google-genai `Tool` object containing all registered
+        FunctionDeclarations. Pass this in `GenerateContentConfig(tools=[...])`.
         """
-        from vertexai.generative_models import Tool  # type: ignore[import]
+        from google.genai import types  # type: ignore[import]
 
         declarations = [t.to_function_declaration() for t in self._tools.values()]
-        return Tool(function_declarations=declarations)
+        return types.Tool(function_declarations=declarations)
 
     async def execute(
         self,

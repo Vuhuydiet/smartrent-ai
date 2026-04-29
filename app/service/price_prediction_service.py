@@ -2,12 +2,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from vertexai.generative_models import (  # type: ignore[import]
-    Content,
-    FunctionDeclaration,
-    Part,
-    Tool,
-)
+from google.genai import types  # type: ignore[import]
 
 from app.ai.llm.gateway import get_gateway
 from app.core import backend_client
@@ -43,10 +38,10 @@ If no listings found, use estimation based on Vietnam rental market standards:
 
 
 def _get_search_tool() -> Any:
-    """Build Vertex AI Tool declaration for search_listings."""
-    return Tool(
+    """Build google-genai Tool declaration for search_listings."""
+    return types.Tool(
         function_declarations=[
-            FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="search_listings",
                 description="Search for rental property listings in SmartRent database.",
                 parameters={
@@ -119,13 +114,12 @@ class PricePredictionService:
                 metadata={"property_type": request.property_type},
             )
 
-            # Build model with function calling
-            model = self._gateway.build_model(
+            # Start chat with function-calling tool configured
+            chat = self._gateway.start_chat(
                 model_name=settings.GEMINI_PRICE_MODEL,
                 system_instruction=_SYSTEM_INSTRUCTION,
                 tools=_get_search_tool(),
             )
-            chat = self._gateway.start_chat(model)
 
             # First call
             response = await self._gateway.send_message(
@@ -150,7 +144,7 @@ class PricePredictionService:
                     logger.info("Price prediction calling tool: %s", fc.name)
                     result = await self._execute_tool(fc.name, args)
                     tool_response_parts.append(
-                        Part.from_function_response(
+                        types.Part.from_function_response(
                             name=fc.name,
                             response={"result": result},
                         )
@@ -158,7 +152,7 @@ class PricePredictionService:
 
                 response = await self._gateway.send_message(
                     chat,
-                    Content(role="user", parts=tool_response_parts),
+                    tool_response_parts,
                     trace,
                     span_name=f"price-round-{round_num}",
                 )
