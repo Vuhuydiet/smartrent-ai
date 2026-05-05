@@ -39,7 +39,7 @@ router = APIRouter()
 )
 async def verify_listing(
     request: ListingVerificationRequest,
-) -> ListingVerificationResponse:
+) -> Any:
     """
     Verify a rental listing using Gemini AI multimodal analysis.
 
@@ -66,7 +66,11 @@ async def verify_listing(
             f"Score: {result.score:.2f}, Valid: {result.is_valid}"
         )
 
-        return result
+        from fastapi.encoders import jsonable_encoder
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content=jsonable_encoder(result)
+        )
 
     except ValueError as e:
         logger.warning(f"Invalid request data: {str(e)}")
@@ -75,9 +79,11 @@ async def verify_listing(
             message=f"Invalid request data: {str(e)}",
             details={},
         )
+        from fastapi.encoders import jsonable_encoder
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error.model_dump(),
+            detail=jsonable_encoder(error),
         )
 
     except Exception as e:
@@ -87,9 +93,11 @@ async def verify_listing(
             message="An unexpected error occurred during verification",
             details={"error_type": type(e).__name__},
         )
+        from fastapi.encoders import jsonable_encoder
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error.model_dump(),
+            detail=jsonable_encoder(error),
         )
 
 

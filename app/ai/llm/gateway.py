@@ -143,6 +143,28 @@ class LLMGateway:
             location=location,
             api_endpoint=api_endpoint,
         )
+
+        # Explicitly set async credentials for REST transport to avoid fallback to gRPC
+        try:
+            import google.auth
+            from google.oauth2 import service_account
+
+            creds = None
+            if settings.GCP_CREDENTIALS_BASE64:
+                creds = service_account.Credentials.from_service_account_file(
+                    self._credentials_tmp_path
+                )
+            else:
+                creds, _ = google.auth.default()
+
+            if creds:
+                from google.cloud import aiplatform
+
+                aiplatform.initializer._set_async_rest_credentials(creds)
+                logger.info("Async REST credentials configured successfully.")
+        except Exception as e:
+            logger.warning("Could not set async REST credentials: %s", e)
+        self._models_cache: Dict[tuple, Any] = {}
         logger.info(
             "Vertex AI initialised (project=%s, location=%s, endpoint=%s)",
             settings.GCP_PROJECT_ID,
@@ -445,13 +467,20 @@ class LLMGateway:
         active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_CHAT_MODEL
 
-        model_kwargs: Dict[str, Any] = {"model_name": model_name}
-        if system_instruction:
-            model_kwargs["system_instruction"] = system_instruction
-        if tools is not None:
-            model_kwargs["tools"] = [tools] if not isinstance(tools, list) else tools
-
-        model = GenerativeModel(**model_kwargs)
+        # Use cached model to avoid re-initialization overhead
+        cache_key = (model_name, system_instruction, str(tools))
+        if cache_key in self._models_cache:
+            model = self._models_cache[cache_key]
+        else:
+            model_kwargs: Dict[str, Any] = {"model_name": model_name}
+            if system_instruction:
+                model_kwargs["system_instruction"] = system_instruction
+            if tools is not None:
+                model_kwargs["tools"] = (
+                    [tools] if not isinstance(tools, list) else tools
+                )
+            model = GenerativeModel(**model_kwargs)
+            self._models_cache[cache_key] = model
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
@@ -485,53 +514,85 @@ class LLMGateway:
     # Vision generate (images + text — ListingVerification)
     # ------------------------------------------------------------------
 
-    async def generate_with_images(
+    async def generate_multimodal(
         self,
         prompt: str,
-        images: List[Any],
+        images: Optional[List[Any]] = None,
+        videos: Optional[List[Dict[str, Any]]] = None,
         *,
         model_name: Optional[str] = None,
+        system_instruction: Optional[str] = None,
         generation_config: Optional[Dict[str, Any]] = None,
         trace: Optional[Any] = None,
-        span_name: str = "vision-generate",
+        span_name: str = "multimodal-generate",
     ) -> Any:
         """
-        Multimodal generation: text prompt + PIL Image objects.
-
-        Uses Vertex AI native async (generate_content_async).
+        Multimodal generation: text prompt + images + videos.
         """
+        import io
+
         from vertexai.generative_models import (  # type: ignore[import]
             GenerationConfig,
             GenerativeModel,
+            Part,
         )
 
         from app.core.config import settings
 
-        active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_VISION_MODEL
-        model = GenerativeModel(model_name)
+        # Use cached model to avoid re-initialization overhead
+        cache_key = (model_name, system_instruction, "multimodal")
+        if cache_key in self._models_cache:
+            logger.info("Model cache HIT for %s (multimodal)", model_name)
+            model = self._models_cache[cache_key]
+        else:
+            logger.info(
+                "Model cache MISS for %s (multimodal) - initializing new model",
+                model_name,
+            )
+            model_kwargs: Dict[str, Any] = {"model_name": model_name}
+            if system_instruction:
+                model_kwargs["system_instruction"] = system_instruction
+            model = GenerativeModel(**model_kwargs)
+            self._models_cache[cache_key] = model
+
+        content_parts: List[Any] = [prompt]
+
+        # Process Images
+        if images:
+            for img in images:
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=60, optimize=True)
+                content_parts.append(
+                    Part.from_data(data=buf.getvalue(), mime_type="image/jpeg")
+                )
+
+        # Process Videos
+        if videos:
+            for video in videos:
+                content_parts.append(
+                    Part.from_data(data=video["data"], mime_type=video["mime_type"])
+                )
+
+        logger.info("Content parts prepared: %d total parts", len(content_parts))
 
         gen_kwargs: Dict[str, Any] = {}
         if generation_config:
             gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
 
-        content_parts: List[Any] = [prompt] + images
-
+        active_trace: Any = trace if trace is not None else _NoOpTrace()
         generation = active_trace.generation(
             name=span_name,
             model=model_name,
-            input=prompt[:2000],
-            metadata={"image_count": len(images)},
+            input=f"{prompt} (Images: {len(images or [])}, Videos: {len(videos or [])})",
         )
 
         try:
             response = await _retry_on_quota(
                 model.generate_content_async, content_parts, **gen_kwargs
             )
-
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
-
             generation.end(
                 output=output_text[:2000] if output_text else "", usage=usage
             )
@@ -539,7 +600,9 @@ class LLMGateway:
 
         except Exception as e:
             generation.end(level="ERROR", status_message=str(e))
-            logger.error("vision generate failed [%s]: %s", span_name, e, exc_info=True)
+            logger.error(
+                "multimodal generate failed [%s]: %s", span_name, e, exc_info=True
+            )
             raise
 
     # ------------------------------------------------------------------
