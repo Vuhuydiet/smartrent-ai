@@ -13,7 +13,7 @@ import json
 import logging
 import re
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import httpx
 from agents import Agent, Runner  # type: ignore[import]

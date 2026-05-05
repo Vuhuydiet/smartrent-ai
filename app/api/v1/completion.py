@@ -58,7 +58,7 @@ async def completion(request: CompletionRequest) -> CompletionResponse:
         name="Raw Completion",
         instructions="Respond with exactly what the user asks for. Do not add commentary.",
         model=make_model(model_name),
-        model_settings=ModelSettings(**settings_kwargs) if settings_kwargs else None,
+        model_settings=ModelSettings(**settings_kwargs),
     )
 
     span = trace.generation(

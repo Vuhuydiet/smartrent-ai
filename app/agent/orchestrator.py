@@ -22,7 +22,7 @@ import functools
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, cast
 
 from agents import Agent, Runner, RunResultStreaming  # type: ignore[import]
 from agents.exceptions import MaxTurnsExceeded  # type: ignore[import]
@@ -391,7 +391,7 @@ class AgentOrchestrator:
             try:
                 result = await Runner.run(
                     starting_agent=agent,
-                    input=input_items,
+                    input=cast(Any, input_items),
                     context=tool_ctx,
                     max_turns=MAX_AGENT_TURNS,
                 )
@@ -529,7 +529,7 @@ class AgentOrchestrator:
 
             stream: RunResultStreaming = Runner.run_streamed(
                 starting_agent=agent,
-                input=input_items,
+                input=cast(Any, input_items),
                 context=tool_ctx,
                 max_turns=MAX_AGENT_TURNS,
             )
