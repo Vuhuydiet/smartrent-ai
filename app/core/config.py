@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:
         return (
-            f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@"
+            f"mysql+aiomysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@"
             f"{self.MYSQL_SERVER}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
         )
 
@@ -24,7 +24,35 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    model_config = {"env_file": ".env", "case_sensitive": True}
+    # Google Cloud / Vertex AI Configuration
+    GCP_CREDENTIALS_BASE64: str = ""  # Base64-encoded service account JSON
+    GCP_PROJECT_ID: str = ""
+    GCP_LOCATION: str = "us-central1"
+    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
+    GEMINI_VISION_MODEL: str = (
+        "gemini-2.5-flash"  # Model used for listing verification (vision + text)
+    )
+    GEMINI_PRICE_MODEL: str = (
+        "gemini-2.5-flash"  # Model used for price prediction (function calling)
+    )
+
+    # SmartRent Backend Configuration
+    SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
+    SMARTRENT_AI_URL: str = "http://localhost:8000"
+
+    # Chat Configuration
+    MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user
+
+    # Langfuse Observability
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True,
+        "extra": "ignore",
+    }
 
 
 settings = Settings()

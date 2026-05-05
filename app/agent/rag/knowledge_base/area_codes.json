@@ -1,0 +1,97 @@
+{
+  "_note": "Province codes follow Vietnam's official administrative division (ĐVHC). District codes should be verified against the SmartRent backend GET /v1/locations/districts API.",
+  "provinces": [
+    {
+      "code": "01",
+      "name": "Hà Nội",
+      "aliases": ["hanoi", "hà nội", "ha noi", "hn"]
+    },
+    {
+      "code": "79",
+      "name": "TP. Hồ Chí Minh",
+      "aliases": ["hcm", "ho chi minh", "hồ chí minh", "saigon", "sài gòn", "tphcm", "tp hcm"]
+    },
+    {
+      "code": "48",
+      "name": "Đà Nẵng",
+      "aliases": ["da nang", "đà nẵng", "dn"]
+    },
+    {
+      "code": "31",
+      "name": "Hải Phòng",
+      "aliases": ["hai phong", "hải phòng", "hp"]
+    },
+    {
+      "code": "92",
+      "name": "Cần Thơ",
+      "aliases": ["can tho", "cần thơ", "ct"]
+    },
+    {
+      "code": "74",
+      "name": "Bình Dương",
+      "aliases": ["binh duong", "bình dương", "bd"]
+    },
+    {
+      "code": "75",
+      "name": "Đồng Nai",
+      "aliases": ["dong nai", "đồng nai"]
+    },
+    {
+      "code": "77",
+      "name": "Bà Rịa - Vũng Tàu",
+      "aliases": ["vung tau", "vũng tàu", "ba ria", "bà rịa"]
+    }
+  ],
+  "districts": {
+    "01": [
+      { "code": "001", "name": "Ba Đình",         "aliases": ["ba dinh"] },
+      { "code": "002", "name": "Hoàn Kiếm",       "aliases": ["hoan kiem"] },
+      { "code": "003", "name": "Tây Hồ",          "aliases": ["tay ho"] },
+      { "code": "004", "name": "Long Biên",        "aliases": ["long bien"] },
+      { "code": "005", "name": "Cầu Giấy",        "aliases": ["cau giay"] },
+      { "code": "006", "name": "Đống Đa",         "aliases": ["dong da"] },
+      { "code": "007", "name": "Hai Bà Trưng",    "aliases": ["hai ba trung"] },
+      { "code": "008", "name": "Hoàng Mai",       "aliases": ["hoang mai"] },
+      { "code": "009", "name": "Thanh Xuân",      "aliases": ["thanh xuan"] },
+      { "code": "016", "name": "Sóc Sơn",         "aliases": ["soc son"] },
+      { "code": "017", "name": "Đông Anh",        "aliases": ["dong anh"] },
+      { "code": "018", "name": "Gia Lâm",         "aliases": ["gia lam"] },
+      { "code": "019", "name": "Nam Từ Liêm",     "aliases": ["nam tu liem"] },
+      { "code": "020", "name": "Mê Linh",         "aliases": ["me linh"] },
+      { "code": "268", "name": "Hà Đông",         "aliases": ["ha dong"] },
+      { "code": "277", "name": "Bắc Từ Liêm",     "aliases": ["bac tu liem"] }
+    ],
+    "79": [
+      { "code": "760", "name": "Quận 1",          "aliases": ["quan 1", "district 1", "q1"] },
+      { "code": "761", "name": "Quận 12",         "aliases": ["quan 12", "district 12", "q12"] },
+      { "code": "764", "name": "Gò Vấp",          "aliases": ["go vap"] },
+      { "code": "765", "name": "Bình Thạnh",      "aliases": ["binh thanh"] },
+      { "code": "766", "name": "Tân Bình",        "aliases": ["tan binh"] },
+      { "code": "767", "name": "Tân Phú",         "aliases": ["tan phu"] },
+      { "code": "768", "name": "Phú Nhuận",       "aliases": ["phu nhuan"] },
+      { "code": "769", "name": "TP. Thủ Đức",     "aliases": ["thu duc", "thủ đức"] },
+      { "code": "770", "name": "Quận 3",          "aliases": ["quan 3", "district 3", "q3"] },
+      { "code": "771", "name": "Quận 10",         "aliases": ["quan 10", "district 10", "q10"] },
+      { "code": "772", "name": "Quận 11",         "aliases": ["quan 11", "district 11", "q11"] },
+      { "code": "773", "name": "Quận 4",          "aliases": ["quan 4", "district 4", "q4"] },
+      { "code": "774", "name": "Quận 5",          "aliases": ["quan 5", "district 5", "q5"] },
+      { "code": "775", "name": "Quận 6",          "aliases": ["quan 6", "district 6", "q6"] },
+      { "code": "776", "name": "Quận 8",          "aliases": ["quan 8", "district 8", "q8"] },
+      { "code": "777", "name": "Bình Tân",        "aliases": ["binh tan"] },
+      { "code": "778", "name": "Quận 7",          "aliases": ["quan 7", "district 7", "q7", "phu my hung", "phú mỹ hưng"] },
+      { "code": "783", "name": "Củ Chi",          "aliases": ["cu chi"] },
+      { "code": "784", "name": "Hóc Môn",         "aliases": ["hoc mon"] },
+      { "code": "785", "name": "Bình Chánh",      "aliases": ["binh chanh"] },
+      { "code": "786", "name": "Nhà Bè",          "aliases": ["nha be"] },
+      { "code": "787", "name": "Cần Giờ",         "aliases": ["can gio"] }
+    ],
+    "48": [
+      { "code": "490", "name": "Hải Châu",        "aliases": ["hai chau"] },
+      { "code": "491", "name": "Thanh Khê",       "aliases": ["thanh khe"] },
+      { "code": "492", "name": "Sơn Trà",         "aliases": ["son tra"] },
+      { "code": "493", "name": "Ngũ Hành Sơn",   "aliases": ["ngu hanh son", "marble mountains"] },
+      { "code": "494", "name": "Liên Chiểu",      "aliases": ["lien chieu"] },
+      { "code": "495", "name": "Cẩm Lệ",         "aliases": ["cam le"] }
+    ]
+  }
+}

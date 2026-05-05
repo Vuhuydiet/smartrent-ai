@@ -1,0 +1,120 @@
+{
+  "features": [
+    {
+      "id": "guide_post_listing",
+      "name": "Đăng tin cho thuê/bán BĐS",
+      "keywords": ["đăng tin", "tạo tin", "post", "đăng bài", "cho thuê", "bán nhà", "đăng phòng", "cách đăng tin"],
+      "steps": [
+        "Đăng nhập tài khoản SmartRent.",
+        "Nhấn nút 'Đăng tin mới' trên thanh menu.",
+        "Chọn loại tin: Cho thuê hoặc Bán.",
+        "Chọn loại BĐS: Phòng trọ, Căn hộ, Nhà nguyên căn, Studio, Văn phòng.",
+        "Nhập địa chỉ: Tỉnh/Thành → Quận/Huyện → Phường/Xã → Địa chỉ chi tiết.",
+        "Điền thông tin chi tiết: diện tích, số phòng ngủ/WC, hướng, nội thất.",
+        "Nhập giá thuê/bán (VND) và đơn vị (tháng/năm).",
+        "Chọn tiện nghi có sẵn: WiFi, điều hòa, máy giặt, bãi đỗ xe...",
+        "Tải ảnh chụp BĐS (tối thiểu 3 ảnh, khuyến nghị 5-10 ảnh).",
+        "Viết mô tả chi tiết về BĐS.",
+        "Chọn gói tin: Thường (miễn phí) hoặc VIP (Silver/Gold/Diamond).",
+        "Xác nhận và gửi tin để duyệt."
+      ],
+      "tips": [
+        "Ảnh rõ ràng, đủ sáng giúp tin được duyệt nhanh hơn và thu hút nhiều người xem.",
+        "Mô tả chi tiết về nội thất, tiện ích xung quanh (gần trường, chợ, bệnh viện).",
+        "Tin VIP Gold/Diamond giúp tăng lượt xem gấp 5-10 lần.",
+        "Hệ thống AI sẽ tự động xác minh chất lượng ảnh và nội dung tin đăng."
+      ]
+    },
+    {
+      "id": "guide_search_property",
+      "name": "Tìm kiếm BĐS trên SmartRent",
+      "keywords": ["tìm kiếm", "search", "tìm phòng", "tìm nhà", "bộ lọc", "filter", "cách tìm"],
+      "steps": [
+        "Truy cập trang chủ SmartRent hoặc mở ứng dụng.",
+        "Chọn loại BĐS muốn tìm: Cho thuê hoặc Mua bán.",
+        "Chọn khu vực: Tỉnh/Thành phố → Quận/Huyện (bắt buộc).",
+        "Tùy chọn thêm bộ lọc: khoảng giá, diện tích, số phòng ngủ, tiện nghi.",
+        "Nhấn 'Tìm kiếm' để xem kết quả.",
+        "Sắp xếp kết quả theo: Mới nhất, Giá tăng/giảm.",
+        "Nhấn vào tin đăng để xem chi tiết.",
+        "Lưu tin yêu thích bằng nút trái tim."
+      ],
+      "tips": [
+        "Sử dụng chatbot AI để tìm kiếm bằng ngôn ngữ tự nhiên, ví dụ: 'Tìm phòng trọ Cầu Giấy dưới 3 triệu có WiFi'.",
+        "Kết hợp nhiều bộ lọc để thu hẹp kết quả chính xác hơn.",
+        "Theo dõi tin mới đăng trong 7 ngày gần nhất để không bỏ lỡ cơ hội."
+      ]
+    },
+    {
+      "id": "guide_manage_listings",
+      "name": "Quản lý tin đăng",
+      "keywords": ["quản lý tin", "tin của tôi", "chỉnh sửa tin", "sửa tin", "xóa tin", "ẩn tin", "my listings"],
+      "steps": [
+        "Đăng nhập và vào mục 'Quản lý tin đăng' từ menu tài khoản.",
+        "Xem danh sách tất cả tin đã đăng với trạng thái (đang hiển thị/hết hạn/chờ duyệt).",
+        "Để chỉnh sửa: Nhấn 'Sửa' → thay đổi thông tin → Lưu.",
+        "Để ẩn/hiện tin: Nhấn 'Ẩn tin' nếu tạm thời không muốn hiển thị.",
+        "Để xóa: Nhấn 'Xóa tin' → xác nhận. Lưu ý: tin đã xóa không thể khôi phục.",
+        "Để gia hạn: Nhấn 'Gia hạn' → chọn thời gian → thanh toán.",
+        "Đánh dấu 'Đã cho thuê/bán' khi BĐS đã giao dịch thành công."
+      ],
+      "tips": [
+        "Cập nhật tin thường xuyên giúp tin hiển thị cao hơn trong kết quả tìm kiếm.",
+        "Đánh dấu 'Đã cho thuê' thay vì xóa tin để giữ lịch sử."
+      ]
+    },
+    {
+      "id": "guide_contact_landlord",
+      "name": "Liên hệ chủ nhà",
+      "keywords": ["liên hệ", "gọi điện", "nhắn tin", "contact", "chủ nhà", "số điện thoại", "zalo"],
+      "steps": [
+        "Mở tin đăng BĐS muốn liên hệ.",
+        "Xem thông tin liên hệ: số điện thoại, Zalo (nếu có).",
+        "Nhấn nút 'Gọi điện' để gọi trực tiếp cho chủ nhà.",
+        "Hoặc nhấn 'Nhắn tin' để gửi tin nhắn qua hệ thống SmartRent.",
+        "Hẹn lịch xem nhà trực tiếp với chủ nhà."
+      ],
+      "tips": [
+        "Gọi điện vào giờ hành chính (8h-20h) để chủ nhà dễ nghe máy hơn.",
+        "Chuẩn bị sẵn câu hỏi: giá cuối, tiền điện nước, thời hạn hợp đồng, đặt cọc.",
+        "Sử dụng chatbot để lấy thông tin liên hệ nhanh hơn."
+      ]
+    },
+    {
+      "id": "guide_vip_subscription",
+      "name": "Đăng ký gói VIP cho tin đăng",
+      "keywords": ["mua vip", "đăng ký vip", "vip", "nâng cấp", "gói dịch vụ", "subscription", "silver", "gold", "diamond"],
+      "steps": [
+        "Đăng nhập tài khoản SmartRent.",
+        "Vào mục 'Quản lý tin đăng'.",
+        "Chọn tin đăng muốn nâng cấp VIP.",
+        "Nhấn 'Nâng cấp VIP'.",
+        "Chọn gói: VIP Silver (ưu tiên nhẹ) / VIP Gold (nổi bật) / VIP Diamond (cao nhất).",
+        "Chọn thời gian áp dụng (số ngày).",
+        "Thanh toán qua phương thức có sẵn.",
+        "VIP có hiệu lực ngay lập tức sau thanh toán."
+      ],
+      "tips": [
+        "VIP Diamond cho lượt xem cao nhất, phù hợp khu vực cạnh tranh.",
+        "Thử VIP Silver trước nếu chưa chắc chắn về hiệu quả.",
+        "Kết hợp VIP với ảnh đẹp và mô tả chi tiết để tối đa hóa hiệu quả."
+      ]
+    },
+    {
+      "id": "guide_saved_listings",
+      "name": "Quản lý tin đã lưu",
+      "keywords": ["tin đã lưu", "saved", "yêu thích", "bookmark", "danh sách lưu", "xem lại"],
+      "steps": [
+        "Đăng nhập tài khoản SmartRent.",
+        "Vào mục 'Tin đã lưu' hoặc 'Yêu thích' từ menu tài khoản.",
+        "Xem danh sách tất cả tin bạn đã lưu.",
+        "Nhấn vào tin để xem chi tiết.",
+        "Nhấn biểu tượng trái tim để bỏ lưu nếu không còn quan tâm."
+      ],
+      "tips": [
+        "Lưu tin giúp bạn dễ dàng so sánh nhiều phòng/nhà trước khi quyết định.",
+        "Hệ thống sẽ thông báo nếu tin đã lưu có thay đổi về giá."
+      ]
+    }
+  ]
+}

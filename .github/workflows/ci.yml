@@ -8,7 +8,7 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: smartrent-ai
-  PYTHON_VERSION: "3.10.11"
+  PYTHON_VERSION: "3.13"
 
 jobs:
   lint:
@@ -18,30 +18,30 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      run: uv sync
 
     - name: Run code quality checks
       run: |
         # Format check
-        black --check .
+        uv run black --check .
 
         # Import sorting check
-        isort --check-only .
+        uv run isort --check-only .
 
         # Linting
-        flake8 .
+        uv run flake8 .
 
         # Type checking
-        mypy .
+        uv run mypy .
 
   test:
     runs-on: ubuntu-latest
@@ -51,24 +51,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      run: uv sync
 
     - name: Run unit tests
       run: |
-        pytest tests/ -v --cov=app --cov-report=xml:tests/coverage.xml --cov-report=html:tests/htmlcov --cov-fail-under=1
+        uv run pytest tests/ -v --cov=app --cov-report=xml:tests/coverage.xml --cov-report=html:tests/htmlcov --cov-fail-under=1
 
     - name: Check coverage threshold
       run: |
-        coverage report --fail-under=1
+        uv run coverage report --fail-under=1
         echo "✅ Coverage is above the minimum threshold of 1%"
 
     - name: Upload coverage reports
@@ -97,28 +97,17 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: |
+          vuhuydiet/smartrent-ai:${{ github.sha }}
+          vuhuydiet/smartrent-ai:dev
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        platforms: linux/amd64,linux/arm64
 
   deploy:
     needs: build-and-push
@@ -126,51 +115,50 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
     steps:
-    - name: Checkout deployment repository
-      uses: actions/checkout@v4
-      with:
-        repository: 'Vuhuydiet/smartrent-deploy'
-        token: ${{ secrets.DEPLOY_REPO_TOKEN }}
-        path: 'deploy-repo'
+      - name: Checkout Deployment Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'Vuhuydiet/smartrent-deploy'
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          path: 'smartrent-deploy'
 
-    - name: Set environment variables
-      id: env
-      run: |
-        COMMIT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
-        ENVIRONMENT=$([[ "${GITHUB_REF}" == "refs/heads/main" ]] && echo "prd" || echo "dev")
-        VALUES_FILE="charts/smartrent/environments/${ENVIRONMENT}/values.yaml"
+      - name: Update AI image tag
+        run: |
+          sed -i 's/^AI_TAG=.*/AI_TAG=${{ github.sha }}/' smartrent-deploy/docker/tags.env
 
-        echo "commit-sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
-        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-        echo "values-file=$VALUES_FILE" >> $GITHUB_OUTPUT
+      - name: Commit and push changes
+        working-directory: smartrent-deploy
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docker/tags.env
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          COMMIT_LINK="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          git commit -m "Deploy AI: ${{ github.event.head_commit.message }} (${COMMIT_LINK})"
+          git push
 
-    - name: Update image tags in values.yaml
-      run: |
-        echo "Updating image tags to: ${{ steps.env.outputs.commit-sha }} for environment: ${{ steps.env.outputs.environment }}"
-
-        sed -i '/^AIServer:/,/^[A-Za-z]/ s/^    tag: .*/    tag: ${{ steps.env.outputs.commit-sha }}/' deploy-repo/${{ steps.env.outputs.values-file }}
-
-        echo "Updated values.yaml content:"
-        cat deploy-repo/${{ steps.env.outputs.values-file }}
-
-    - name: Get commit info
-      id: commit-info
-      run: |
-        echo "commit-message=${{ github.event.head_commit.message }}" >> $GITHUB_OUTPUT
-        echo "commit-link=https://github.com/${{ github.repository }}/commit/${{ github.sha }}" >> $GITHUB_OUTPUT
-
-    - name: Commit and push changes
-      run: |
-        cd deploy-repo
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add ${{ steps.env.outputs.values-file }}
-
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-          exit 0
-        fi
-
-        COMMIT_MESSAGE="${{ steps.env.outputs.commit-sha }}: ${{ steps.commit-info.outputs.commit-message }} ${{ steps.commit-info.outputs.commit-link }}"
-        git commit -m "$COMMIT_MESSAGE"
-        git push
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd ~/smartrent-deploy
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose \
+              --env-file docker/.env \
+              --env-file docker/tags.env \
+              -f docker/docker-compose.yml \
+              pull ai
+            docker compose \
+              --env-file docker/.env \
+              --env-file docker/tags.env \
+              -f docker/docker-compose.yml \
+              up -d --no-deps ai
