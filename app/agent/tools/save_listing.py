@@ -1,25 +1,23 @@
 """
-Tool: save_listing
-
-Save or unsave a listing to/from the user's favorites on SmartRent.
-Requires a valid auth token in the execution context.
+Tool: save_listing — save or unsave a listing to/from the user's favorites.
+Requires a valid auth_token in ToolContext.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Annotated, Any, Dict
 
 import httpx
 from google.genai import types  # type: ignore[import]
 
-from app.agent.tools.base_tool import BaseTool
+from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
 logger = logging.getLogger(__name__)
 
 
-class SaveListingTool(BaseTool):
-    name = "save_listing"
-    description = (
+@function_tool(
+    name_override="save_listing",
+    description_override=(
         "Save or unsave a property listing to/from the user's favorites. "
         "Use when the user says 'lưu tin này', 'thêm vào yêu thích', "
         "'bỏ lưu', or 'xóa khỏi yêu thích'."
@@ -56,41 +54,42 @@ class SaveListingTool(BaseTool):
         context = kwargs.get("context") or {}
         token = context.get("auth_token")
 
-        if not token:
-            return {
-                "status": "error",
-                "error": (
-                    "Người dùng chưa đăng nhập. "
-                    "Hãy hướng dẫn người dùng đăng nhập để lưu tin."
-                ),
-            }
+    token = ctx.context.auth_token
+    if not token:
+        return {
+            "status": "error",
+            "error": (
+                "Người dùng chưa đăng nhập. "
+                "Hãy hướng dẫn người dùng đăng nhập để lưu tin."
+            ),
+        }
 
-        try:
-            if action == "unsave":
-                data = await backend_client.unsave_listing(listing_id, token)
-            else:
-                data = await backend_client.save_listing(listing_id, token)
+    try:
+        if action == "unsave":
+            data = await backend_client.unsave_listing(listing_id, token)
+        else:
+            data = await backend_client.save_listing(listing_id, token)
 
-            if "error" in data:
-                return {"status": "error", "error": data["error"]}
+        if "error" in data:
+            return {"status": "error", "error": data["error"]}
 
-            return {
-                "status": "success",
-                "action": action,
-                "listingId": listing_id,
-                "message": (
-                    f"Đã lưu tin {listing_id} vào danh sách yêu thích."
-                    if action == "save"
-                    else f"Đã bỏ lưu tin {listing_id}."
-                ),
-            }
+        return {
+            "status": "success",
+            "action": action,
+            "listingId": listing_id,
+            "message": (
+                f"Đã lưu tin {listing_id} vào danh sách yêu thích."
+                if action == "save"
+                else f"Đã bỏ lưu tin {listing_id}."
+            ),
+        }
 
-        except httpx.HTTPStatusError as e:
-            logger.error("Backend HTTP %s for save_listing", e.response.status_code)
-            return {
-                "status": "error",
-                "error": f"Backend returned HTTP {e.response.status_code}",
-            }
-        except Exception as e:
-            logger.error("save_listing failed: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
+    except httpx.HTTPStatusError as e:
+        logger.error("Backend HTTP %s for save_listing", e.response.status_code)
+        return {
+            "status": "error",
+            "error": f"Backend returned HTTP {e.response.status_code}",
+        }
+    except Exception as e:
+        logger.error("save_listing failed: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e)}

@@ -1,6 +1,7 @@
 .ignore/
 tmp/
 diff/
+.DS_Store
 
 smartrent-key.json
 

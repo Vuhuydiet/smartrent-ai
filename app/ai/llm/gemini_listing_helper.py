@@ -1,4 +1,14 @@
+"""
+Listing-verification helper.
+
+Uses the OpenAI Agents SDK to send a vision-enabled prompt to the configured
+LLM provider (Gemini by default via LiteLLM) and parse the JSON output.
+The class name is kept for backward compatibility with services that import
+`GeminiListingVerificationHelper`; under the hood, the provider is selectable.
+"""
+
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -6,18 +16,25 @@ from io import BytesIO
 from typing import Any, Dict, List
 
 import httpx
+from agents import Agent, Runner  # type: ignore[import]
 from PIL import Image
 
+from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_MAX_IMAGES = 8
 
 
 class GeminiListingVerificationHelper:
     """
-    Enhanced Gemini client specifically for listing verification with multimodal capabilities.
+    Multimodal listing-verification helper. Wraps a single-turn Agents-SDK
+    `Agent` (no tools) and parses the JSON response.
 
-    Uses LLMGateway so all calls are traced through Langfuse.
+    Despite the legacy name, this class is provider-agnostic — see
+    `app.ai.llm.agent_factory.make_model`.
     """
 
     def __init__(self) -> None:
@@ -139,8 +156,7 @@ class GeminiListingVerificationHelper:
                 },
                 trace=trace,
             )
-
-            return self._handle_api_response(self._response_text(response))
+            return self._handle_api_response(response_text)
 
         except Exception as e:
             logger.error("Multimodal analysis failed: %s", e, exc_info=True)
@@ -182,9 +198,7 @@ class GeminiListingVerificationHelper:
     async def analyze_text_content(
         self, text_content: str, analysis_prompt: str
     ) -> Dict[str, Any]:
-        """
-        Analyze text content for listing verification (no images).
-        """
+        """Analyze text content for listing verification (no images)."""
         try:
             full_prompt = (
                 f"{analysis_prompt}\n\n"
@@ -194,7 +208,7 @@ class GeminiListingVerificationHelper:
 
             trace = self._gateway.create_trace(
                 name="listing-verification",
-                metadata={"mode": "text-only"},
+                metadata={"mode": "text-only", "model": settings.LLM_VISION_MODEL},
             )
 
             response = await self._gateway.generate(
@@ -209,8 +223,7 @@ class GeminiListingVerificationHelper:
                 trace=trace,
                 span_name="verify-text",
             )
-
-            return self._handle_api_response(self._response_text(response))
+            return self._handle_api_response(response_text)
 
         except Exception as e:
             import traceback
@@ -279,15 +292,12 @@ You are an AI expert in rental property listing verification.
         return ""
 
     @staticmethod
-    async def _download_images(image_urls: List[str], max_images: int = 8) -> List[Any]:
+    async def _download_images(image_urls: List[str]) -> List[str]:
         """
-        Download and preprocess images from URLs concurrently.
-
-        Uses httpx.AsyncClient so we don't block the event loop while waiting
-        on network IO, and PIL decoding is offloaded to a worker thread so the
-        loop keeps serving other requests during CPU-bound image resizing.
+        Download and preprocess images concurrently. Returns a list of
+        base64-encoded data URIs ready for the Responses API.
         """
-        urls = image_urls[:max_images]
+        urls = image_urls[:_MAX_IMAGES]
         if not urls:
             return []
 
@@ -296,7 +306,7 @@ You are an AI expert in rental property listing verification.
         }
         async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
 
-            async def _fetch_and_decode(i: int, url: str) -> Any:
+            async def _fetch_and_encode(i: int, url: str) -> str | None:
                 try:
                     resp = await client.get(url)
                     if resp.status_code != 200:
@@ -308,7 +318,7 @@ You are an AI expert in rental property listing verification.
                         return None
                     content = resp.content
 
-                    def _decode() -> Image.Image:
+                    def _encode() -> str:
                         img: Image.Image = Image.open(BytesIO(content))
                         if img.mode != "RGB":
                             img = img.convert("RGB")
@@ -317,28 +327,27 @@ You are an AI expert in rental property listing verification.
                             img.thumbnail((512, 512), Image.Resampling.LANCZOS)
                         return img
 
-                    pil_image = await asyncio.to_thread(_decode)
+                    data_uri = await asyncio.to_thread(_encode)
                     logger.info("Successfully processed image %d", i + 1)
-                    return pil_image
+                    return data_uri
                 except Exception as e:
                     logger.error("Error processing image %d: %s", i + 1, e)
                     return None
 
             results = await asyncio.gather(
-                *(_fetch_and_decode(i, url) for i, url in enumerate(urls))
+                *(_fetch_and_encode(i, url) for i, url in enumerate(urls))
             )
 
-        return [img for img in results if img is not None]
+        return [u for u in results if u is not None]
 
     @staticmethod
     def _parse_json_response(response_text: str) -> Dict[str, Any]:
-        """Parse JSON response with fallback handling."""
+        """Parse JSON response with multiple fallbacks."""
         try:
             return json.loads(response_text)
         except json.JSONDecodeError:
             pass
 
-        # Try extracting JSON object from response
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_match:
             try:
@@ -346,7 +355,6 @@ You are an AI expert in rental property listing verification.
             except json.JSONDecodeError:
                 pass
 
-        # Try fixing incomplete JSON
         if response_text.count("{") > response_text.count("}"):
             missing = response_text.count("{") - response_text.count("}")
             try:
@@ -395,12 +403,11 @@ You are an AI expert in rental property listing verification.
 
     @staticmethod
     def _handle_generation_error(error_msg: str) -> Dict[str, Any]:
-        """Handle generation errors with appropriate responses."""
+        """Map errors to a structured payload the service layer understands."""
         logger.error("Error in analysis: %s", error_msg)
 
         if "quota exceeded" in error_msg.lower() or "429" in error_msg:
             return {"error": "quota exceeded", "analysis_completed": False}
-        elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+        if "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
             return {"error": "invalid api key", "analysis_completed": False}
-        else:
-            return {"error": error_msg, "analysis_completed": False}
+        return {"error": error_msg, "analysis_completed": False}

@@ -1,17 +1,16 @@
 """
-Tool: search_listings
-
-Calls the SmartRent backend listing search API and returns a compact summary
-for the LLM plus the full raw listing objects for the API response layer.
+Tool: search_listings — calls the SmartRent backend and returns a compact
+summary for the LLM. Raw listings are appended to ToolContext.collected_listings
+so the orchestrator can return them to the frontend.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Annotated, Any, Dict, List, Optional
 
 import httpx
 from google.genai import types  # type: ignore[import]
 
-from app.agent.tools.base_tool import BaseTool
+from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "productType": item.get("productType", ""),
         "listingType": item.get("listingType", ""),
     }
-    # Optional fields — only include when present to save tokens
     for key in ("bedrooms", "bathrooms", "furnishing", "direction"):
         val = item.get(key)
         if val is not None:
@@ -182,63 +180,51 @@ class SearchListingsTool(BaseTool):
         if params["size"] > _MAX_SIZE:
             params["size"] = _MAX_SIZE
 
-        # Cast fields that the backend expects as integers.
-        for int_field in (
-            "districtId",
-            "minBedrooms",
-            "maxBedrooms",
-            "bedrooms",
-            "bathrooms",
-            "page",
-            "size",
-            "postedWithinDays",
-        ):
-            if int_field in params and isinstance(params[int_field], float):
-                params[int_field] = int(params[int_field])
+    # Backend checks both old and new address fields — keep them in sync.
+    if "provinceCode" in params:
+        params.setdefault("provinceId", params["provinceCode"])
+    elif "provinceId" in params:
+        params.setdefault("provinceCode", params["provinceId"])
 
-        # Backend checks both old and new address fields — keep them in sync.
-        if "provinceCode" in params:
-            params.setdefault("provinceId", params["provinceCode"])
-        elif "provinceId" in params:
-            params.setdefault("provinceCode", params["provinceId"])
+    try:
+        logger.info("search_listings request params: %s", params)
+        data = await backend_client.search_listings(params)
+        raw_listings = data.get("listings", [])
+        listing_ids = [str(item.get("listingId", "?")) for item in raw_listings]
+        logger.info(
+            "search_listings response: %d listings, totalCount=%s, IDs=%s",
+            len(raw_listings),
+            data.get("totalCount"),
+            listing_ids,
+        )
 
-        try:
-            logger.info("search_listings request params: %s", params)
-            data = await backend_client.search_listings(params)
-            raw_listings = data.get("listings", [])
-            listing_ids = [str(item.get("listingId", "?")) for item in raw_listings]
-            logger.info(
-                "search_listings response: %d listings, totalCount=%s, IDs=%s",
-                len(raw_listings),
-                data.get("totalCount"),
-                listing_ids,
-            )
-
-            if "error" in data:
-                return {
-                    "status": "error",
-                    "error": data["error"],
-                    "code": data.get("code"),
-                }
-
-            listings: list = data.get("listings", [])
-
-            return {
-                "status": "success",
-                "count": len(listings),
-                "totalCount": data.get("totalCount", len(listings)),
-                "currentPage": params.get("page", 1),
-                "pageSize": params["size"],
-                "listings": [_compact_search_item(item) for item in listings],
-                "_raw_listings": listings,
-            }
-
-        except httpx.HTTPStatusError as e:
-            logger.error("Backend HTTP %s for search_listings", e.response.status_code)
+        if "error" in data:
             return {
                 "status": "error",
-                "error": f"Backend returned HTTP {e.response.status_code}",
+                "error": data["error"],
+                "code": data.get("code"),
             }
-        except Exception as e:
-            logger.error("search_listings failed: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
+
+        listings: list = data.get("listings", [])
+
+        # Hand raw listings to the orchestrator via shared context
+        ctx.context.collected_listings.extend(listings)
+
+        return {
+            "status": "success",
+            "count": len(listings),
+            "totalCount": data.get("totalCount", len(listings)),
+            "currentPage": params.get("page", 1),
+            "pageSize": params["size"],
+            "listings": [_compact_search_item(item) for item in listings],
+        }
+
+    except httpx.HTTPStatusError as e:
+        logger.error("Backend HTTP %s for search_listings", e.response.status_code)
+        return {
+            "status": "error",
+            "error": f"Backend returned HTTP {e.response.status_code}",
+        }
+    except Exception as e:
+        logger.error("search_listings failed: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e)}

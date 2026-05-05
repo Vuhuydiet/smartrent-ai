@@ -24,17 +24,28 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    # Google Cloud / Vertex AI Configuration
+    # LLM Provider Configuration
+    # All agents are built via the OpenAI Agents SDK. The provider is selected
+    # at startup; switching providers is a single env-var change.
+    #   "gemini"  → LitellmModel; auth auto-detected:
+    #               - GCP_CREDENTIALS_BASE64 set → Vertex AI (service account)
+    #               - else GEMINI_API_KEY set    → Google AI Studio (api key)
+    #   "openai"  → LitellmModel via OPENAI_API_KEY
+    LLM_PROVIDER: str = "gemini"
+    GEMINI_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+
+    # Google Cloud / Vertex AI credentials — only needed when using Vertex AI
+    # for Gemini (service-account auth). Leave blank to use GEMINI_API_KEY.
     GCP_CREDENTIALS_BASE64: str = ""  # Base64-encoded service account JSON
     GCP_PROJECT_ID: str = ""
-    GCP_LOCATION: str = "global"
-    GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
-    GEMINI_VISION_MODEL: str = (
-        "gemini-2.5-flash"  # Model used for listing verification (vision + text)
-    )
-    GEMINI_PRICE_MODEL: str = (
-        "gemini-2.5-flash"  # Model used for price prediction (function calling)
-    )
+    GCP_LOCATION: str = "us-central1"
+
+    # Per-task model identifiers — bare model names (e.g. "gemini-2.5-flash",
+    # "gpt-4o-mini"). The factory prepends the provider prefix when needed.
+    LLM_CHAT_MODEL: str = "gemini-2.5-flash"  # Chat / agent loop
+    LLM_VISION_MODEL: str = "gemini-2.5-flash"  # Listing verification (text+image)
+    LLM_PRICE_MODEL: str = "gemini-2.5-flash"  # Price prediction
 
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"

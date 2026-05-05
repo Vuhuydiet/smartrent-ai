@@ -1,16 +1,10 @@
 """
-Tool: get_price_estimate
+Tool: get_price_estimate — XGBoost rental price predictor with rule-based fallback.
 
-Estimates the fair market rental price for a property using the XGBoost
-price predictor model. Falls back to a rule-based market estimate when the
-trained model file is not available.
-
-Model loading strategy
-----------------------
 The XGBoost model (RealEstatePricePredictorModel) is expensive to train (~minutes).
-On startup this tool attempts to load a pre-saved pickle from the path configured
-in PRICE_MODEL_PATH. If the file does not exist the tool transparently uses a
-lightweight rule-based fallback — the agent still works, just with lower accuracy.
+On first call this tool tries to load a pre-saved pickle from PRICE_MODEL_PATH;
+if the file does not exist it transparently uses a lightweight rule-based fallback —
+the agent still works, just with lower accuracy.
 
 To train and save the model run (one-time):
     python -m app.ai.house_pricing.train_and_save
@@ -19,11 +13,11 @@ To train and save the model run (one-time):
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 from google.genai import types  # type: ignore[import]
 
-from app.agent.tools.base_tool import BaseTool
+from app.agent.tool_context import ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +25,11 @@ logger = logging.getLogger(__name__)
 # Lazy singleton for the XGBoost model
 # ---------------------------------------------------------------------------
 _predictor: Optional[Any] = None
-_predictor_loaded = False  # True once we have attempted to load (even if it failed)
+_predictor_loaded = False
 
 
 def _get_predictor() -> Optional[Any]:
-    """
-    Return the singleton RealEstatePricePredictorModel, or None if unavailable.
-    Load attempt happens once; subsequent calls return the cached result.
-    """
+    """Return the singleton predictor or None if unavailable."""
     global _predictor, _predictor_loaded
     if _predictor_loaded:
         return _predictor
@@ -47,7 +38,7 @@ def _get_predictor() -> Optional[Any]:
     model_path = os.environ.get("PRICE_MODEL_PATH", "")
     if not model_path or not os.path.exists(model_path):
         logger.info(
-            "PRICE_MODEL_PATH not set or file not found — using rule-based price fallback."
+            "PRICE_MODEL_PATH not set or file not found — using rule-based fallback."
         )
         return None
 
@@ -65,10 +56,9 @@ def _get_predictor() -> Optional[Any]:
 
 
 # ---------------------------------------------------------------------------
-# Rule-based fallback (market estimates — same logic as PricePredictionService)
+# Rule-based fallback
 # ---------------------------------------------------------------------------
 
-# Monthly rent per m² in VND, keyed by city keyword → tier
 _CITY_RENT: Dict[str, Dict[str, int]] = {
     "hà nội": {"high": 220_000, "medium": 160_000, "low": 110_000},
     "hanoi": {"high": 220_000, "medium": 160_000, "low": 110_000},
@@ -82,19 +72,19 @@ _DEFAULT_RENT = {"high": 180_000, "medium": 130_000, "low": 90_000}
 _HIGH_TIER_DISTRICTS = {
     "hoàn kiếm",
     "ba đình",
-    "tây hồ",  # Hanoi premium
+    "tây hồ",
     "quận 1",
     "quận 3",
-    "bình thạnh",  # HCM premium
-    "hải châu",  # Da Nang premium
+    "bình thạnh",
+    "hải châu",
 }
 _LOW_TIER_DISTRICTS = {
     "hà đông",
     "thanh trì",
-    "gia lâm",  # Hanoi fringe
+    "gia lâm",
     "thủ đức",
     "bình tân",
-    "gò vấp",  # HCM fringe
+    "gò vấp",
 }
 
 _PROPERTY_MULTIPLIERS: Dict[str, float] = {
@@ -232,68 +222,66 @@ class GetPriceEstimateTool(BaseTool):
         askingPrice: Optional[float] = kwargs.get("askingPrice")  # noqa: N806
         predictor = _get_predictor()
 
-        # --- ML model path ---------------------------------------------------
-        if predictor is not None and latitude is not None and longitude is not None:
-            try:
-                now = datetime.now()
-                property_data = {
-                    "city": city,
-                    "district": district,
-                    "ward": ward,
-                    "property_type": propertyType,
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "post_date": now.strftime("%Y-%m-%d"),
-                }
-                prediction = predictor.predict_price_range(property_data)
-                result: Dict[str, Any] = {
-                    "status": "success",
-                    "source": "ml_model",
-                    "estimatedMonthlyRent": int(
-                        prediction["predicted_price"] * 1_000_000
-                    ),
-                    "priceRange": {
-                        "min": int(prediction["price_range"]["min"] * 1_000_000),
-                        "max": int(prediction["price_range"]["max"] * 1_000_000),
-                    },
-                    "currency": "VND",
-                    "confidence": "high",
-                }
+    # --- ML model path -----------------------------------------------------
+    if predictor is not None and latitude is not None and longitude is not None:
+        try:
+            now = datetime.now()
+            property_data = {
+                "city": city,
+                "district": district,
+                "ward": ward or "",
+                "property_type": propertyType,
+                "latitude": latitude,
+                "longitude": longitude,
+                "post_date": now.strftime("%Y-%m-%d"),
+            }
+            prediction = predictor.predict_price_range(property_data)
+            result: Dict[str, Any] = {
+                "status": "success",
+                "source": "ml_model",
+                "estimatedMonthlyRent": int(prediction["predicted_price"] * 1_000_000),
+                "priceRange": {
+                    "min": int(prediction["price_range"]["min"] * 1_000_000),
+                    "max": int(prediction["price_range"]["max"] * 1_000_000),
+                },
+                "currency": "VND",
+                "confidence": "high",
+            }
 
-                if askingPrice is not None:
-                    evaluation = predictor.evaluate_price_vs_market(
-                        property_data, askingPrice / 1_000_000
-                    )
-                    result["marketEvaluation"] = evaluation["market_evaluation"]
-                    result["priceDifferencePercent"] = round(
-                        evaluation["price_difference_percentage"], 1
-                    )
-
-                return result
-
-            except Exception as e:
-                logger.warning(
-                    "ML price prediction failed, falling back to rule-based: %s", e
+            if askingPrice is not None:
+                evaluation = predictor.evaluate_price_vs_market(
+                    property_data, askingPrice / 1_000_000
+                )
+                result["marketEvaluation"] = evaluation["market_evaluation"]
+                result["priceDifferencePercent"] = round(
+                    evaluation["price_difference_percentage"], 1
                 )
 
-        # --- Rule-based fallback ---------------------------------------------
-        result = _rule_based_estimate(city, district, propertyType, area)
+            return result
 
-        if askingPrice is not None:
-            mid = (result["priceRange"]["min"] + result["priceRange"]["max"]) / 2
-            diff_pct = (askingPrice - mid) / mid * 100
-            if diff_pct < -25:
-                category = "very_low"
-            elif diff_pct < -10:
-                category = "low"
-            elif diff_pct <= 15:
-                category = "reasonable"
-            elif diff_pct <= 30:
-                category = "high"
-            else:
-                category = "very_high"
+        except Exception as e:
+            logger.warning(
+                "ML price prediction failed, falling back to rule-based: %s", e
+            )
 
-            result["marketEvaluation"] = {"category": category}
-            result["priceDifferencePercent"] = round(diff_pct, 1)
+    # --- Rule-based fallback ----------------------------------------------
+    result = _rule_based_estimate(city, district, propertyType, float(area))
 
-        return result
+    if askingPrice is not None:
+        mid = (result["priceRange"]["min"] + result["priceRange"]["max"]) / 2
+        diff_pct = (askingPrice - mid) / mid * 100
+        if diff_pct < -25:
+            category = "very_low"
+        elif diff_pct < -10:
+            category = "low"
+        elif diff_pct <= 15:
+            category = "reasonable"
+        elif diff_pct <= 30:
+            category = "high"
+        else:
+            category = "very_high"
+
+        result["marketEvaluation"] = {"category": category}
+        result["priceDifferencePercent"] = round(diff_pct, 1)
+
+    return result

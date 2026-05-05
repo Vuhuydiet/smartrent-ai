@@ -1,21 +1,20 @@
 """
-Agent Orchestrator — the core agent loop.
+Agent Orchestrator — built on the OpenAI Agents SDK.
 
 Flow per request
 ----------------
 1. Create Langfuse trace
-2. RAG: retrieve per-query context (location codes, amenity IDs, relevant FAQ)
-3. Build Gemini model with fully resolved system_instruction (base + static prefix + dynamic context)
-4. Convert prior history to Vertex AI Content objects
-5. Agentic loop (max MAX_TOOL_ROUNDS rounds):
-   a. Send message → LLM
-   b. Extract ALL function calls from response
-   c. If none → final text response, exit loop
-   d. Execute every tool via ToolRegistry (collect _raw_listings from search)
-   e. Feed all tool results back as a single Content → repeat
-6. Extract final text
-7. Build listings payload from collected raw listing objects
-8. Return AgentResult
+2. RAG: retrieve per-query context (location codes, amenity IDs, FAQ)
+3. Build a per-request `Agent` with:
+       instructions = stable base prompt (cache-friendly across requests)
+       model        = LiteLLM-backed model from agent_factory (provider-pluggable)
+       tools        = @function_tool callables from app.agent.tools
+4. Build conversation input as Responses-API messages; the dynamic RAG context
+   is prepended to the user message so the system instructions stay byte-stable.
+5. Run via Runner.run() (sync) or Runner.run_streamed() (SSE).
+6. Tools push raw listings into ToolContext.collected_listings; the orchestrator
+   builds the listings payload from that collection after the run.
+7. Return AgentResult / yield SSE-shaped events.
 """
 
 import asyncio
@@ -25,129 +24,24 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from google.genai import types  # type: ignore[import]
+from agents import Agent, Runner, RunResultStreaming  # type: ignore[import]
+from agents.exceptions import MaxTurnsExceeded  # type: ignore[import]
+from openai.types.responses import ResponseTextDeltaEvent  # type: ignore[import]
 
 from app.agent.rag.retriever import RAGRetriever
-from app.agent.tools.registry import ToolRegistry
+from app.agent.tool_context import ToolContext
+from app.agent.tools import get_chat_tools
+from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import LLMGateway, get_gateway
 from app.core.config import settings
 from app.dto.chat import ChatMessage, LastListingRef
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ROUNDS = 5  # safety cap — prevents infinite loops on misbehaving models
-REQUEST_TIMEOUT_SECONDS = 120  # overall timeout for one orchestrator.run() call
-
-# Token-budgeted sliding window — bounds LLM-bound history regardless of
-# session length. Two complementary caps are enforced:
-#   1. HISTORY_TOKEN_BUDGET — primary, character-based token estimate
-#   2. MAX_HISTORY_MESSAGES — hard safety cap if estimation drifts
-#
-# Walking newest-first: always keep the current user message, then accumulate
-# older messages until the token budget is exhausted. Entity continuity for
-# follow-ups like "details of #2" is preserved separately via the
-# `last_listings` field on ChatRequest, so we can drop old prose without
-# losing referential meaning.
-HISTORY_TOKEN_BUDGET = 4000  # ~3-4K tokens of history sent to LLM
-MAX_HISTORY_MESSAGES = 20  # hard cap (safety)
-
-# Listing-list compaction: assistant messages that enumerate listings as
-# `1. [ID:35201] ... 2. [ID:35202] ...` are bulky and re-sent every turn.
-# After the initial UI render, the listing IDs are the only thing the LLM
-# needs for follow-up. We compact such messages in the LLM-bound history
-# while keeping the FE-stored copy intact for the user-visible chat.
-_LISTING_ID_RE = re.compile(r"\[ID:(\d+)\]")
-_COMPACT_THRESHOLD = 2  # only compact when 2+ listing IDs present
-
-
-def _estimate_tokens(text: str) -> int:
-    """
-    Rough token estimate. Conservative (~3 chars/token) — Vietnamese is
-    slightly less efficient than English in Gemini's tokenizer, plus the
-    extra +5 covers role prefix and message overhead per turn.
-    """
-    return (len(text) // 3) + 5
-
-
-def _compact_assistant_message(content: str) -> str:
-    """
-    Compact assistant messages that enumerate listings. Preserves the leading
-    summary sentence and the listing IDs (so the model can still resolve
-    "cái thứ 2"-style references), drops the per-item titles/descriptions.
-
-    Returns content unchanged when fewer than `_COMPACT_THRESHOLD` listing
-    IDs are present.
-    """
-    ids = _LISTING_ID_RE.findall(content)
-    if len(ids) < _COMPACT_THRESHOLD:
-        return content
-
-    # Find the first line that contains a [ID:...] — that's where the
-    # numbered list begins. Take only the prose before that line as header.
-    lines = content.split("\n")
-    list_start = next(
-        (i for i, line in enumerate(lines) if _LISTING_ID_RE.search(line)),
-        len(lines),
-    )
-    header = "\n".join(lines[:list_start]).rstrip(" :\n").rstrip()
-    if not header:
-        header = "Đã trả về danh sách kết quả."
-
-    return f"{header}\n[Đã hiển thị {len(ids)} tin: {', '.join(ids)}]"
-
-
-def _trim_history(messages: List[ChatMessage]) -> List[ChatMessage]:
-    """
-    Token-budgeted sliding window over conversation history.
-
-    Strategy:
-      1. Always keep the current (last) user message — that's the query.
-      2. Walk older messages newest-first, accumulating into the kept set
-         until either the token budget or the hard message cap is reached.
-      3. Ensure the trimmed window starts with a user message (Gemini chat
-         history requires user-first alternation).
-
-    The token budget is the primary cap; MAX_HISTORY_MESSAGES is a safety
-    fallback in case the character-based estimate drifts (e.g. very long
-    English passages tokenizing more efficiently than expected).
-    """
-    if not messages:
-        return messages
-
-    # Apply per-message compaction first so token accounting reflects what
-    # actually goes to the LLM, not the FE-stored verbatim version.
-    compacted = [
-        ChatMessage(
-            role=m.role,
-            content=(
-                _compact_assistant_message(m.content)
-                if m.role == "assistant"
-                else m.content
-            ),
-        )
-        for m in messages
-    ]
-
-    current = compacted[-1]
-    history = compacted[:-1]
-
-    used_tokens = _estimate_tokens(current.content)
-    kept: List[ChatMessage] = [current]
-
-    for msg in reversed(history):
-        if len(kept) >= MAX_HISTORY_MESSAGES:
-            break
-        msg_tokens = _estimate_tokens(msg.content)
-        if used_tokens + msg_tokens > HISTORY_TOKEN_BUDGET:
-            break
-        used_tokens += msg_tokens
-        kept.insert(0, msg)
-
-    # Conversation must start with a user message (Gemini requirement).
-    while kept and kept[0].role != "user":
-        kept = kept[1:]
-
-    return kept
+# Each tool round consumes ~2 turns (LLM call + tool result), so 12 is the
+# rough equivalent of the old MAX_TOOL_ROUNDS=5 cap.
+MAX_AGENT_TURNS = 12
+REQUEST_TIMEOUT_SECONDS = 120
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +60,7 @@ class AgentResult:
 
 
 # ---------------------------------------------------------------------------
-# System prompt construction
+# System prompt
 # ---------------------------------------------------------------------------
 
 _SYSTEM_BASE = """\
@@ -261,24 +155,17 @@ KHÔNG CÓ KẾT QUẢ:
 
 
 @functools.lru_cache(maxsize=8)
-def _build_static_system_instruction(
+def _build_static_instructions(
     base_prompt: str,
     static_prefix: str,
     max_listings: int,
 ) -> str:
     """
-    Assemble the STABLE system instruction reused across every request.
+    Assemble the STABLE instructions reused across every request.
 
-    This deliberately excludes per-request data (RAG context, last_listings) so
-    the resulting string is byte-identical across calls — letting Gemini's
-    implicit cache hit and enabling explicit CachedContent registration later.
-
-    Structure:
-        [Base rules + tool usage guide]            — from Langfuse or local fallback
-        [Static RAG prefix: provinces + amenities] — same for every user/turn
-
-    Cached via lru_cache keyed on (base_prompt, static_prefix, max_listings).
-    Both inputs are process-stable, so the cache effectively holds one entry.
+    Excludes per-request data (RAG context, last_listings) so the resulting
+    string is byte-identical across calls — letting the provider's prompt
+    cache (Gemini implicit cache, OpenAI prefix cache) hit.
     """
     resolved = base_prompt.replace("{{max_listings}}", str(max_listings))
     resolved = resolved.replace("{max_listings}", str(max_listings))
@@ -295,10 +182,7 @@ def _build_dynamic_context_block(
     """
     Build the per-request context block prepended to the user's first message.
 
-    Kept OUT of system_instruction so the system_instruction stays cache-stable.
-    The model still sees this content — just on the user side of the turn.
-
-    Returns an empty string when there is nothing to inject.
+    Kept OUT of the agent's instructions so the instructions stay cache-stable.
     """
     parts: List[str] = []
 
@@ -314,6 +198,23 @@ def _build_dynamic_context_block(
     return "\n\n".join(parts)
 
 
+def _to_responses_input(messages: List[ChatMessage]) -> List[Dict[str, Any]]:
+    """Convert ChatMessage list to Responses-API input items."""
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
+def _tool_names_used(new_items: List[Any]) -> List[str]:
+    """Extract names of tools the agent invoked, in order."""
+    names: List[str] = []
+    for item in new_items:
+        if getattr(item, "type", None) == "tool_call_item":
+            raw = getattr(item, "raw_item", None)
+            name = getattr(raw, "name", None)
+            if name:
+                names.append(name)
+    return names
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -323,24 +224,84 @@ class AgentOrchestrator:
     """
     Stateless coordinator — one instance is created at startup and reused.
 
-    Each call to `run()` is independent: it creates its own Gemini model
-    (with per-request system_instruction), chat session, and Langfuse trace.
+    Each call to `run()` is independent: it builds its own per-request Agent,
+    ToolContext, and Langfuse trace.
     """
 
     def __init__(
         self,
         gateway: LLMGateway,
-        tool_registry: ToolRegistry,
         rag: RAGRetriever,
     ) -> None:
         self._gateway = gateway
-        self._tools = tool_registry
         self._rag = rag
         self._static_prefix = rag.get_system_prompt_prefix()
+        self._tools = get_chat_tools()
         logger.info(
             "AgentOrchestrator initialised — tools: %s",
-            self._tools.list_tools(),
+            [getattr(t, "name", repr(t)) for t in self._tools],
         )
+
+    # ------------------------------------------------------------------
+    # Helpers shared by run() and run_stream()
+    # ------------------------------------------------------------------
+
+    def _build_agent(self, instructions: str) -> Agent[ToolContext]:
+        return Agent[ToolContext](
+            name="SmartRent Chat Agent",
+            instructions=instructions,
+            model=make_model(settings.LLM_CHAT_MODEL),
+            model_settings=default_model_settings(temperature=0.7),
+            tools=self._tools,
+        )
+
+    def _build_input(
+        self,
+        messages: List[ChatMessage],
+        dynamic_context: str,
+        last_listings: Optional[List[LastListingRef]],
+    ) -> List[Dict[str, Any]]:
+        """Build the Responses-API input list, prepending dynamic context to the last user message."""
+        items = _to_responses_input(messages[:-1])
+        last_user = messages[-1].content
+        context_block = _build_dynamic_context_block(dynamic_context, last_listings)
+        if context_block:
+            last_user = f"{context_block}\n\n---\n\n{last_user}"
+        items.append({"role": "user", "content": last_user})
+        return items
+
+    def _build_listings_payload(
+        self, raw_listings: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Deduplicate raw listings by listingId (later entries win — detail >
+        search card) and shape the response payload.
+        """
+        if not raw_listings:
+            return None
+
+        seen: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for listing in raw_listings:
+            lid = str(listing.get("listingId", id(listing)))
+            if lid not in seen:
+                order.append(lid)
+            seen[lid] = listing
+
+        unique = [seen[lid] for lid in order]
+        top = unique[: settings.MAX_LISTINGS_RETURN]
+        return {
+            "listings": top,
+            "totalCount": len(top),
+            "selectedFromTotal": len(unique),
+            "currentPage": 1,
+            "pageSize": len(top),
+            "totalPages": 1,
+        }
+
+    # ------------------------------------------------------------------
+    # Synchronous entry point
+    # ------------------------------------------------------------------
 
     async def run(
         self,
@@ -350,32 +311,7 @@ class AgentOrchestrator:
         auth_token: Optional[str] = None,
         last_listings: Optional[List[LastListingRef]] = None,
     ) -> AgentResult:
-        """
-        Execute the full agent pipeline for one user turn.
-
-        Args:
-            messages: Full conversation history (the last item must be role=user).
-            session_id: Optional ID for grouping traces in Langfuse.
-            user_id: Optional authenticated user ID (for personalized features).
-            auth_token: Optional JWT token (for calling authenticated backend APIs).
-
-        Returns:
-            AgentResult with the assistant message, optional listings, and metadata.
-        """
-        original_count = len(messages)
-        messages = _trim_history(messages)
-        kept_tokens = sum(_estimate_tokens(m.content) for m in messages)
-        if len(messages) < original_count:
-            logger.info(
-                "Token-budgeted window: trimmed history %d → %d messages "
-                "(~%d tokens, budget=%d)",
-                original_count,
-                len(messages),
-                kept_tokens,
-                HISTORY_TOKEN_BUDGET,
-            )
         user_message = messages[-1].content
-
         try:
             return await asyncio.wait_for(
                 self._run_pipeline(
@@ -404,25 +340,23 @@ class AgentOrchestrator:
         messages: List[ChatMessage],
         user_message: str,
         session_id: Optional[str],
-        user_id: Optional[str] = None,
-        auth_token: Optional[str] = None,
-        last_listings: Optional[List[LastListingRef]] = None,
+        user_id: Optional[str],
+        auth_token: Optional[str],
+        last_listings: Optional[List[LastListingRef]],
     ) -> AgentResult:
-        """Inner pipeline — separated so run() can wrap it with a timeout."""
-
-        # ── 1. Langfuse trace ──────────────────────────────────────────────
         trace = self._gateway.create_trace(
             name="chat-request",
             session_id=session_id,
             input={"message": user_message},
             metadata={
-                "model": settings.GEMINI_CHAT_MODEL,
+                "model": settings.LLM_CHAT_MODEL,
+                "provider": settings.LLM_PROVIDER,
                 "turns": len(messages),
             },
         )
 
         try:
-            # ── 2. RAG retrieval ───────────────────────────────────────────
+            # ── RAG ──────────────────────────────────────────────────
             rag_span = trace.span(name="rag-retrieve", input={"query": user_message})
             dynamic_context = self._rag.retrieve(user_message)
             rag_span.end(
@@ -432,130 +366,61 @@ class AgentOrchestrator:
                 }
             )
 
-            # ── 3. Fetch prompt from Langfuse (cached) & build STABLE system instruction
-            base_prompt, prompt_obj = self._gateway.get_prompt(
+            # ── Build agent ──────────────────────────────────────────
+            base_prompt, _prompt_obj = self._gateway.get_prompt(
                 "smartrent-chat-system",
                 label="production",
                 fallback=_SYSTEM_BASE,
             )
-            system_instruction = _build_static_system_instruction(
+            instructions = _build_static_instructions(
                 base_prompt or _SYSTEM_BASE,
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            # ── 4. Build chat session with prior history ───────────────────
-            history = _to_vertex_history(messages[:-1])
-            tools_obj = self._tools.get_tool()
-            # Try to use Vertex CachedContent for the stable prefix.
-            # Returns None on first call / cache miss / unavailable — start_chat
-            # then falls back to passing system_instruction inline as before.
-            cached_content = await self._gateway.get_or_create_cache(
-                model_name=settings.GEMINI_CHAT_MODEL,
-                system_instruction=system_instruction,
-                tools=tools_obj,
-            )
-            chat = self._gateway.start_chat(
-                model_name=settings.GEMINI_CHAT_MODEL,
-                system_instruction=system_instruction,
-                tools=tools_obj,
-                history=history,
-                cached_content=cached_content,
-            )
+            agent = self._build_agent(instructions)
 
-            # ── 5. Agentic loop ────────────────────────────────────────────
-            # Per-request RAG context rides on the user message so the
-            # system_instruction prefix stays cache-stable across requests.
-            context_block = _build_dynamic_context_block(dynamic_context, last_listings)
-            message_to_send: Any = (
-                f"{context_block}\n\n---\n\n{user_message}"
-                if context_block
-                else user_message
-            )
-            tools_used: List[str] = []
-            all_raw_listings: List[Dict[str, Any]] = []
-            response: Any = None
+            # ── Run ──────────────────────────────────────────────────
+            input_items = self._build_input(messages, dynamic_context, last_listings)
+            tool_ctx = ToolContext(user_id=user_id, auth_token=auth_token)
 
-            for round_num in range(MAX_TOOL_ROUNDS):
-                logger.info("Agent loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS)
-                span_name = (
-                    "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
+            llm_span = trace.generation(
+                name="agent-run",
+                model=settings.LLM_CHAT_MODEL,
+                input=str(input_items[-1])[:2000],
+            )
+            try:
+                result = await Runner.run(
+                    starting_agent=agent,
+                    input=input_items,
+                    context=tool_ctx,
+                    max_turns=MAX_AGENT_TURNS,
                 )
-                response = await self._gateway.send_message(
-                    chat,
-                    message_to_send,
-                    trace,
-                    span_name,
-                    prompt=prompt_obj if round_num == 0 else None,
+                llm_span.end(output=str(result.final_output)[:2000])
+            except MaxTurnsExceeded as e:
+                llm_span.end(level="ERROR", status_message=f"max_turns_exceeded: {e}")
+                logger.warning("Agent run exceeded MAX_AGENT_TURNS=%d", MAX_AGENT_TURNS)
+                final_text = (
+                    "Xin lỗi, tôi cần thêm bước để hoàn tất yêu cầu này. Bạn có thể "
+                    "cho tôi thêm chi tiết hoặc thử lại không?"
+                )
+                listings_payload = self._build_listings_payload(
+                    tool_ctx.collected_listings
+                )
+                return AgentResult(
+                    message=final_text,
+                    listings=listings_payload,
+                    metadata={"error": "max_turns_exceeded"},
                 )
 
-                # Collect every function call the model requested in this round
-                parts = response.candidates[0].content.parts
-                function_calls = [
-                    p.function_call
-                    for p in parts
-                    if p.function_call is not None and p.function_call.name
-                ]
+            # ── Extract output ──────────────────────────────────────
+            final_text = (
+                str(result.final_output).strip()
+                if result.final_output
+                else "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
+            )
+            tools_used = _tool_names_used(result.new_items)
+            listings_payload = self._build_listings_payload(tool_ctx.collected_listings)
 
-                if not function_calls:
-                    logger.info(
-                        "Round %d: no function calls — final LLM response.",
-                        round_num + 1,
-                    )
-                    break
-
-                # Build execution context for tools that need user identity
-                tool_context: Optional[Dict[str, Any]] = None
-                if user_id or auth_token:
-                    tool_context = {
-                        "user_id": user_id,
-                        "auth_token": auth_token,
-                    }
-
-                # Execute all tool calls and build a single tool-response Content
-                tool_response_parts: List[Any] = []
-                for fc in function_calls:
-                    args = dict(fc.args) if fc.args else {}
-                    logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
-
-                    tool_span = trace.span(name=f"tool-{fc.name}", input=args)
-                    result = await self._tools.execute(
-                        fc.name, args, context=tool_context
-                    )
-
-                    # Extract raw listings for the API response payload.
-                    # The compact summary stays in `result` and is sent back to the LLM.
-                    if result.get("status") == "success":
-                        if "_raw_listings" in result:
-                            all_raw_listings.extend(result.pop("_raw_listings"))
-                        if "_raw_listing" in result:
-                            all_raw_listings.append(result.pop("_raw_listing"))
-
-                    tool_span.end(
-                        output={
-                            "status": result.get("status"),
-                            "count": result.get("count"),
-                        }
-                    )
-                    tools_used.append(fc.name)
-
-                    tool_response_parts.append(
-                        types.Part.from_function_response(
-                            name=fc.name,
-                            response=result,
-                        )
-                    )
-
-                # Feed all tool results back to the model in one turn
-                # New SDK: pass the list of Parts directly; chat session adds role=user
-                message_to_send = tool_response_parts
-
-            # ── 6. Extract final text ──────────────────────────────────────
-            final_text = _extract_text(response)
-
-            # ── 7. Build listings payload ──────────────────────────────────
-            listings_payload = _build_listings_payload(all_raw_listings)
-
-            # ── 8. Close trace ─────────────────────────────────────────────
             trace.update(
                 output={"message": final_text[:500]},
                 metadata={"tools_used": tools_used},
@@ -566,7 +431,8 @@ class AgentOrchestrator:
                 listings=listings_payload,
                 tools_used=tools_used,
                 metadata={
-                    "model": settings.GEMINI_CHAT_MODEL,
+                    "model": settings.LLM_CHAT_MODEL,
+                    "provider": settings.LLM_PROVIDER,
                     "tools_used": tools_used,
                     "rag_context_injected": bool(dynamic_context),
                 },
@@ -578,7 +444,7 @@ class AgentOrchestrator:
             raise
 
     # ------------------------------------------------------------------
-    # Streaming entry point (SSE — ChatService.process_chat_stream)
+    # Streaming entry point (SSE)
     # ------------------------------------------------------------------
 
     async def run_stream(  # noqa: C901
@@ -590,15 +456,11 @@ class AgentOrchestrator:
         last_listings: Optional[List[LastListingRef]] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """
-        Streaming variant of run() — yields SSE-shaped events as the agent
-        progresses through tool calls and LLM responses.
+        Streaming variant of run() — yields SSE-shaped events:
 
-        Events yielded (dicts with "event" + "data"):
-            {"event": "status",   "data": {"phase": "thinking", "round": int}}
-            {"event": "status",   "data": {"phase": "tool_call", "tool": str}}
-            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str, "error"?: str}}
+            {"event": "status",   "data": {"phase": "thinking"|"tool_call"|"tool_result", ...}}
             {"event": "text",     "data": {"delta": str}}
-            {"event": "listings", "data": {...listings payload...}}
+            {"event": "listings", "data": {...}}
             {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
             {"event": "error",    "data": {"message": str}}
         """
@@ -621,19 +483,19 @@ class AgentOrchestrator:
             session_id=session_id,
             input={"message": user_message},
             metadata={
-                "model": settings.GEMINI_CHAT_MODEL,
-                "turns_original": original_count,
-                "turns_used": len(messages),
-                "history_tokens_est": kept_tokens,
+                "model": settings.LLM_CHAT_MODEL,
+                "provider": settings.LLM_PROVIDER,
+                "turns": len(messages),
                 "streamed": True,
             },
         )
 
+        tool_ctx = ToolContext(user_id=user_id, auth_token=auth_token)
         tools_used: List[str] = []
-        all_raw_listings: List[Dict[str, Any]] = []
+        any_text_streamed = False
 
         try:
-            # ── RAG ──────────────────────────────────────────────────────
+            # ── RAG ──────────────────────────────────────────────────
             rag_span = trace.span(name="rag-retrieve", input={"query": user_message})
             dynamic_context = self._rag.retrieve(user_message)
             rag_span.end(
@@ -643,144 +505,106 @@ class AgentOrchestrator:
                 }
             )
 
-            # ── System instruction + model + chat ────────────────────────
-            base_prompt, prompt_obj = self._gateway.get_prompt(
+            # ── Build agent ──────────────────────────────────────────
+            base_prompt, _prompt_obj = self._gateway.get_prompt(
                 "smartrent-chat-system",
                 label="production",
                 fallback=_SYSTEM_BASE,
             )
-            system_instruction = _build_static_system_instruction(
+            instructions = _build_static_instructions(
                 base_prompt or _SYSTEM_BASE,
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            history = _to_vertex_history(messages[:-1])
-            tools_obj = self._tools.get_tool()
-            cached_content = await self._gateway.get_or_create_cache(
-                model_name=settings.GEMINI_CHAT_MODEL,
-                system_instruction=system_instruction,
-                tools=tools_obj,
-            )
-            chat = self._gateway.start_chat(
-                model_name=settings.GEMINI_CHAT_MODEL,
-                system_instruction=system_instruction,
-                tools=tools_obj,
-                history=history,
-                cached_content=cached_content,
+            agent = self._build_agent(instructions)
+            input_items = self._build_input(messages, dynamic_context, last_listings)
+
+            yield {"event": "status", "data": {"phase": "thinking", "round": 1}}
+
+            llm_span = trace.generation(
+                name="agent-run-stream",
+                model=settings.LLM_CHAT_MODEL,
+                input=str(input_items[-1])[:2000],
             )
 
-            # ── Agentic loop ─────────────────────────────────────────────
-            # Per-request RAG context rides on the user message so the
-            # system_instruction prefix stays cache-stable across requests.
-            context_block = _build_dynamic_context_block(dynamic_context, last_listings)
-            message_to_send: Any = (
-                f"{context_block}\n\n---\n\n{user_message}"
-                if context_block
-                else user_message
+            stream: RunResultStreaming = Runner.run_streamed(
+                starting_agent=agent,
+                input=input_items,
+                context=tool_ctx,
+                max_turns=MAX_AGENT_TURNS,
             )
-            any_text_streamed = False
 
-            for round_num in range(MAX_TOOL_ROUNDS):
-                logger.info("Stream loop — round %d/%d", round_num + 1, MAX_TOOL_ROUNDS)
+            async for event in stream.stream_events():
+                etype = getattr(event, "type", None)
+
+                if etype == "raw_response_event":
+                    data = getattr(event, "data", None)
+                    if isinstance(data, ResponseTextDeltaEvent):
+                        delta = getattr(data, "delta", "")
+                        if delta:
+                            any_text_streamed = True
+                            yield {"event": "text", "data": {"delta": delta}}
+                    continue
+
+                if etype == "run_item_stream_event":
+                    item = getattr(event, "item", None)
+                    item_type = getattr(item, "type", None)
+                    raw = getattr(item, "raw_item", None)
+
+                    if item_type == "tool_call_item":
+                        name = getattr(raw, "name", "") or ""
+                        if name:
+                            tools_used.append(name)
+                            yield {
+                                "event": "status",
+                                "data": {"phase": "tool_call", "tool": name},
+                            }
+                    elif item_type == "tool_call_output_item":
+                        name = ""
+                        # Tool name lives on the matching tool_call; best-effort
+                        # extraction from raw output payload when available.
+                        if isinstance(raw, dict):
+                            name = raw.get("name", "")
+                        status = "success"
+                        try:
+                            output = getattr(item, "output", None)
+                            if isinstance(output, dict) and "status" in output:
+                                status = str(output["status"])
+                        except Exception:  # noqa: BLE001
+                            pass
+                        yield {
+                            "event": "status",
+                            "data": {
+                                "phase": "tool_result",
+                                "tool": name or (tools_used[-1] if tools_used else ""),
+                                "status": status,
+                            },
+                        }
+                    continue
+
+                # AgentUpdatedStreamEvent / others — ignored
+
+            # Stream complete — close generation span
+            final_text = str(stream.final_output).strip() if stream.final_output else ""
+            llm_span.end(output=final_text[:2000] if final_text else "(tool-only)")
+
+            if not any_text_streamed and final_text:
+                yield {"event": "text", "data": {"delta": final_text}}
+            elif not any_text_streamed:
                 yield {
-                    "event": "status",
-                    "data": {"phase": "thinking", "round": round_num + 1},
+                    "event": "text",
+                    "data": {
+                        "delta": "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
+                    },
                 }
 
-                span_name = (
-                    "llm-initial" if round_num == 0 else f"llm-round-{round_num}"
-                )
-                function_calls: List[Any] = []
-
-                async for chunk in self._gateway.send_message_stream(
-                    chat,
-                    message_to_send,
-                    trace,
-                    span_name=span_name,
-                    prompt=prompt_obj if round_num == 0 else None,
-                ):
-                    if chunk["type"] == "text_delta":
-                        any_text_streamed = True
-                        yield {
-                            "event": "text",
-                            "data": {"delta": chunk["delta"]},
-                        }
-                    elif chunk["type"] == "final":
-                        function_calls = chunk["function_calls"]
-
-                if not function_calls:
-                    logger.info(
-                        "Round %d: no function calls — end of stream.", round_num + 1
-                    )
-                    break
-
-                # ── Tool execution ──────────────────────────────────────
-                tool_context: Optional[Dict[str, Any]] = None
-                if user_id or auth_token:
-                    tool_context = {
-                        "user_id": user_id,
-                        "auth_token": auth_token,
-                    }
-
-                tool_response_parts: List[Any] = []
-                for fc in function_calls:
-                    args = dict(fc.args) if fc.args else {}
-                    logger.info("Calling tool '%s' args=%s", fc.name, list(args.keys()))
-                    yield {
-                        "event": "status",
-                        "data": {"phase": "tool_call", "tool": fc.name},
-                    }
-
-                    tool_span = trace.span(name=f"tool-{fc.name}", input=args)
-                    result = await self._tools.execute(
-                        fc.name, args, context=tool_context
-                    )
-
-                    if result.get("status") == "success":
-                        if "_raw_listings" in result:
-                            all_raw_listings.extend(result.pop("_raw_listings"))
-                        if "_raw_listing" in result:
-                            all_raw_listings.append(result.pop("_raw_listing"))
-
-                    tool_span.end(
-                        output={
-                            "status": result.get("status"),
-                            "count": result.get("count"),
-                        }
-                    )
-                    tools_used.append(fc.name)
-
-                    tool_result_data: Dict[str, Any] = {
-                        "phase": "tool_result",
-                        "tool": fc.name,
-                        "status": result.get("status"),
-                    }
-                    # Surface the error message to FE when a tool fails so
-                    # the UI can show it instead of a generic "tool failed".
-                    if result.get("status") == "error" and result.get("error"):
-                        tool_result_data["error"] = str(result["error"])[:500]
-                    yield {"event": "status", "data": tool_result_data}
-
-                    tool_response_parts.append(
-                        types.Part.from_function_response(name=fc.name, response=result)
-                    )
-
-                # New SDK: pass the list of Parts directly; chat session adds role=user
-                message_to_send = tool_response_parts
-
-            # ── Fallback text if model ended without prose ───────────────
-            if not any_text_streamed:
-                fallback = "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
-                yield {"event": "text", "data": {"delta": fallback}}
-
-            # ── Listings payload ────────────────────────────────────────
-            listings_payload = _build_listings_payload(all_raw_listings)
+            listings_payload = self._build_listings_payload(tool_ctx.collected_listings)
             if listings_payload:
                 yield {"event": "listings", "data": listings_payload}
 
-            # ── Done ────────────────────────────────────────────────────
             metadata = {
-                "model": settings.GEMINI_CHAT_MODEL,
+                "model": settings.LLM_CHAT_MODEL,
+                "provider": settings.LLM_PROVIDER,
                 "tools_used": tools_used,
                 "rag_context_injected": bool(dynamic_context),
             }
@@ -794,6 +618,14 @@ class AgentOrchestrator:
             logger.info("run_stream cancelled (client disconnect)")
             trace.update(output={"cancelled": True})
             raise
+        except MaxTurnsExceeded:
+            trace.update(output={"error": "max_turns_exceeded"})
+            yield {
+                "event": "error",
+                "data": {
+                    "message": "Yêu cầu cần quá nhiều bước. Vui lòng thử lại với câu hỏi cụ thể hơn."
+                },
+            }
         except Exception as e:
             trace.update(output={"error": str(e)})
             logger.error("AgentOrchestrator.run_stream failed: %s", e, exc_info=True)
@@ -806,86 +638,6 @@ class AgentOrchestrator:
 
 
 # ---------------------------------------------------------------------------
-# Private helpers (module-level for clarity)
-# ---------------------------------------------------------------------------
-
-
-def _to_vertex_history(messages: List[ChatMessage]) -> List[Any]:
-    """Convert ChatMessage list to google-genai Content objects."""
-    history: List[Any] = []
-    for msg in messages:
-        role = "user" if msg.role == "user" else "model"
-        history.append(
-            types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
-        )
-    return history
-
-
-def _extract_text(response: Any) -> str:
-    """
-    Safely pull text from a Vertex AI GenerateContentResponse.
-
-    The simple `.text` accessor raises ValueError when the response contains
-    function calls or is otherwise multi-part, so we fall back to iterating parts.
-    """
-    if response is None:
-        return "Có lỗi xảy ra. Vui lòng thử lại."
-
-    try:
-        text = response.text.strip()
-        if text:
-            return text
-    except (ValueError, AttributeError):
-        pass
-
-    try:
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, "text") and part.text:
-                return part.text.strip()
-    except (AttributeError, IndexError):
-        pass
-
-    logger.warning("_extract_text: could not find text in response.")
-    return "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
-
-
-def _build_listings_payload(
-    raw_listings: List[Dict[str, Any]],
-) -> Optional[Dict[str, Any]]:
-    """
-    Build the `listings` field for ChatResponse from raw listing objects
-    collected during tool execution.
-
-    Deduplicates by listingId — when the same listing appears from both
-    search_listings and get_listing_detail, the later (more detailed) version wins.
-
-    Returns None when no listings were found (non-search conversations).
-    """
-    if not raw_listings:
-        return None
-
-    # Deduplicate: later entries override earlier ones (detail > search card)
-    seen: Dict[str, Dict[str, Any]] = {}
-    order: List[str] = []
-    for listing in raw_listings:
-        lid = str(listing.get("listingId", id(listing)))
-        if lid not in seen:
-            order.append(lid)
-        seen[lid] = listing  # later version wins (get_listing_detail overrides search)
-
-    unique = [seen[lid] for lid in order]
-    top = unique[: settings.MAX_LISTINGS_RETURN]
-    return {
-        "listings": top,
-        "totalCount": len(top),
-        "selectedFromTotal": len(unique),
-        "currentPage": 1,
-        "pageSize": len(top),
-        "totalPages": 1,
-    }
-
-
-# ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
@@ -893,17 +645,11 @@ _instance: Optional[AgentOrchestrator] = None
 
 
 def get_orchestrator() -> AgentOrchestrator:
-    """
-    Return the module-level AgentOrchestrator singleton.
-    Created lazily on first call — safe to call from service layer.
-    """
+    """Return the module-level AgentOrchestrator singleton."""
     global _instance
     if _instance is None:
-        from app.agent.tools import build_default_registry
-
         gateway = get_gateway()
-        tools = build_default_registry()
         rag = RAGRetriever()
-        _instance = AgentOrchestrator(gateway, tools, rag)
+        _instance = AgentOrchestrator(gateway, rag)
         logger.info("AgentOrchestrator singleton created.")
     return _instance

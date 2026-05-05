@@ -1,3 +1,11 @@
+"""
+Price prediction service — uses an OpenAI Agents SDK Agent that calls the
+shared `search_listings` function tool to find comparable listings, then
+returns a structured price range.
+
+Falls back to a rule-based estimate when the AI agent fails.
+"""
+
 import json
 import logging
 from typing import Any, Dict
@@ -14,14 +22,15 @@ logger = logging.getLogger(__name__)
 _SYSTEM_INSTRUCTION = """\
 You are a real estate price prediction expert for Vietnam rental market.
 
-You have access to the SmartRent backend listing database through tools.
+You have access to the SmartRent backend listing database through the
+`search_comparable_listings` tool.
 
 Your task:
-1. Use the `search_listings` tool to find similar rental properties in the requested location
-2. Search within 2km radius of the coordinates
-3. Filter by property type and area (±30% range)
-4. Analyze the prices of similar listings
-5. Calculate a realistic price range based on market data
+1. Use the tool to find similar rental properties in the requested location.
+2. Search within 2km radius of the coordinates.
+3. Filter by property type and area (±30% range).
+4. Analyze the prices of similar listings.
+5. Calculate a realistic price range based on market data.
 
 Return ONLY a JSON object with this exact format:
 {
@@ -90,7 +99,7 @@ def _get_search_tool() -> Any:
 
 
 class PricePredictionService:
-    """Service for rental price prediction using Gemini AI with backend integration."""
+    """Service for rental price prediction using the unified Agents SDK."""
 
     def __init__(self) -> None:
         self._gateway = get_gateway()
@@ -168,7 +177,6 @@ class PricePredictionService:
                         result_text = part.text
                         break
             trace.update(output={"response": result_text[:500]})
-
             result = self._parse_json(result_text)
 
             return PriceSuggestionResponse(
@@ -191,45 +199,10 @@ class PricePredictionService:
                 currency="VND",
             )
 
-    async def _execute_tool(
-        self, function_name: str, args: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Execute a tool call using the shared backend_client."""
-        if function_name == "search_listings":
-            try:
-                # Map MCP-style args to backend API params
-                params: Dict[str, Any] = {}
-                if "listing_type" in args:
-                    params["listingType"] = args["listing_type"]
-                if "latitude" in args:
-                    params["latitude"] = args["latitude"]
-                if "longitude" in args:
-                    params["longitude"] = args["longitude"]
-                if "radius_km" in args:
-                    params["radiusKm"] = args["radius_km"]
-                if "product_type" in args:
-                    params["propertyType"] = args["product_type"]
-                if "min_area" in args:
-                    params["minArea"] = args["min_area"]
-                if "max_area" in args:
-                    params["maxArea"] = args["max_area"]
-                if "size" in args:
-                    params["size"] = args["size"]
-                params.setdefault("excludeExpired", True)
-
-                data = await backend_client.search_listings(params)
-                listings = data.get("listings", [])
-                logger.info("search_listings returned %d results", len(listings))
-                return {"listings": listings, "total": len(listings)}
-            except Exception as e:
-                logger.error("Error executing search_listings: %s", e)
-                return {"listings": [], "total": 0, "error": str(e)}
-
-        return {"error": f"Unknown function: {function_name}"}
-
     @staticmethod
     def _parse_json(text: str) -> Dict[str, Any]:
         """Parse JSON from LLM response, stripping markdown fences."""
+        text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
             if text.endswith("```"):
@@ -250,7 +223,6 @@ class PricePredictionService:
             "ho chi minh": {"high": 250_000, "medium": 180_000, "low": 120_000},
             "da nang": {"high": 180_000, "medium": 130_000, "low": 90_000},
         }
-
         type_multipliers = {
             "apartment": 1.0,
             "house": 1.1,
