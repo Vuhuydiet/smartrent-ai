@@ -39,7 +39,7 @@ router = APIRouter()
 )
 async def verify_listing(
     request: ListingVerificationRequest,
-) -> ListingVerificationResponse:
+) -> Any:
     """
     Verify a rental listing using Gemini AI multimodal analysis.
 

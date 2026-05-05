@@ -1,5 +1,6 @@
 import io
 import logging
+from typing import Any
 
 import httpx
 from PIL import Image
@@ -28,7 +29,7 @@ async def download_and_compress_image(
             image_data = response.content
 
         # Open image using Pillow
-        img = Image.open(io.BytesIO(image_data))
+        img: Any = Image.open(io.BytesIO(image_data))
 
         # Convert to RGB if it's RGBA or P (to save as JPEG)
         if img.mode in ("RGBA", "P"):
