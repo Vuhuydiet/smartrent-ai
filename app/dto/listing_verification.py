@@ -16,6 +16,14 @@ class HousingPropertyType(str, Enum):
     STUDIO = "STUDIO"
 
 
+class VerificationSuggestedStatus(str, Enum):
+    """Suggested status from AI analysis"""
+
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
 class ListingImage(BaseModel):
     """Model for listing images"""
 
@@ -144,6 +152,26 @@ class CompletenessValidation(BaseModel):
     )
 
 
+class StructuredReason(BaseModel):
+    """Structured reasons for AI decisions"""
+
+    blurriness_issue: bool = Field(default=False, description="Image is too blurry")
+    missing_fields: List[str] = Field(
+        default_factory=list, description="Missing important fields"
+    )
+    inconsistent_info: bool = Field(
+        default=False, description="Text and image info do not match"
+    )
+    watermark_or_phone: bool = Field(
+        default=False, description="Contains watermarks or phone numbers in images"
+    )
+    stock_photo: bool = Field(
+        default=False,
+        description="Images appear to be stock photos or from the internet",
+    )
+    details: str = Field(..., description="A detailed explanation of the reasons")
+
+
 class ListingVerificationResponse(BaseModel):
     """Response model for listing verification"""
 
@@ -159,11 +187,24 @@ class ListingVerificationResponse(BaseModel):
     content_validation: ContentValidation
     completeness_validation: CompletenessValidation
 
+    # Structured reasons and violations
+    reason: StructuredReason = Field(
+        ..., description="Detailed structured reasons for the assessment"
+    )
+    violation_codes: List[str] = Field(
+        default_factory=list,
+        description="Critical violation codes like SCAM, INAPPROPRIATE_CONTENT",
+    )
+
     # Issues and suggestions
     violations: List[Violation] = Field(default_factory=list)
     suggestions: List[Suggestion] = Field(default_factory=list)
 
     # Metadata
+    suggested_status: VerificationSuggestedStatus = Field(
+        default=VerificationSuggestedStatus.NEEDS_REVIEW,
+        description="Suggested action for the backend",
+    )
     verification_timestamp: datetime = Field(default_factory=datetime.now)
     model_used: str = Field(default_factory=lambda: settings.GEMINI_VISION_MODEL)
     processing_time_seconds: Optional[float] = None

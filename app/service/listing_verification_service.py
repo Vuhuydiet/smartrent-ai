@@ -52,24 +52,17 @@ class ListingVerificationService:
 
             # Perform comprehensive analysis using Gemini
             if image_urls or video_urls:
-                # For now, we'll analyze images with text. Video support can be added later
-                if image_urls:
-                    analysis_result = await self.gemini_helper.analyze_images_with_text(
-                        images=image_urls,
-                        text_content=text_content,
-                        analysis_prompt=self.gemini_helper.create_comprehensive_analysis_prompt(),
-                    )
-                else:
-                    # Only videos, fallback to text analysis for now
-                    analysis_result = await self.gemini_helper.analyze_text_content(
-                        text_content=text_content,
-                        analysis_prompt=self._create_text_only_analysis_prompt(),
-                    )
+                analysis_result = await self.gemini_helper.analyze_multimodal(
+                    image_urls=image_urls,
+                    video_urls=video_urls,
+                    text_content=text_content,
+                    analysis_prompt=self.gemini_helper.create_analysis_prompt(),
+                )
             else:
                 # Text-only analysis
                 analysis_result = await self.gemini_helper.analyze_text_content(
                     text_content=text_content,
-                    analysis_prompt=self._create_text_only_analysis_prompt(),
+                    analysis_prompt=self.gemini_helper.create_analysis_prompt(),
                 )
 
             # Process results
@@ -102,63 +95,25 @@ class ListingVerificationService:
             metadata_str = ", ".join(metadata_parts) if metadata_parts else "None"
 
         text_content = f"""
-        Title: {listing_data.title}
-        Description: {listing_data.description}
-        Price: ${listing_data.price}/month
-        Area: {listing_data.area or 'Not specified'} sq meters
-        Address: {listing_data.address}
-        Property Type: {listing_data.property_type or 'Not specified'}
-        Amenities: {', '.join(listing_data.amenities) if listing_data.amenities else 'None'}
-        Number of Images: {len(listing_data.images)}
-        Number of Videos: {len(listing_data.videos)}
-        Additional Info: {metadata_str}
+### LISTING INFORMATION:
+- **Title**: {listing_data.title}
+- **Description**: {listing_data.description}
+- **Price**: {listing_data.price} (VND per month)
+- **Area**: {listing_data.area or 'Not specified'} m2
+- **Address**: {listing_data.address}
+- **Property Type**: {listing_data.property_type.value if listing_data.property_type else 'Not specified'}
+- **Amenities**: {', '.join(listing_data.amenities) if listing_data.amenities else 'None'}
+
+### MEDIA STATS:
+- **Number of Images Attached**: {len(listing_data.images)}
+- **Number of Videos**: {len(listing_data.videos)}
+
+### METADATA:
+- {metadata_str}
 """
         return text_content
 
-    def _create_text_only_analysis_prompt(self) -> str:
-        """Create analysis prompt for text-only content"""
-        return """
-You are an AI expert in rental property listing verification. Analyze the provided text content for a rental property listing.
-
-Evaluate across these categories:
-
-1. **CONTENT RELEVANCE**:
-   - Is this clearly a rental property listing?
-   - Does the content match rental property category?
-   - Is the information coherent and professional?
-   - Are there any inappropriate or suspicious elements?
-
-2. **COMPLETENESS & QUALITY**:
-   - Is essential information provided (price, location, description)?
-   - Is the description detailed and informative?
-   - Are important details missing?
-   - Is the overall quality sufficient for a good listing?
-
-Return a JSON response with this structure (keep messages brief, max 80 chars each):
-{
-    "content_analysis": {
-        "is_rental_related": boolean,
-        "category_match": boolean,
-        "content_score": float (0-1),
-        "issues": ["max 2 brief issues"],
-        "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "brief message"}]
-    },
-    "completeness_analysis": {
-        "is_complete": boolean,
-        "completeness_score": float (0-1),
-        "missing_fields": ["max 3 field names"],
-        "quality_issues": ["max 2 brief issues"],
-        "suggestions": [{"category": "string", "message": "brief suggestion", "priority": "low|medium|high"}]
-    },
-    "overall_assessment": {
-        "is_valid": boolean,
-        "overall_score": float (0-1),
-        "confidence": float (0-1),
-        "major_concerns": ["max 2 primary issues"],
-        "recommendations": ["max 2 brief recommendations"]
-    }
-}
-"""
+    # Removed _create_text_only_analysis_prompt as it's handled by system instruction
 
     def _process_analysis_result(
         self, analysis_result: Dict[str, Any], listing_data: ListingVerificationRequest
@@ -172,94 +127,97 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
             )
 
         # Extract analysis components
-        image_analysis = analysis_result.get("image_analysis", {})
-        content_analysis = analysis_result.get("content_analysis", {})
-        completeness_analysis = analysis_result.get("completeness_analysis", {})
-        overall_assessment = analysis_result.get("overall_assessment", {})
+        image_validation_data = analysis_result.get("image_validation", {})
+        video_validation_data = analysis_result.get("video_validation", {})
+        content_validation_data = analysis_result.get("content_validation", {})
+        completeness_validation_data = analysis_result.get(
+            "completeness_validation", {}
+        )
+        reason_data = analysis_result.get("reason", {})
+        violation_codes = analysis_result.get("violation_codes", [])
 
         # Create validation objects
         image_validation = ImageValidation(
-            is_valid=image_analysis.get("is_valid", len(listing_data.images) == 0),
+            is_valid=image_validation_data.get(
+                "is_valid", len(listing_data.images) == 0
+            ),
             total_images=len(listing_data.images),
-            valid_images=image_analysis.get("total_images_analyzed", 0),
-            issues=image_analysis.get("issues", []),
-            quality_score=image_analysis.get(
+            valid_images=image_validation_data.get("valid_images", 0),
+            issues=image_validation_data.get("issues", []),
+            quality_score=image_validation_data.get(
                 "quality_score", 1.0 if len(listing_data.images) == 0 else 0.5
             ),
         )
 
-        # Extract video analysis
-        video_analysis = analysis_result.get("video_analysis", {})
-        total_videos = len(listing_data.videos)
-        valid_videos_count = video_analysis.get("total_videos_analyzed", total_videos)
-        video_issues = video_analysis.get("issues", [])
-
-        # Video is valid if: no videos OR (all videos are valid AND no issues)
-        video_is_valid = (total_videos == 0) or (
-            valid_videos_count == total_videos and len(video_issues) == 0
-        )
-
         video_validation = VideoValidation(
-            is_valid=video_is_valid,
-            total_videos=total_videos,
-            valid_videos=valid_videos_count,
-            issues=video_issues,
-            quality_score=video_analysis.get(
-                "quality_score", 1.0 if total_videos == 0 else 0.7
+            is_valid=video_validation_data.get("is_valid", True)
+            if len(listing_data.videos) == 0
+            else video_validation_data.get("is_valid", False),
+            total_videos=len(listing_data.videos),
+            valid_videos=video_validation_data.get("valid_videos", 0),
+            issues=video_validation_data.get("issues", []),
+            quality_score=video_validation_data.get(
+                "quality_score", 1.0 if len(listing_data.videos) == 0 else 0.0
             ),
         )
 
         content_validation = ContentValidation(
-            is_rental_related=content_analysis.get("is_rental_related", True),
-            category_match=content_analysis.get("category_match", True),
-            content_score=content_analysis.get("content_score", 0.5),
-            issues=content_analysis.get("issues", []),
+            is_rental_related=content_validation_data.get("is_rental_related", True),
+            category_match=content_validation_data.get("category_match", True),
+            content_score=content_validation_data.get("content_score", 0.5),
+            issues=content_validation_data.get("issues", []),
         )
 
         completeness_validation = CompletenessValidation(
-            is_complete=completeness_analysis.get("is_complete", False),
-            completeness_score=completeness_analysis.get("completeness_score", 0.5),
-            missing_fields=completeness_analysis.get("missing_fields", []),
-            quality_issues=completeness_analysis.get("quality_issues", []),
+            is_complete=completeness_validation_data.get("is_complete", False),
+            completeness_score=completeness_validation_data.get(
+                "completeness_score", 0.5
+            ),
+            missing_fields=completeness_validation_data.get("missing_fields", []),
+            quality_issues=completeness_validation_data.get("quality_issues", []),
+        )
+
+        from app.dto.listing_verification import StructuredReason
+
+        reason = StructuredReason(
+            blurriness_issue=reason_data.get("blurriness_issue", False),
+            missing_fields=reason_data.get("missing_fields", []),
+            inconsistent_info=reason_data.get("inconsistent_info", False),
+            watermark_or_phone=reason_data.get("watermark_or_phone", False),
+            stock_photo=reason_data.get("stock_photo", False),
+            details=reason_data.get("details", "AI Assessment"),
         )
 
         # Extract violations and suggestions
         violations = []
-        for violation_data in content_analysis.get("violations", []):
+        for violation_data in analysis_result.get("violations", []):
             violations.append(
                 Violation(
                     category=violation_data.get("category", "unknown"),
                     severity=violation_data.get("severity", "low"),
                     message=violation_data.get("message", "Violation detected"),
-                    field=violation_data.get("field"),
+                    field=violation_data.get("field")
+                    if violation_data.get("field")
+                    else "",
                 )
             )
 
         suggestions = []
-        for suggestion_data in completeness_analysis.get("suggestions", []):
+        for suggestion_data in analysis_result.get("suggestions", []):
             suggestions.append(
                 Suggestion(
                     category=suggestion_data.get("category", "improvement"),
                     message=suggestion_data.get("message", "Improvement suggested"),
-                    field=suggestion_data.get("field"),
+                    field=suggestion_data.get("field")
+                    if suggestion_data.get("field")
+                    else "",
                     priority=suggestion_data.get("priority", "medium"),
                 )
             )
 
-        # Add general suggestions from overall assessment
-        for recommendation in overall_assessment.get("recommendations", []):
-            suggestions.append(
-                Suggestion(
-                    category="general",
-                    message=recommendation,
-                    field=None,
-                    priority="medium",
-                )
-            )
-
         # Use overall assessment scores if available, otherwise calculate
-        overall_score = overall_assessment.get(
-            "overall_score",
+        overall_score = analysis_result.get(
+            "score",
             (
                 image_validation.quality_score * 0.3
                 + content_validation.content_score * 0.4
@@ -267,7 +225,7 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
             ),
         )
 
-        is_valid = overall_assessment.get(
+        is_valid = analysis_result.get(
             "is_valid",
             (
                 content_validation.is_rental_related
@@ -277,18 +235,22 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
             ),
         )
 
-        confidence = overall_assessment.get("confidence", 0.8)
+        confidence = analysis_result.get("confidence", 0.8)
+        suggested_status = analysis_result.get("suggested_status", "NEEDS_REVIEW")
 
         return ListingVerificationResponse(
             is_valid=is_valid,
             score=overall_score,
             confidence=confidence,
+            suggested_status=suggested_status,
             image_validation=image_validation,
             video_validation=video_validation,
             content_validation=content_validation,
             completeness_validation=completeness_validation,
             violations=violations,
             suggestions=suggestions,
+            reason=reason,
+            violation_codes=violation_codes,
         )
 
     def _create_fallback_response(
@@ -319,6 +281,17 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
             missing_fields.append("sufficient_images")
 
         basic_score = max(0.6, 1.0 - len(missing_fields) * 0.15)  # Less penalty
+
+        from app.dto.listing_verification import StructuredReason
+
+        fallback_reason = StructuredReason(
+            blurriness_issue=False,
+            missing_fields=missing_fields,
+            inconsistent_info=False,
+            watermark_or_phone=False,
+            stock_photo=False,
+            details=clean_error_msg,
+        )
 
         return ListingVerificationResponse(
             is_valid=len(missing_fields) <= 1
@@ -367,4 +340,6 @@ Return a JSON response with this structure (keep messages brief, max 80 chars ea
                     priority="high",
                 )
             ],
+            reason=fallback_reason,
+            violation_codes=[],
         )

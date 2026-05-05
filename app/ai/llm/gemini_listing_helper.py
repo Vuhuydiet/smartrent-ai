@@ -27,47 +27,157 @@ class GeminiListingVerificationHelper:
     # Public API
     # ------------------------------------------------------------------
 
-    async def analyze_images_with_text(
-        self, images: List[str], text_content: str, analysis_prompt: str
+    async def analyze_multimodal(
+        self,
+        image_urls: List[str],
+        video_urls: List[str],
+        text_content: str,
+        analysis_prompt: str,
     ) -> Dict[str, Any]:
         """
-        Analyze images along with text content for comprehensive listing verification.
+        Analyze images and videos along with text content.
         """
         try:
-            image_objects = await self._download_images(images)
-            if not image_objects:
-                raise ValueError("No valid images could be processed")
+            # Download images and videos in parallel
+            images_task = self._download_images(image_urls)
+            videos_task = self._download_videos(video_urls)
+            image_objects, video_objects = await asyncio.gather(
+                images_task, videos_task
+            )
+
+            logger.info(
+                "Media download complete: %d images, %d videos loaded successfully.",
+                len(image_objects),
+                len(video_objects),
+            )
+
+            # Extract keyframes from videos if possible to speed up
+            processed_images = list(image_objects)
+            final_videos = []
+
+            logger.info(
+                "Starting media processing: %d images, %d video objects",
+                len(processed_images),
+                len(video_objects),
+            )
+
+            try:
+                from app.utils.video_utils import extract_keyframes
+
+                for v_data in video_objects:
+                    try:
+                        logger.info("Attempting keyframe extraction for a video...")
+                        frames = extract_keyframes(v_data["data"])
+                        if frames:
+                            logger.info(
+                                "Extracted %d frames from video to speed up analysis",
+                                len(frames),
+                            )
+                            processed_images.extend(frames)
+                        else:
+                            logger.warning(
+                                "No frames extracted from video, falling back to full video"
+                            )
+                            final_videos.append(v_data)
+                    except Exception as ve:
+                        logger.error(
+                            "Keyframe extraction failed for a video: %s. Falling back.",
+                            ve,
+                        )
+                        final_videos.append(v_data)
+            except ImportError:
+                logger.warning("OpenCV not found, sending full videos to Gemini")
+                final_videos = video_objects
+            except Exception as e:
+                logger.error("Unexpected error in video processing block: %s", e)
+                final_videos = video_objects
+
+            if not processed_images and not final_videos:
+                logger.warning(
+                    "No media downloaded (images: %d, videos: %d). Falling back to text-only.",
+                    len(image_objects),
+                    len(video_objects),
+                )
+                return await self.analyze_text_content(text_content, analysis_prompt)
+
+            logger.info(
+                "Final payload: %d images, %d videos",
+                len(processed_images),
+                len(final_videos),
+            )
 
             full_prompt = (
+                "CRITICAL: YOU MUST ANALYZE ALL ATTACHED MEDIA (IMAGES/VIDEOS) CAREFULLY.\n"
+                "I am providing you with actual binary media data alongside this text.\n"
                 f"{analysis_prompt}\n\n"
-                f"Text Content to analyze:\n{text_content}\n\n"
-                "Please analyze both the images and text content together to provide "
-                "a comprehensive assessment.\n"
-                "Return your response as valid JSON only, without any additional text or formatting."
+                "### TEXT DATA TO VERIFY:\n"
+                f"{text_content}\n\n"
+                "### YOUR TASK:\n"
+                "1. Cross-reference the provided text with the visual details in the images and videos.\n"
+                "2. Check for stock photos/videos, watermarks, and consistency.\n"
+                "3. Ensure the media matches the described property.\n"
+                "4. Return valid JSON only."
             )
 
             trace = self._gateway.create_trace(
                 name="listing-verification",
-                metadata={"image_count": len(image_objects), "mode": "images+text"},
+                metadata={
+                    "image_count": len(image_objects),
+                    "video_count": len(video_objects),
+                    "mode": "multimodal",
+                },
             )
 
-            response = await self._gateway.generate_with_images(
+            response = await self._gateway.generate_multimodal(
                 prompt=full_prompt,
-                images=image_objects,
+                images=processed_images,
+                videos=final_videos,
+                system_instruction=self.create_system_instruction(),
                 generation_config={
-                    "temperature": 0.1,
-                    "top_p": 0.8,
-                    "top_k": 20,
-                    "max_output_tokens": 8192,
+                    "temperature": 0.0,
+                    "response_mime_type": "application/json",
                 },
                 trace=trace,
-                span_name="verify-images-text",
             )
 
             return self._handle_api_response(self._response_text(response))
 
         except Exception as e:
+            logger.error("Multimodal analysis failed: %s", e, exc_info=True)
             return self._handle_generation_error(str(e))
+
+    async def _download_videos(self, urls: List[str]) -> List[Dict[str, Any]]:
+        """Download videos in parallel and prepare for Gemini."""
+        if not urls:
+            return []
+
+        async def _download_one(i, url, client):
+            try:
+                logger.info("Attempting to download video %d from: %s", i + 1, url)
+                # Limit to 10MB for speed
+                resp = await client.get(
+                    url, headers={"Range": "bytes=0-10485760"}, timeout=20.0
+                )
+
+                if resp.status_code not in [200, 206]:
+                    resp = await client.get(url, timeout=30.0)
+
+                if resp.status_code in [200, 206] and len(resp.content) > 0:
+                    mime_type = resp.headers.get("Content-Type", "video/mp4")
+                    return {"data": resp.content, "mime_type": mime_type}
+            except Exception as e:
+                logger.error("Exception downloading video %d: %s", i + 1, str(e))
+            return None
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        }
+
+        async with httpx.AsyncClient(headers=headers) as client:
+            tasks = [_download_one(i, url, client) for i, url in enumerate(urls)]
+            results = await asyncio.gather(*tasks)
+
+        return [v for v in results if v is not None]
 
     async def analyze_text_content(
         self, text_content: str, analysis_prompt: str
@@ -89,11 +199,12 @@ class GeminiListingVerificationHelper:
 
             response = await self._gateway.generate(
                 prompt=full_prompt,
+                system_instruction=self.create_system_instruction(),
                 generation_config={
-                    "temperature": 0.1,
-                    "top_p": 0.8,
-                    "top_k": 20,
+                    "temperature": 0.0,
+                    "top_p": 0.95,
                     "max_output_tokens": 4096,
+                    "response_mime_type": "application/json",
                 },
                 trace=trace,
                 span_name="verify-text",
@@ -102,64 +213,44 @@ class GeminiListingVerificationHelper:
             return self._handle_api_response(self._response_text(response))
 
         except Exception as e:
+            import traceback
+
+            logger.error(
+                "[analyze_text_content] FULL ERROR:\n%s", traceback.format_exc()
+            )
             return self._handle_generation_error(str(e))
 
-    def create_comprehensive_analysis_prompt(self) -> str:
-        """Create a comprehensive analysis prompt for listing verification"""
+    def create_system_instruction(self) -> str:
+        """Create a concise system instruction for fast listing verification"""
         return """
-You are an AI expert in rental property listing verification. Analyze the provided content (text and images if available) and evaluate it across three main categories:
+You are an AI expert in rental property listing verification.
+### CORE RULES:
+- **REJECT (0.1)**: Cartoons, 3D renders, or watermarks of other sites.
+- **NEEDS_REVIEW (0.4-0.6)**: Missing photos, price-location mismatch, or stock photos.
+- **APPROVE (0.9-1.0)**: High-quality, realistic photos consistent with the description.
+- **INCONSISTENCY**: Flag if the visual view (window) doesn't match the described location.
 
-1. **IMAGE/MEDIA VALIDATION** (if images provided):
-   - Are images clear, well-lit, and high quality?
-   - Do images show actual property spaces (not stock photos)?
-   - Are images appropriate for rental listings?
-   - Do images match the described property?
-
-2. **CONTENT RELEVANCE**:
-   - Is this clearly a rental property listing?
-   - Does the content match rental property category?
-   - Is the information coherent and professional?
-   - Are there any inappropriate or suspicious elements?
-
-3. **COMPLETENESS & QUALITY**:
-   - Is essential information provided (price, location, description)?
-   - Is the description detailed and informative?
-   - Are important details missing?
-   - Is the overall quality sufficient for a good listing?
-
-Return a JSON response with this exact structure (keep messages concise, max 100 chars each):
+### RESPONSE FORMAT (JSON ONLY):
 {
-    "image_analysis": {
-        "is_valid": boolean,
-        "quality_score": float (0-1),
-        "issues": ["max 3 brief issues"],
-        "total_images_analyzed": integer
-    },
-    "content_analysis": {
-        "is_rental_related": boolean,
-        "category_match": boolean,
-        "content_score": float (0-1),
-        "issues": ["max 2 brief issues"],
-        "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "brief message"}]
-    },
-    "completeness_analysis": {
-        "is_complete": boolean,
-        "completeness_score": float (0-1),
-        "missing_fields": ["max 3 field names"],
-        "quality_issues": ["max 2 brief issues"],
-        "suggestions": [{"category": "string", "message": "brief suggestion", "priority": "low|medium|high"}]
-    },
-    "overall_assessment": {
-        "is_valid": boolean,
-        "overall_score": float (0-1),
-        "confidence": float (0-1),
-        "major_concerns": ["max 2 primary issues"],
-        "recommendations": ["max 2 brief recommendations"]
-    }
+    "image_validation": {"is_valid": bool, "quality_score": float, "issues": [], "total_images": int, "valid_images": int},
+    "video_validation": {"is_valid": bool, "quality_score": float, "issues": [], "total_videos": int, "valid_videos": int},
+    "content_validation": {"is_rental_related": bool, "category_match": bool, "content_score": float, "issues": []},
+    "completeness_validation": {"is_complete": bool, "completeness_score": float, "missing_fields": [], "quality_issues": []},
+    "reason": {"blurriness_issue": bool, "missing_fields": [], "inconsistent_info": bool, "watermark_or_phone": bool, "stock_photo": bool, "details": "string"},
+    "violation_codes": ["SCAM", "INAPPROPRIATE_CONTENT", "DUPLICATE_ADS", "WATERMARK_VIOLATION", "INCONSISTENT_INFO", "CONTACT_INFO_IN_DESC"],
+    "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "string"}],
+    "suggestions": [{"category": "string", "message": "string", "priority": "low|medium|high"}],
+    "is_valid": bool,
+    "score": float,
+    "confidence": float,
+    "suggested_status": "APPROVED|REJECTED|NEEDS_REVIEW"
 }
-
-Be thorough but CONCISE. Keep all text fields short and focused.
 """
+
+    def create_analysis_prompt(self) -> str:
+        return (
+            "Please verify this rental listing according to your system instructions."
+        )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -200,7 +291,10 @@ Be thorough but CONCISE. Keep all text fields short and focused.
         if not urls:
             return []
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        }
+        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
 
             async def _fetch_and_decode(i: int, url: str) -> Any:
                 try:
@@ -218,8 +312,9 @@ Be thorough but CONCISE. Keep all text fields short and focused.
                         img: Image.Image = Image.open(BytesIO(content))
                         if img.mode != "RGB":
                             img = img.convert("RGB")
-                        if img.width > 2048 or img.height > 2048:
-                            img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+                        # Resize to 512px max - This is the most effective way to speed up
+                        if img.width > 512 or img.height > 512:
+                            img.thumbnail((512, 512), Image.Resampling.LANCZOS)
                         return img
 
                     pil_image = await asyncio.to_thread(_decode)
@@ -268,16 +363,35 @@ Be thorough but CONCISE. Keep all text fields short and focused.
 
     @classmethod
     def _handle_api_response(cls, response_text: str) -> Dict[str, Any]:
-        """Handle and parse API response."""
+        """Handle and parse API response with sanitization."""
         logger.info("Raw Gemini response: %s...", response_text[:500])
+        data = cls._parse_json_response(response_text)
 
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
+        # Sanitize 'missing_fields' in 'reason' to ensure it's a list (Fixes Pydantic validation error)
+        if "reason" in data and isinstance(data["reason"], dict):
+            if "missing_fields" in data["reason"]:
+                if not isinstance(data["reason"]["missing_fields"], list):
+                    logger.warning(
+                        "Sanitizing 'reason.missing_fields' from %s to []",
+                        type(data["reason"]["missing_fields"]),
+                    )
+                    data["reason"]["missing_fields"] = []
 
-        return cls._parse_json_response(response_text)
+        # Sanitize 'missing_fields' in 'completeness_validation'
+        if "completeness_validation" in data and isinstance(
+            data["completeness_validation"], dict
+        ):
+            if "missing_fields" in data["completeness_validation"]:
+                if not isinstance(
+                    data["completeness_validation"]["missing_fields"], list
+                ):
+                    logger.warning(
+                        "Sanitizing 'completeness_validation.missing_fields' from %s to []",
+                        type(data["completeness_validation"]["missing_fields"]),
+                    )
+                    data["completeness_validation"]["missing_fields"] = []
+
+        return data
 
     @staticmethod
     def _handle_generation_error(error_msg: str) -> Dict[str, Any]:
