@@ -35,6 +35,25 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 1  # quota retries — fail fast for chat UX
 _BASE_DELAY = 3  # seconds
 
+# Per-LLM-call timeout for the streaming path. The agent's outer timeout
+# (REQUEST_TIMEOUT_SECONDS in orchestrator) only covers the non-streaming
+# path; without this, a stuck Gemini call hangs the SSE stream forever.
+# 90s is generous enough for legitimate slowness on round 2 with large
+# tool results, short enough to surface real hangs to the user.
+_STREAM_TIMEOUT_SECONDS = 90
+
+# Vertex AI explicit context cache (CachedContent) — registers the stable
+# system_instruction + tool schemas once, then references the cache from
+# every chat request. Cached tokens bill at ~25% of normal input rate and
+# eliminate prefix re-encoding latency. The cache is invisible to callers
+# beyond the optional `cached_content` argument on start_chat.
+_CACHE_TTL_SECONDS = 3600  # refresh hourly
+_CACHE_REFRESH_MARGIN = 60  # treat cache as expired this many seconds early
+# Vertex requires cached content to exceed a per-model minimum (~1024
+# tokens for Flash, ~2048 for Pro). Skip caching below this character
+# threshold rather than waste an API call we know will fail.
+_MIN_CACHEABLE_CHARS = 3000
+
 
 async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """
@@ -162,6 +181,13 @@ class LLMGateway:
             location,
         )
 
+        # Explicit CachedContent state. The cache is created lazily on the
+        # first request that needs it, then reused across subsequent requests
+        # and refreshed transparently when the TTL approaches.
+        self._cache_handle: Optional[str] = None
+        self._cache_key: Optional[int] = None
+        self._cache_expires_at: float = 0.0
+
         # Langfuse is optional — gracefully disabled when keys are absent
         self._langfuse: Optional[Any] = None
         self._langfuse_enabled = False
@@ -254,6 +280,87 @@ class LLMGateway:
             return fallback, None
 
     # ------------------------------------------------------------------
+    # Explicit context cache (Vertex AI CachedContent)
+    # ------------------------------------------------------------------
+
+    async def get_or_create_cache(
+        self,
+        model_name: str,
+        system_instruction: str,
+        tools: Optional[Any] = None,
+    ) -> Optional[str]:
+        """
+        Return a CachedContent resource name for the given (model, system, tools)
+        triple. Creates and caches the resource lazily on first call, refreshes
+        before TTL expiry, and recreates on key change (e.g. prompt edit).
+
+        Returns None when caching is unavailable (content below per-model
+        minimum, region not supported, API rejection). Callers should fall
+        back to the non-cached path.
+        """
+        # Hash the inputs to detect drift (e.g. Langfuse prompt edited mid-process).
+        # `str(tools)` is stable because google-genai Tool objects have deterministic repr.
+        cache_key = hash((model_name, system_instruction, str(tools)))
+        now = time.time()
+
+        cache_valid = (
+            self._cache_handle is not None
+            and self._cache_key == cache_key
+            and now < self._cache_expires_at - _CACHE_REFRESH_MARGIN
+        )
+        if cache_valid:
+            return self._cache_handle
+
+        # Skip when content is too small to be cacheable on Vertex.
+        if len(system_instruction) < _MIN_CACHEABLE_CHARS:
+            logger.info(
+                "Cache skipped: system_instruction too small (%d chars < %d threshold)",
+                len(system_instruction),
+                _MIN_CACHEABLE_CHARS,
+            )
+            return None
+
+        # Create or recreate the cache.
+        from google.genai import types  # type: ignore[import]
+
+        try:
+            config_kwargs: Dict[str, Any] = {
+                "system_instruction": system_instruction,
+                "ttl": f"{_CACHE_TTL_SECONDS}s",
+            }
+            if tools is not None:
+                config_kwargs["tools"] = (
+                    tools if isinstance(tools, list) else [tools]
+                )
+            cache = await self._client.aio.caches.create(
+                model=model_name,
+                config=types.CreateCachedContentConfig(**config_kwargs),
+            )
+            self._cache_handle = cache.name
+            self._cache_key = cache_key
+            self._cache_expires_at = now + _CACHE_TTL_SECONDS
+            logger.info(
+                "CachedContent created: name=%s ttl=%ds (system=%d chars)",
+                cache.name,
+                _CACHE_TTL_SECONDS,
+                len(system_instruction),
+            )
+            return cache.name
+
+        except Exception as e:
+            # Fail soft: caller falls back to non-cached path.
+            logger.warning(
+                "CachedContent creation failed (%s) — falling back to "
+                "uncached path. This is non-fatal but raises per-request "
+                "input token cost.",
+                e,
+            )
+            # Avoid retry storm: pretend we have a temporary cache to hold
+            # off retrying for a short window.
+            self._cache_expires_at = now + 60
+            return None
+
+    # ------------------------------------------------------------------
     # Chat construction (used by AgentOrchestrator)
     # ------------------------------------------------------------------
 
@@ -263,21 +370,32 @@ class LLMGateway:
         system_instruction: str,
         tools: Optional[Any] = None,
         history: Optional[List[Any]] = None,
+        cached_content: Optional[str] = None,
     ) -> Any:
         """
         Create a stateful AsyncChat session pre-configured with the given
         system instruction, tools, and seeded history.
 
-        Replaces the old (build_model + start_chat) two-step pattern from the
-        deprecated SDK. Returns an async chat object that supports
+        When `cached_content` is provided (a CachedContent resource name), the
+        system_instruction and tools are loaded from the cache by Vertex; the
+        local arguments must still match what was cached.
+
+        Returns an async chat object that supports
         `send_message(message=...)` and `send_message_stream(message=...)`.
         """
         from google.genai import types  # type: ignore[import]
 
-        config_kwargs: Dict[str, Any] = {"system_instruction": system_instruction}
-        if tools is not None:
-            # `tools` may be either a single Tool or list — normalise to list.
-            config_kwargs["tools"] = tools if isinstance(tools, list) else [tools]
+        config_kwargs: Dict[str, Any] = {}
+        if cached_content:
+            # Cache supplies system + tools; do NOT duplicate them in config.
+            config_kwargs["cached_content"] = cached_content
+        else:
+            config_kwargs["system_instruction"] = system_instruction
+            if tools is not None:
+                # `tools` may be either a single Tool or list — normalise to list.
+                config_kwargs["tools"] = (
+                    tools if isinstance(tools, list) else [tools]
+                )
 
         config = types.GenerateContentConfig(**config_kwargs)
         return self._client.aio.chats.create(
@@ -369,37 +487,44 @@ class LLMGateway:
         stream_start = time.perf_counter()
 
         try:
-            stream = await chat.send_message_stream(message=message)
-            async for chunk in stream:
-                sdk_chunks_received += 1
-                # Timestamp each chunk arrival from the SDK. If chunks arrive
-                # spread over time → SDK is streaming (downstream buffering).
-                # If they all arrive bunched at the end → SDK is buffering.
-                logger.info(
-                    "Stream [%s] SDK chunk #%d arrived at +%.0fms",
-                    span_name,
-                    sdk_chunks_received,
-                    (time.perf_counter() - stream_start) * 1000,
-                )
-                last_chunk = chunk
-                try:
-                    parts = chunk.candidates[0].content.parts
-                except (AttributeError, IndexError, TypeError):
-                    continue
+            logger.info(
+                "Stream [%s] issuing SDK request (timeout=%ds)",
+                span_name,
+                _STREAM_TIMEOUT_SECONDS,
+            )
+            # Per-call timeout — without this a stuck Gemini call hangs
+            # the SSE stream forever and the FE shows an indefinite spinner.
+            async with asyncio.timeout(_STREAM_TIMEOUT_SECONDS):
+                stream = await chat.send_message_stream(message=message)
+                async for chunk in stream:
+                    sdk_chunks_received += 1
+                    # Timestamp each chunk arrival. Spread over time → SDK is
+                    # streaming. Bunched at end → SDK or transport is buffering.
+                    logger.info(
+                        "Stream [%s] SDK chunk #%d arrived at +%.0fms",
+                        span_name,
+                        sdk_chunks_received,
+                        (time.perf_counter() - stream_start) * 1000,
+                    )
+                    last_chunk = chunk
+                    try:
+                        parts = chunk.candidates[0].content.parts
+                    except (AttributeError, IndexError, TypeError):
+                        continue
 
-                if not parts:
-                    continue
+                    if not parts:
+                        continue
 
-                for part in parts:
-                    text = getattr(part, "text", None)
-                    if text:
-                        accumulated.append(text)
-                        text_deltas_yielded += 1
-                        yield {"type": "text_delta", "delta": text}
+                    for part in parts:
+                        text = getattr(part, "text", None)
+                        if text:
+                            accumulated.append(text)
+                            text_deltas_yielded += 1
+                            yield {"type": "text_delta", "delta": text}
 
-                    fc = getattr(part, "function_call", None)
-                    if fc is not None and getattr(fc, "name", None):
-                        function_calls.append(fc)
+                        fc = getattr(part, "function_call", None)
+                        if fc is not None and getattr(fc, "name", None):
+                            function_calls.append(fc)
 
             logger.info(
                 "Stream [%s]: SDK chunks=%d, text deltas yielded=%d, total chars=%d",
@@ -420,6 +545,20 @@ class LLMGateway:
             usage = self._extract_usage(last_chunk) if last_chunk is not None else None
             generation.end(output=full_text or "(function call)", usage=usage)
 
+        except asyncio.TimeoutError:
+            elapsed = (time.perf_counter() - stream_start) * 1000
+            logger.error(
+                "LLM stream [%s] timed out after %dms (cap=%ds, chunks received=%d)",
+                span_name,
+                elapsed,
+                _STREAM_TIMEOUT_SECONDS,
+                sdk_chunks_received,
+            )
+            generation.end(
+                level="ERROR",
+                status_message=f"LLM stream timeout after {_STREAM_TIMEOUT_SECONDS}s",
+            )
+            raise
         except Exception as e:
             generation.end(level="ERROR", status_message=str(e))
             logger.error("LLM stream failed [%s]: %s", span_name, e, exc_info=True)

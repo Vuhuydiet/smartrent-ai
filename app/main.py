@@ -84,13 +84,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-# Add CORS middleware
+# Add CORS middleware — origins driven by settings.CORS_ALLOWED_ORIGINS.
+# CORS spec forbids the combination of `allow_origins=["*"]` with
+# `allow_credentials=True` — browsers reject the response. We auto-disable
+# credentials when wildcard is configured to avoid silent breakage.
+_cors_origins = settings.cors_origins_list
+_cors_credentials = "*" not in _cors_origins
+if not _cors_credentials and _cors_origins == ["*"]:
+    logger.warning(
+        "CORS configured with wildcard '*' — allow_credentials forced to False. "
+        "For production, set CORS_ALLOWED_ORIGINS to explicit FE origins."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+logger.info(
+    "CORS: %d origin(s) allowed, credentials=%s",
+    len(_cors_origins),
+    _cors_credentials,
 )
 
 app.include_router(apiv1_router)
