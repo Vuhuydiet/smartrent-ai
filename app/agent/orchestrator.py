@@ -149,6 +149,7 @@ def _trim_history(messages: List[ChatMessage]) -> List[ChatMessage]:
 
     return kept
 
+
 # ---------------------------------------------------------------------------
 # Result type
 # ---------------------------------------------------------------------------
@@ -761,9 +762,7 @@ class AgentOrchestrator:
                     yield {"event": "status", "data": tool_result_data}
 
                     tool_response_parts.append(
-                        types.Part.from_function_response(
-                            name=fc.name, response=result
-                        )
+                        types.Part.from_function_response(name=fc.name, response=result)
                     )
 
                 # New SDK: pass the list of Parts directly; chat session adds role=user

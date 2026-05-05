@@ -379,9 +379,7 @@ class LLMGateway:
                 "ttl": f"{_CACHE_TTL_SECONDS}s",
             }
             if tools is not None:
-                config_kwargs["tools"] = (
-                    tools if isinstance(tools, list) else [tools]
-                )
+                config_kwargs["tools"] = tools if isinstance(tools, list) else [tools]
             cache = await self._client.aio.caches.create(
                 model=model_name,
                 config=types.CreateCachedContentConfig(**config_kwargs),
@@ -443,9 +441,7 @@ class LLMGateway:
             config_kwargs["system_instruction"] = system_instruction
             if tools is not None:
                 # `tools` may be either a single Tool or list — normalise to list.
-                config_kwargs["tools"] = (
-                    tools if isinstance(tools, list) else [tools]
-                )
+                config_kwargs["tools"] = tools if isinstance(tools, list) else [tools]
 
         config = types.GenerateContentConfig(**config_kwargs)
         return self._client.aio.chats.create(
@@ -762,9 +758,7 @@ class LLMGateway:
 
         for video in videos or []:
             contents.append(
-                types.Part.from_bytes(
-                    data=video["data"], mime_type=video["mime_type"]
-                )
+                types.Part.from_bytes(data=video["data"], mime_type=video["mime_type"])
             )
 
         logger.info(
