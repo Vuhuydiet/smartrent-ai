@@ -543,8 +543,13 @@ class LLMGateway:
         # Use cached model to avoid re-initialization overhead
         cache_key = (model_name, system_instruction, "multimodal")
         if cache_key in self._models_cache:
+            logger.info("Model cache HIT for %s (multimodal)", model_name)
             model = self._models_cache[cache_key]
         else:
+            logger.info(
+                "Model cache MISS for %s (multimodal) - initializing new model",
+                model_name,
+            )
             model_kwargs: Dict[str, Any] = {"model_name": model_name}
             if system_instruction:
                 model_kwargs["system_instruction"] = system_instruction
