@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # Google Cloud / Vertex AI Configuration
     GCP_CREDENTIALS_BASE64: str = ""  # Base64-encoded service account JSON
     GCP_PROJECT_ID: str = ""
-    GCP_LOCATION: str = "us-central1"
+    GCP_LOCATION: str = "global"
     GEMINI_CHAT_MODEL: str = "gemini-2.5-flash"  # Model used for chat responses
     GEMINI_VISION_MODEL: str = (
         "gemini-2.5-flash"  # Model used for listing verification (vision + text)
@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
     SMARTRENT_AI_URL: str = "http://localhost:8000"
+    INTERNAL_AI_API_KEY: str = (
+        "your_secret_internal_key_here"  # Override in production via env var
+    )
 
     # Chat Configuration
     MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user

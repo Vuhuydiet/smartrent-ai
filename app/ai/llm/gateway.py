@@ -175,6 +175,27 @@ class LLMGateway:
             project=settings.GCP_PROJECT_ID,
             location=location,
         )
+
+        # Explicitly set async credentials for REST transport to avoid fallback to gRPC
+        try:
+            import google.auth
+            from google.oauth2 import service_account
+
+            creds = None
+            if settings.GCP_CREDENTIALS_BASE64:
+                creds = service_account.Credentials.from_service_account_file(
+                    self._credentials_tmp_path
+                )
+            else:
+                creds, _ = google.auth.default()
+
+            if creds:
+                from google.cloud import aiplatform
+
+                aiplatform.initializer._set_async_rest_credentials(creds)
+                logger.info("Async REST credentials configured successfully.")
+        except Exception as e:
+            logger.warning("Could not set async REST credentials: %s", e)
         logger.info(
             "google-genai client initialised (project=%s, location=%s, vertexai=True)",
             settings.GCP_PROJECT_ID,
@@ -589,6 +610,11 @@ class LLMGateway:
         active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_CHAT_MODEL
 
+        # google-genai SDK manages its own client-level caching; explicit
+        # CachedContent (start_chat / get_or_create_cache) covers the chat
+        # path. The old vertexai-era _models_cache is intentionally not
+        # ported — it would leak GenerativeModel objects from the deprecated
+        # SDK into a code path that no longer constructs them.
         config_kwargs: Dict[str, Any] = {}
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
@@ -648,21 +674,26 @@ class LLMGateway:
     # Vision generate (images + text — ListingVerification)
     # ------------------------------------------------------------------
 
-    async def generate_with_images(
+    async def generate_multimodal(
         self,
         prompt: str,
-        images: List[Any],
+        images: Optional[List[Any]] = None,
+        videos: Optional[List[Dict[str, Any]]] = None,
         *,
         model_name: Optional[str] = None,
+        system_instruction: Optional[str] = None,
         generation_config: Optional[Dict[str, Any]] = None,
         trace: Optional[Any] = None,
-        span_name: str = "vision-generate",
+        span_name: str = "multimodal-generate",
     ) -> Any:
         """
-        Multimodal generation: text prompt + PIL Image objects (or already-Part inputs).
+        Multimodal generation: text prompt + images + videos.
 
-        PIL images are encoded as PNG bytes and wrapped in `types.Part.from_bytes`.
-        Items already shaped as Part objects pass through unchanged.
+        Images may be PIL Image objects, raw bytes, or already-shaped
+        google-genai Part objects (passed through unchanged). PIL images
+        are encoded as JPEG (quality=60) to keep payload sizes manageable
+        for the verification path. Videos are passed as raw bytes with
+        their declared mime_type.
         """
         import io
 
@@ -670,33 +701,53 @@ class LLMGateway:
 
         from app.core.config import settings
 
-        active_trace: Any = trace if trace is not None else _NoOpTrace()
         model_name = model_name or settings.GEMINI_VISION_MODEL
 
-        # Build content list: prompt as plain string, images converted to Parts.
+        # Build content list: prompt as plain string, images + videos
+        # converted to google-genai Parts. Images may be PIL, raw bytes, or
+        # already-shaped Part objects (passthrough). Videos arrive as
+        # {"data": bytes, "mime_type": "video/mp4"} dicts from the
+        # listing-verification download path.
         contents: List[Any] = [prompt]
-        for img in images:
+        for img in images or []:
             # Already a genai Part — pass through.
             if hasattr(img, "inline_data") or isinstance(img, types.Part):
                 contents.append(img)
                 continue
-            # PIL image — encode to PNG bytes.
+            # PIL image — encode to JPEG (q=60) to keep payloads bounded
+            # for vision calls; verification doesn't need lossless.
             if hasattr(img, "save"):
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
+                img.save(buf, format="JPEG", quality=60, optimize=True)
                 contents.append(
-                    types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
+                    types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
                 )
                 continue
-            # Raw bytes — assume PNG.
+            # Raw bytes — assume already a JPEG/PNG-encoded image.
             if isinstance(img, (bytes, bytearray)):
                 contents.append(
-                    types.Part.from_bytes(data=bytes(img), mime_type="image/png")
+                    types.Part.from_bytes(data=bytes(img), mime_type="image/jpeg")
                 )
                 continue
-            logger.warning("generate_with_images: unsupported image type %r", type(img))
+            logger.warning("generate_multimodal: unsupported image type %r", type(img))
+
+        for video in videos or []:
+            contents.append(
+                types.Part.from_bytes(
+                    data=video["data"], mime_type=video["mime_type"]
+                )
+            )
+
+        logger.info(
+            "Content parts prepared: %d total (images=%d, videos=%d)",
+            len(contents),
+            len(images or []),
+            len(videos or []),
+        )
 
         config_kwargs: Dict[str, Any] = {}
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
         if generation_config:
             mapped = dict(generation_config)
             for k in ("max_output_tokens", "temperature", "top_p", "top_k"):
@@ -706,21 +757,19 @@ class LLMGateway:
 
         config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
+        active_trace: Any = trace if trace is not None else _NoOpTrace()
         generation = active_trace.generation(
             name=span_name,
             model=model_name,
-            input=prompt[:2000],
-            metadata={"image_count": len(images)},
+            input=f"{prompt} (Images: {len(images or [])}, Videos: {len(videos or [])})",
         )
 
         try:
             response = await _retry_on_quota(
                 self._generate_content_call, model_name, contents, config
             )
-
             usage = self._extract_usage(response)
             output_text = self._extract_text_safe(response)
-
             generation.end(
                 output=output_text[:2000] if output_text else "", usage=usage
             )
@@ -728,7 +777,9 @@ class LLMGateway:
 
         except Exception as e:
             generation.end(level="ERROR", status_message=str(e))
-            logger.error("vision generate failed [%s]: %s", span_name, e, exc_info=True)
+            logger.error(
+                "multimodal generate failed [%s]: %s", span_name, e, exc_info=True
+            )
             raise
 
     # ------------------------------------------------------------------
