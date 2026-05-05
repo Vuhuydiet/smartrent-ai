@@ -52,7 +52,17 @@ _CACHE_REFRESH_MARGIN = 60  # treat cache as expired this many seconds early
 # Vertex requires cached content to exceed a per-model minimum (~1024
 # tokens for Flash, ~2048 for Pro). Skip caching below this character
 # threshold rather than waste an API call we know will fail.
-_MIN_CACHEABLE_CHARS = 3000
+# 4500 chars at ~3 chars/token (Vietnamese-adjusted) ≈ 1500 tokens, comfortably
+# above Flash's 1024 minimum. Tightening this caused the previous 3000-char
+# threshold to land right on the boundary and emit a stream of 400 errors.
+_MIN_CACHEABLE_CHARS = 4500
+
+# Vertex AI CachedContent is currently region-scoped: only specific regional
+# endpoints (us-central1, us-east5, europe-west1, etc.) accept caches.create.
+# The 'global' endpoint, while better for chat routing, returns 400 on cache
+# creation — so we short-circuit when that's the configured location to avoid
+# burning a request per chat turn on a call we already know will fail.
+_CACHE_UNSUPPORTED_LOCATIONS = frozenset({"global"})
 
 
 async def _retry_on_quota(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -131,9 +141,11 @@ class LLMGateway:
         trace    = gateway.create_trace("price-prediction", input=prompt)
         response = await gateway.generate(prompt, model_name=..., trace=trace)
 
-        # --- Vision + text (ListingVerification) ---
+        # --- Vision + text + video (ListingVerification) ---
         trace    = gateway.create_trace("listing-verify", input=text)
-        response = await gateway.generate_with_images(prompt, images, trace=trace)
+        response = await gateway.generate_multimodal(
+            prompt, images=images, videos=videos, trace=trace,
+        )
     """
 
     def __init__(self) -> None:
@@ -331,6 +343,23 @@ class LLMGateway:
         )
         if cache_valid:
             return self._cache_handle
+
+        # Skip when the configured location doesn't support CachedContent.
+        # Cache the negative answer for a long window so we don't re-check
+        # on every chat turn.
+        from app.core.config import settings
+
+        if settings.GCP_LOCATION in _CACHE_UNSUPPORTED_LOCATIONS:
+            if self._cache_expires_at < now:
+                logger.info(
+                    "Cache disabled: GCP_LOCATION=%r does not support "
+                    "CachedContent. Set GCP_LOCATION to a regional endpoint "
+                    "(e.g. us-central1) to enable prefix caching.",
+                    settings.GCP_LOCATION,
+                )
+                # Suppress the log for an hour — same TTL as a real cache.
+                self._cache_expires_at = now + _CACHE_TTL_SECONDS
+            return None
 
         # Skip when content is too small to be cacheable on Vertex.
         if len(system_instruction) < _MIN_CACHEABLE_CHARS:
