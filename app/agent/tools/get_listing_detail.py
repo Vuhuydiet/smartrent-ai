@@ -32,7 +32,7 @@ class GetListingDetailTool(BaseTool):
         return types.FunctionDeclaration(
             name=self.name,
             description=self.description,
-            parameters={
+            parameters={  # type: ignore[arg-type]
                 "type": "object",
                 "properties": {
                     "listingId": {
