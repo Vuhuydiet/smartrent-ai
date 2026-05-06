@@ -259,7 +259,7 @@ You are an AI expert in rental property listing verification.
     @staticmethod
     def _response_text(response: Any) -> str:
         """
-        Safely extract text from a Vertex AI response.
+        Safely extract text from a google-genai response.
 
         `response.text` raises ValueError when the response contains no
         text parts (safety filter, empty candidate, function call).

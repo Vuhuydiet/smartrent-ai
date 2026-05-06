@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Init Vertex AI / Langfuse on startup, flush traces on shutdown."""
-    # Eagerly construct the LLM gateway so vertexai.init() runs before any
-    # request is served. Without this, the first endpoint to construct a
-    # GenerativeModel directly (e.g. /api/v1/completion/) crashes with
-    # GoogleAuthError because Vertex AI has no project configured yet.
+    # Eagerly construct the LLM gateway so the google-genai client is
+    # initialised before any request is served. Without this, the first
+    # request that hits an LLM-backed endpoint pays the credential-decoding
+    # and client-construction cost on the request hot path.
     try:
         from app.ai.llm.gateway import get_gateway
 
@@ -84,13 +84,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-# Add CORS middleware
+# Add CORS middleware — origins driven by settings.CORS_ALLOWED_ORIGINS.
+# CORS spec forbids the combination of `allow_origins=["*"]` with
+# `allow_credentials=True` — browsers reject the response. We auto-disable
+# credentials when wildcard is configured to avoid silent breakage.
+_cors_origins = settings.cors_origins_list
+_cors_credentials = "*" not in _cors_origins
+if not _cors_credentials and _cors_origins == ["*"]:
+    logger.warning(
+        "CORS configured with wildcard '*' — allow_credentials forced to False. "
+        "For production, set CORS_ALLOWED_ORIGINS to explicit FE origins."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+logger.info(
+    "CORS: %d origin(s) allowed, credentials=%s",
+    len(_cors_origins),
+    _cors_credentials,
 )
 
 app.include_router(apiv1_router)

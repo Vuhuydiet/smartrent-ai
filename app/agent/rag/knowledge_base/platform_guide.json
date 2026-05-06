@@ -3,7 +3,20 @@
     {
       "id": "guide_post_listing",
       "name": "Đăng tin cho thuê/bán BĐS",
-      "keywords": ["đăng tin", "tạo tin", "post", "đăng bài", "cho thuê", "bán nhà", "đăng phòng", "cách đăng tin"],
+      "keywords": [
+        "đăng tin",
+        "tạo tin",
+        "post",
+        "đăng bài",
+        "cho thuê",
+        "bán nhà",
+        "đăng phòng",
+        "cách đăng tin",
+        "post a rental",
+        "create listing",
+        "publish ad",
+        "how to post"
+      ],
       "steps": [
         "Đăng nhập tài khoản SmartRent.",
         "Nhấn nút 'Đăng tin mới' trên thanh menu.",
@@ -28,7 +41,19 @@
     {
       "id": "guide_search_property",
       "name": "Tìm kiếm BĐS trên SmartRent",
-      "keywords": ["tìm kiếm", "search", "tìm phòng", "tìm nhà", "bộ lọc", "filter", "cách tìm"],
+      "keywords": [
+        "tìm kiếm",
+        "search",
+        "tìm phòng",
+        "tìm nhà",
+        "bộ lọc",
+        "filter",
+        "cách tìm",
+        "how to search",
+        "find rental",
+        "search listings",
+        "how to find"
+      ],
       "steps": [
         "Truy cập trang chủ SmartRent hoặc mở ứng dụng.",
         "Chọn loại BĐS muốn tìm: Cho thuê hoặc Mua bán.",
@@ -48,7 +73,15 @@
     {
       "id": "guide_manage_listings",
       "name": "Quản lý tin đăng",
-      "keywords": ["quản lý tin", "tin của tôi", "chỉnh sửa tin", "sửa tin", "xóa tin", "ẩn tin", "my listings"],
+      "keywords": [
+        "quản lý tin",
+        "tin của tôi",
+        "chỉnh sửa tin",
+        "sửa tin",
+        "xóa tin",
+        "ẩn tin",
+        "my listings"
+      ],
       "steps": [
         "Đăng nhập và vào mục 'Quản lý tin đăng' từ menu tài khoản.",
         "Xem danh sách tất cả tin đã đăng với trạng thái (đang hiển thị/hết hạn/chờ duyệt).",
@@ -66,7 +99,18 @@
     {
       "id": "guide_contact_landlord",
       "name": "Liên hệ chủ nhà",
-      "keywords": ["liên hệ", "gọi điện", "nhắn tin", "contact", "chủ nhà", "số điện thoại", "zalo"],
+      "keywords": [
+        "liên hệ",
+        "gọi điện",
+        "nhắn tin",
+        "contact",
+        "chủ nhà",
+        "số điện thoại",
+        "zalo",
+        "contact landlord",
+        "message owner",
+        "how to contact"
+      ],
       "steps": [
         "Mở tin đăng BĐS muốn liên hệ.",
         "Xem thông tin liên hệ: số điện thoại, Zalo (nếu có).",
@@ -83,7 +127,20 @@
     {
       "id": "guide_vip_subscription",
       "name": "Đăng ký gói VIP cho tin đăng",
-      "keywords": ["mua vip", "đăng ký vip", "vip", "nâng cấp", "gói dịch vụ", "subscription", "silver", "gold", "diamond"],
+      "keywords": [
+        "mua vip",
+        "đăng ký vip",
+        "vip",
+        "nâng cấp",
+        "gói dịch vụ",
+        "subscription",
+        "silver",
+        "gold",
+        "diamond",
+        "vip plan",
+        "upgrade vip",
+        "premium listing"
+      ],
       "steps": [
         "Đăng nhập tài khoản SmartRent.",
         "Vào mục 'Quản lý tin đăng'.",
@@ -103,7 +160,14 @@
     {
       "id": "guide_saved_listings",
       "name": "Quản lý tin đã lưu",
-      "keywords": ["tin đã lưu", "saved", "yêu thích", "bookmark", "danh sách lưu", "xem lại"],
+      "keywords": [
+        "tin đã lưu",
+        "saved",
+        "yêu thích",
+        "bookmark",
+        "danh sách lưu",
+        "xem lại"
+      ],
       "steps": [
         "Đăng nhập tài khoản SmartRent.",
         "Vào mục 'Tin đã lưu' hoặc 'Yêu thích' từ menu tài khoản.",

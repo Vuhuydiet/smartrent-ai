@@ -17,7 +17,7 @@ class BaseTool(ABC):
     @abstractmethod
     def to_function_declaration(self) -> Any:
         """
-        Return a Vertex AI FunctionDeclaration describing this tool.
+        Return a google-genai `types.FunctionDeclaration` describing this tool.
 
         The declaration is used by the LLM to decide when and how to call the tool.
         """

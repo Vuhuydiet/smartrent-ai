@@ -3,267 +3,710 @@
     {
       "id": "platform_post_listing",
       "category": "platform",
-      "keywords": ["đăng tin", "đăng bài", "post listing", "đăng nhà", "đăng phòng", "cho thuê", "cách đăng"],
+      "keywords": [
+        "đăng tin",
+        "đăng bài",
+        "post listing",
+        "đăng nhà",
+        "đăng phòng",
+        "cho thuê",
+        "cách đăng",
+        "post a rental",
+        "create listing",
+        "publish ad",
+        "list my property",
+        "how to post"
+      ],
       "question": "Cách đăng tin cho thuê nhà/phòng trên SmartRent?",
       "answer": "Để đăng tin trên SmartRent: (1) Đăng nhập tài khoản, chọn 'Đăng tin mới'. (2) Điền thông tin: loại BĐS, địa chỉ, diện tích, giá thuê, tiện nghi. (3) Tải ảnh chụp rõ ràng (khuyến nghị ít nhất 5 ảnh). (4) Chọn gói tin (thường/VIP). (5) Xác nhận và chờ duyệt. Tin đăng thường được duyệt trong 2-24 giờ."
     },
     {
       "id": "platform_contact_landlord",
       "category": "platform",
-      "keywords": ["liên hệ", "contact", "chủ nhà", "số điện thoại", "gặp chủ trọ", "kết nối"],
+      "keywords": [
+        "liên hệ",
+        "contact",
+        "chủ nhà",
+        "số điện thoại",
+        "gặp chủ trọ",
+        "kết nối",
+        "contact landlord",
+        "phone number",
+        "reach owner",
+        "message owner",
+        "how to contact"
+      ],
       "question": "Làm thế nào để liên hệ với chủ nhà trên SmartRent?",
       "answer": "Bạn có thể liên hệ chủ nhà bằng cách: (1) Xem số điện thoại hiển thị trong phần chi tiết tin đăng. (2) Nhấn nút 'Liên hệ' để gọi điện trực tiếp. (3) Gửi tin nhắn qua hệ thống chat nội bộ SmartRent. Lưu ý: Tránh giao dịch ngoài nền tảng để được bảo vệ quyền lợi."
     },
     {
       "id": "platform_account",
       "category": "platform",
-      "keywords": ["tài khoản", "đăng ký", "đăng nhập", "mật khẩu", "account", "register", "login"],
+      "keywords": [
+        "tài khoản",
+        "đăng ký",
+        "đăng nhập",
+        "mật khẩu",
+        "account",
+        "register",
+        "login",
+        "create account",
+        "sign up",
+        "register account",
+        "make account",
+        "new account"
+      ],
       "question": "Cách tạo tài khoản SmartRent?",
       "answer": "Để tạo tài khoản SmartRent: (1) Truy cập SmartRent và nhấn 'Đăng ký'. (2) Nhập email, số điện thoại và tạo mật khẩu. (3) Xác minh email hoặc OTP điện thoại. (4) Hoàn thiện hồ sơ cá nhân. Đăng ký miễn phí và ngay lập tức có thể sử dụng."
     },
     {
       "id": "platform_vip",
       "category": "platform",
-      "keywords": ["vip", "gói tin", "nổi bật", "ưu tiên", "tin vip", "hiển thị nhiều hơn"],
+      "keywords": [
+        "vip",
+        "gói tin",
+        "nổi bật",
+        "ưu tiên",
+        "tin vip",
+        "hiển thị nhiều hơn",
+        "vip plan",
+        "premium listing",
+        "boost listing",
+        "featured ad",
+        "promote listing"
+      ],
       "question": "Gói tin VIP trên SmartRent có lợi ích gì?",
       "answer": "Gói tin VIP trên SmartRent có 3 cấp: Silver, Gold, Diamond. Lợi ích: Hiển thị ưu tiên trên trang tìm kiếm, đánh dấu nổi bật, hiển thị ở vị trí đầu, tăng lượt xem gấp 3-10 lần so với tin thường. Khuyến nghị dùng VIP Gold/Diamond cho phòng/nhà ở vị trí cạnh tranh cao."
     },
     {
       "id": "platform_payment",
       "category": "platform",
-      "keywords": ["thanh toán", "payment", "phí", "chi phí nền tảng", "nạp tiền"],
+      "keywords": [
+        "thanh toán",
+        "payment",
+        "phí",
+        "chi phí nền tảng",
+        "nạp tiền",
+        "service fee",
+        "platform fee",
+        "pricing",
+        "how much does it cost",
+        "cost"
+      ],
       "question": "Phí dịch vụ trên SmartRent như thế nào?",
       "answer": "SmartRent thu phí theo gói đăng tin: Tin thường miễn phí nhưng hiển thị hạn chế. Gói VIP Silver/Gold/Diamond tính phí theo ngày đăng. Người thuê tìm kiếm và liên hệ hoàn toàn miễn phí."
     },
     {
       "id": "rent_documents",
       "category": "rental_process",
-      "keywords": ["giấy tờ", "hồ sơ", "documents", "cmnd", "cccd", "cần những gì", "chuẩn bị"],
+      "keywords": [
+        "giấy tờ",
+        "hồ sơ",
+        "documents",
+        "cmnd",
+        "cccd",
+        "cần những gì",
+        "chuẩn bị",
+        "required documents",
+        "id card",
+        "what do i need",
+        "rental documents",
+        "paperwork"
+      ],
       "question": "Cần chuẩn bị những giấy tờ gì khi thuê nhà?",
       "answer": "Khi thuê nhà/phòng cần chuẩn bị: (1) CCCD/CMND bản gốc và photocopy. (2) Hợp đồng lao động hoặc bằng chứng thu nhập (nếu chủ nhà yêu cầu). (3) Số điện thoại và địa chỉ liên hệ. Một số chủ nhà yêu cầu thêm: sổ hộ khẩu tạm trú, giấy xác nhận của cơ quan/trường học."
     },
     {
       "id": "rent_deposit",
       "category": "rental_process",
-      "keywords": ["đặt cọc", "cọc", "deposit", "tiền cọc", "bao nhiêu cọc", "hoàn cọc"],
+      "keywords": [
+        "đặt cọc",
+        "cọc",
+        "deposit",
+        "tiền cọc",
+        "bao nhiêu cọc",
+        "hoàn cọc",
+        "security deposit",
+        "how much deposit",
+        "deposit refund",
+        "deposit amount"
+      ],
       "question": "Tiền đặt cọc khi thuê nhà thường là bao nhiêu?",
       "answer": "Tiền đặt cọc thuê nhà tại Việt Nam thường là 1-3 tháng tiền thuê: Phòng trọ bình dân: 1-2 tháng. Căn hộ chung cư: 2-3 tháng. Nhà nguyên căn: 2-3 tháng. Tiền cọc phải được hoàn trả khi kết thúc hợp đồng nếu không có hư hại. Nên ghi rõ điều kiện hoàn cọc trong hợp đồng."
     },
     {
       "id": "rent_contract",
       "category": "rental_process",
-      "keywords": ["hợp đồng", "contract", "ký hợp đồng", "điều khoản", "lease", "thời hạn"],
+      "keywords": [
+        "hợp đồng",
+        "contract",
+        "ký hợp đồng",
+        "điều khoản",
+        "lease",
+        "thời hạn",
+        "rental contract",
+        "lease agreement",
+        "contract terms",
+        "lease terms",
+        "what should contract include"
+      ],
       "question": "Hợp đồng thuê nhà cần có những điều khoản nào?",
       "answer": "Hợp đồng thuê nhà cần ghi rõ: (1) Thông tin hai bên (họ tên, CCCD, địa chỉ). (2) Địa chỉ và mô tả tài sản thuê. (3) Thời hạn thuê (bắt đầu - kết thúc). (4) Giá thuê và kỳ thanh toán. (5) Tiền đặt cọc và điều kiện hoàn cọc. (6) Trách nhiệm sửa chữa, bảo trì. (7) Điều kiện chấm dứt hợp đồng sớm. (8) Chữ ký hai bên. Khuyến nghị công chứng nếu thuê dài hạn (trên 6 tháng)."
     },
     {
       "id": "rent_negotiate",
       "category": "rental_process",
-      "keywords": ["mặc cả", "thương lượng", "negotiate", "giảm giá", "discount", "trả giá"],
+      "keywords": [
+        "mặc cả",
+        "thương lượng",
+        "negotiate",
+        "giảm giá",
+        "discount",
+        "trả giá",
+        "negotiate rent",
+        "lower rent",
+        "haggle price",
+        "discount on rent",
+        "bargain"
+      ],
       "question": "Làm thế nào để thương lượng giá thuê?",
       "answer": "Mẹo thương lượng giá thuê hiệu quả: (1) Tìm hiểu giá thị trường khu vực trước. (2) Thuê dài hạn (1 năm+) thường được giảm 5-15%. (3) Đề xuất thanh toán trước 3-6 tháng. (4) Chỉ ra các điểm cần sửa chữa để yêu cầu giảm giá. (5) Thời điểm tốt nhất để thuê giá rẻ: tháng 2-3 (sau Tết), tháng 7-8 (mùa thấp điểm)."
     },
     {
       "id": "rent_utilities",
       "category": "rental_process",
-      "keywords": ["điện nước", "tiền điện", "tiền nước", "internet", "utilities", "phí sinh hoạt", "chi phí"],
+      "keywords": [
+        "điện nước",
+        "tiền điện",
+        "tiền nước",
+        "internet",
+        "utilities",
+        "phí sinh hoạt",
+        "chi phí",
+        "electricity bill",
+        "water bill",
+        "internet cost",
+        "utility bills",
+        "monthly bills"
+      ],
       "question": "Tiền điện nước khi thuê nhà tính như thế nào?",
       "answer": "Phí điện nước khi thuê nhà có hai hình thức: (1) Theo giá nhà nước: Điện ~2.000-3.500đ/kWh (lũy tiến), nước ~6.000-15.000đ/m³. (2) Theo giá thỏa thuận với chủ nhà (thường cao hơn, trung bình điện 3.500-5.000đ/kWh). Nên hỏi rõ và ghi vào hợp đồng. Phí internet thường 100.000-300.000đ/tháng hoặc included."
     },
     {
       "id": "legal_tenant_rights",
       "category": "legal",
-      "keywords": ["quyền lợi", "tenant rights", "pháp lý", "luật", "bảo vệ người thuê", "quyền người thuê"],
+      "keywords": [
+        "quyền lợi",
+        "tenant rights",
+        "pháp lý",
+        "luật",
+        "bảo vệ người thuê",
+        "quyền người thuê",
+        "renter rights",
+        "tenant law",
+        "legal rights",
+        "what rights do tenants have"
+      ],
       "question": "Người thuê nhà có quyền lợi gì theo pháp luật Việt Nam?",
       "answer": "Theo Bộ luật Dân sự 2015, người thuê nhà có quyền: (1) Được ở ổn định trong thời hạn hợp đồng. (2) Được thông báo trước ít nhất 30 ngày nếu chủ nhà muốn chấm dứt hợp đồng sớm. (3) Được hoàn trả tiền cọc đầy đủ nếu không vi phạm. (4) Được sửa chữa những hỏng hóc không do người thuê gây ra. (5) Không bị tự ý vào phòng khi chưa có sự đồng ý."
     },
     {
       "id": "legal_register_temporary",
       "category": "legal",
-      "keywords": ["tạm trú", "đăng ký tạm trú", "temporary residence", "khai báo", "công an phường"],
+      "keywords": [
+        "tạm trú",
+        "đăng ký tạm trú",
+        "temporary residence",
+        "khai báo",
+        "công an phường",
+        "register address",
+        "residency registration",
+        "police registration"
+      ],
       "question": "Có cần đăng ký tạm trú khi thuê nhà không?",
       "answer": "Có, người thuê nhà cần đăng ký tạm trú theo quy định pháp luật: (1) Đăng ký tại công an phường/xã nơi thuê trong vòng 30 ngày kể từ ngày đến. (2) Chủ nhà có nghĩa vụ hỗ trợ và khai báo người thuê. (3) Tạm trú thường được cấp 3-12 tháng và có thể gia hạn. Cần mang theo: CCCD, hợp đồng thuê nhà, ảnh 4x6."
     },
     {
       "id": "area_hanoi_districts",
       "category": "area_guide",
-      "keywords": ["quận hà nội", "khu vực hà nội", "hanoi area", "ở đâu hà nội", "nên thuê quận nào hà nội"],
+      "keywords": [
+        "quận hà nội",
+        "khu vực hà nội",
+        "hanoi area",
+        "ở đâu hà nội",
+        "nên thuê quận nào hà nội",
+        "which district hanoi",
+        "where to live hanoi",
+        "best district hanoi",
+        "hanoi neighborhoods"
+      ],
       "question": "Nên thuê nhà ở quận nào tại Hà Nội?",
       "answer": "Hướng dẫn chọn quận tại Hà Nội: Trung tâm (đắt nhất): Hoàn Kiếm, Ba Đình, Đống Đa — gần văn phòng, tiện nghi đầy đủ, giá 5-15 triệu/tháng. Khu vực phát triển: Cầu Giấy, Tây Hồ, Thanh Xuân — cân bằng giá-chất lượng, nhiều trường đại học, giá 3-8 triệu/tháng. Vùng ven: Hà Đông, Long Biên, Gia Lâm — giá rẻ hơn 1-4 triệu/tháng nhưng cần di chuyển xa hơn."
     },
     {
       "id": "area_hcm_districts",
       "category": "area_guide",
-      "keywords": ["quận hồ chí minh", "khu vực hcm", "hcm area", "ở đâu hcm", "nên thuê quận nào hcm", "sài gòn"],
+      "keywords": [
+        "quận hồ chí minh",
+        "khu vực hcm",
+        "hcm area",
+        "ở đâu hcm",
+        "nên thuê quận nào hcm",
+        "sài gòn",
+        "which district saigon",
+        "where to live hcm",
+        "best district hcm",
+        "saigon neighborhoods",
+        "ho chi minh city"
+      ],
       "question": "Nên thuê nhà ở quận nào tại TP. HCM?",
       "answer": "Hướng dẫn chọn quận tại TP. HCM: Trung tâm (đắt nhất): Quận 1, Quận 3 — trung tâm tài chính, tiện nghi cao cấp, giá 6-20 triệu/tháng. Khu vực cân bằng: Bình Thạnh, Phú Nhuận, Quận 7 (Phú Mỹ Hưng) — yên tĩnh, an ninh tốt, giá 4-10 triệu/tháng. Thủ Đức — khu công nghệ, nhiều bạn trẻ, giá 2-6 triệu/tháng. Vùng ven: Bình Tân, Gò Vấp, Hóc Môn — giá rẻ 1.5-4 triệu/tháng."
     },
     {
       "id": "property_types",
       "category": "property_info",
-      "keywords": ["loại nhà", "loại phòng", "phòng trọ", "căn hộ", "studio", "chung cư", "khác nhau như thế nào"],
+      "keywords": [
+        "loại nhà",
+        "loại phòng",
+        "phòng trọ",
+        "căn hộ",
+        "studio",
+        "chung cư",
+        "khác nhau như thế nào",
+        "room vs apartment",
+        "studio vs apartment",
+        "types of rentals",
+        "property categories",
+        "what is a phong tro"
+      ],
       "question": "Sự khác nhau giữa phòng trọ, studio, chung cư mini và căn hộ chung cư?",
       "answer": "Phân loại BĐS cho thuê tại Việt Nam: PHÒNG TRỌ (ROOM): Diện tích 10-30m², WC chung hoặc riêng, giá 1-4 triệu/tháng — phù hợp sinh viên, người đơn. STUDIO: Phòng ngủ + phòng khách + bếp liền, 25-45m², giá 3-8 triệu — phù hợp người đi làm độc thân. CHUNG CƯ MINI: Tòa nhà nhỏ, phòng độc lập, tiện nghi cơ bản, 30-60m², 4-9 triệu. CHUNG CƯ: Tòa nhà lớn, đầy đủ tiện ích, 50-120m², giá 7-25 triệu — phù hợp gia đình."
     },
     {
       "id": "price_range_general",
       "category": "price_guide",
-      "keywords": ["giá thuê", "giá bao nhiêu", "bảng giá", "chi phí thuê", "giá trung bình", "mức giá"],
+      "keywords": [
+        "giá thuê",
+        "giá bao nhiêu",
+        "bảng giá",
+        "chi phí thuê",
+        "giá trung bình",
+        "mức giá",
+        "average rent",
+        "typical rent price",
+        "how much is rent",
+        "rent prices vietnam"
+      ],
       "question": "Giá thuê nhà/phòng trung bình ở các thành phố lớn Việt Nam?",
       "answer": "Giá thuê tham khảo (2024): HÀ NỘI: Phòng trọ 1.5-4 triệu, Studio 3-7 triệu, Chung cư 7-20 triệu/tháng. TP.HCM: Phòng trọ 2-5 triệu, Studio 4-9 triệu, Chung cư 8-25 triệu/tháng. ĐÀ NẴNG: Phòng trọ 1.5-3.5 triệu, Studio 3-6 triệu, Chung cư 6-15 triệu/tháng. Giá phụ thuộc nhiều vào vị trí, nội thất, và tầng lớp."
     },
     {
       "id": "moving_tips",
       "category": "rental_process",
-      "keywords": ["chuyển nhà", "dọn đến", "move in", "nhận phòng", "check in", "bàn giao"],
+      "keywords": [
+        "chuyển nhà",
+        "dọn đến",
+        "move in",
+        "nhận phòng",
+        "check in",
+        "bàn giao",
+        "move in checklist",
+        "moving in",
+        "handover inspection",
+        "what to check"
+      ],
       "question": "Cần lưu ý gì khi nhận bàn giao phòng/nhà?",
       "answer": "Checklist khi nhận bàn giao phòng: (1) Chụp ảnh toàn bộ tình trạng phòng trước khi vào ở. (2) Kiểm tra và ghi nhận số điện, nước tại thời điểm bàn giao. (3) Lập biên bản bàn giao có danh sách đồ đạc, nội thất kèm tình trạng. (4) Kiểm tra các thiết bị: điều hòa, máy nước nóng, bình gas, khóa cửa. (5) Yêu cầu biên lai/hóa đơn tiền cọc. Ký biên bản có đủ chữ ký hai bên."
     },
-
     {
       "id": "subscription_pricing",
       "category": "subscription",
-      "keywords": ["giá vip", "bảng giá vip", "phí vip", "giá gói tin", "vip bao nhiêu tiền", "chi phí vip", "mua vip"],
+      "keywords": [
+        "giá vip",
+        "bảng giá vip",
+        "phí vip",
+        "giá gói tin",
+        "vip bao nhiêu tiền",
+        "chi phí vip",
+        "mua vip",
+        "vip pricing",
+        "premium plan price",
+        "how much is vip",
+        "subscription cost"
+      ],
       "question": "Giá các gói VIP trên SmartRent là bao nhiêu?",
       "answer": "SmartRent có 3 gói VIP cho tin đăng: VIP Silver — hiển thị ưu tiên nhẹ, tăng lượt xem gấp 3 lần, phí thấp nhất. VIP Gold — nhãn nổi bật, hiển thị đầu trang tìm kiếm, tăng lượt xem gấp 5 lần. VIP Diamond — vị trí cao nhất, nhãn đặc biệt, tăng lượt xem gấp 10 lần. Phí tính theo số ngày đăng tin. Xem chi tiết bảng giá tại mục 'Bảng giá' trên trang SmartRent."
     },
     {
       "id": "subscription_upgrade",
       "category": "subscription",
-      "keywords": ["nâng cấp vip", "upgrade", "đổi gói", "nâng gói", "chuyển gói", "tăng gói"],
+      "keywords": [
+        "nâng cấp vip",
+        "upgrade",
+        "đổi gói",
+        "nâng gói",
+        "chuyển gói",
+        "tăng gói",
+        "upgrade plan",
+        "upgrade vip",
+        "change plan",
+        "switch tier"
+      ],
       "question": "Cách nâng cấp gói VIP trên SmartRent?",
       "answer": "Để nâng cấp gói VIP: (1) Vào trang quản lý tin đăng của bạn. (2) Chọn tin muốn nâng cấp. (3) Nhấn 'Nâng cấp VIP' và chọn gói mới (Silver/Gold/Diamond). (4) Thanh toán chênh lệch phí. Gói mới sẽ có hiệu lực ngay lập tức. Bạn có thể nâng cấp bất kỳ lúc nào trong thời gian tin đăng còn hiệu lực."
     },
     {
       "id": "subscription_cancel",
       "category": "subscription",
-      "keywords": ["hủy vip", "hủy gói", "cancel", "ngừng vip", "không dùng vip nữa", "dừng gói"],
+      "keywords": [
+        "hủy vip",
+        "hủy gói",
+        "cancel",
+        "ngừng vip",
+        "không dùng vip nữa",
+        "dừng gói",
+        "cancel vip",
+        "cancel subscription",
+        "stop vip",
+        "unsubscribe"
+      ],
       "question": "Có thể hủy gói VIP đã mua không?",
       "answer": "Chính sách hủy gói VIP: Sau khi thanh toán, gói VIP không được hoàn tiền nhưng sẽ tự hết hạn sau thời gian đã chọn mà không tự động gia hạn. Nếu bạn muốn dừng sử dụng VIP, chỉ cần không gia hạn khi hết hạn. Tin đăng sẽ tự động chuyển về dạng tin thường sau khi VIP hết hạn."
     },
     {
       "id": "subscription_check_status",
       "category": "subscription",
-      "keywords": ["kiểm tra vip", "xem gói", "còn hạn", "hết hạn vip", "thời gian vip", "trạng thái vip"],
+      "keywords": [
+        "kiểm tra vip",
+        "xem gói",
+        "còn hạn",
+        "hết hạn vip",
+        "thời gian vip",
+        "trạng thái vip",
+        "check vip status",
+        "view subscription",
+        "vip expiry",
+        "subscription expiry"
+      ],
       "question": "Cách kiểm tra trạng thái gói VIP hiện tại?",
       "answer": "Để kiểm tra trạng thái VIP: (1) Đăng nhập tài khoản SmartRent. (2) Vào mục 'Quản lý tin đăng'. (3) Mỗi tin đăng sẽ hiển thị nhãn VIP hiện tại (Silver/Gold/Diamond) và ngày hết hạn. Tin VIP còn hạn sẽ có biểu tượng đặc biệt. Tin hết hạn VIP sẽ tự động chuyển về trạng thái thường."
     },
     {
       "id": "account_change_password",
       "category": "account_management",
-      "keywords": ["đổi mật khẩu", "thay mật khẩu", "change password", "quên mật khẩu", "reset password", "mật khẩu mới"],
+      "keywords": [
+        "đổi mật khẩu",
+        "thay mật khẩu",
+        "change password",
+        "quên mật khẩu",
+        "reset password",
+        "mật khẩu mới",
+        "forgot password",
+        "new password",
+        "password"
+      ],
       "question": "Cách đổi mật khẩu tài khoản SmartRent?",
       "answer": "Đổi mật khẩu: (1) Đăng nhập và vào 'Cài đặt tài khoản'. (2) Chọn 'Đổi mật khẩu'. (3) Nhập mật khẩu cũ và mật khẩu mới. (4) Xác nhận. Nếu quên mật khẩu: Nhấn 'Quên mật khẩu' ở trang đăng nhập → nhập email đã đăng ký → nhận link đặt lại mật khẩu qua email → tạo mật khẩu mới."
     },
     {
       "id": "account_update_profile",
       "category": "account_management",
-      "keywords": ["cập nhật hồ sơ", "thay đổi thông tin", "sửa thông tin", "update profile", "đổi tên", "đổi số điện thoại", "đổi email", "avatar"],
+      "keywords": [
+        "cập nhật hồ sơ",
+        "thay đổi thông tin",
+        "sửa thông tin",
+        "update profile",
+        "đổi tên",
+        "đổi số điện thoại",
+        "đổi email",
+        "avatar",
+        "edit profile",
+        "change name",
+        "change phone",
+        "change avatar"
+      ],
       "question": "Cách cập nhật thông tin cá nhân trên SmartRent?",
       "answer": "Để cập nhật thông tin cá nhân: (1) Đăng nhập và vào 'Hồ sơ cá nhân' hoặc 'Cài đặt tài khoản'. (2) Bạn có thể thay đổi: tên hiển thị, số điện thoại, ảnh đại diện. (3) Email đăng ký không thể thay đổi sau khi xác minh. (4) Nhấn 'Lưu thay đổi' để cập nhật. Thông tin sẽ được cập nhật ngay lập tức trên hệ thống."
     },
     {
       "id": "account_delete",
       "category": "account_management",
-      "keywords": ["xóa tài khoản", "delete account", "hủy tài khoản", "đóng tài khoản", "ngừng sử dụng"],
+      "keywords": [
+        "xóa tài khoản",
+        "delete account",
+        "hủy tài khoản",
+        "đóng tài khoản",
+        "ngừng sử dụng",
+        "close account",
+        "remove account",
+        "deactivate"
+      ],
       "question": "Cách xóa tài khoản SmartRent?",
       "answer": "Để xóa tài khoản SmartRent: (1) Đăng nhập và vào 'Cài đặt tài khoản'. (2) Chọn 'Xóa tài khoản' ở cuối trang. (3) Xác nhận bằng mật khẩu. Lưu ý: Sau khi xóa, tất cả tin đăng, lịch sử tìm kiếm và tin nhắn sẽ bị xóa vĩnh viễn. Gói VIP đang sử dụng sẽ không được hoàn tiền. Hãy cân nhắc kỹ trước khi xóa."
     },
     {
       "id": "account_verify",
       "category": "account_management",
-      "keywords": ["xác minh", "verify", "xác thực", "otp", "xác nhận email", "xác nhận số điện thoại"],
+      "keywords": [
+        "xác minh",
+        "verify",
+        "xác thực",
+        "otp",
+        "xác nhận email",
+        "xác nhận số điện thoại",
+        "verify account",
+        "email verification",
+        "phone verification",
+        "otp verification"
+      ],
       "question": "Cách xác minh tài khoản SmartRent?",
       "answer": "Xác minh tài khoản giúp tăng độ tin cậy: (1) Xác minh email: Kiểm tra hộp thư (kể cả spam) → nhấn link xác nhận. (2) Xác minh số điện thoại: Nhập SĐT → nhận mã OTP → nhập mã xác nhận. Tài khoản đã xác minh sẽ có nhãn 'Đã xác minh', giúp chủ nhà và người thuê tin tưởng hơn khi liên hệ."
     },
     {
       "id": "feature_save_listing",
       "category": "platform_features",
-      "keywords": ["lưu tin", "save", "bookmark", "yêu thích", "danh sách yêu thích", "lưu bài đăng", "lưu phòng", "quan tâm"],
+      "keywords": [
+        "lưu tin",
+        "save",
+        "bookmark",
+        "yêu thích",
+        "danh sách yêu thích",
+        "lưu bài đăng",
+        "lưu phòng",
+        "quan tâm",
+        "save listing",
+        "bookmark listing",
+        "favorite listing",
+        "wishlist",
+        "save for later"
+      ],
       "question": "Cách lưu tin đăng yêu thích trên SmartRent?",
       "answer": "Để lưu tin yêu thích: (1) Khi xem tin đăng, nhấn biểu tượng trái tim hoặc nút 'Lưu tin'. (2) Tin sẽ được thêm vào danh sách 'Tin đã lưu' trong tài khoản. (3) Truy cập tin đã lưu bất kỳ lúc nào từ menu tài khoản. (4) Bạn có thể bỏ lưu bằng cách nhấn lại biểu tượng trái tim. Cần đăng nhập để sử dụng tính năng này."
     },
     {
       "id": "feature_search_filters",
       "category": "platform_features",
-      "keywords": ["bộ lọc", "filter", "lọc tìm kiếm", "tìm kiếm nâng cao", "cách tìm", "tìm kiếm", "search"],
+      "keywords": [
+        "bộ lọc",
+        "filter",
+        "lọc tìm kiếm",
+        "tìm kiếm nâng cao",
+        "cách tìm",
+        "tìm kiếm",
+        "search",
+        "search filters",
+        "advanced search",
+        "filter listings",
+        "narrow search",
+        "refine results"
+      ],
       "question": "Cách sử dụng bộ lọc tìm kiếm trên SmartRent?",
       "answer": "SmartRent hỗ trợ nhiều bộ lọc tìm kiếm: (1) Vị trí: Chọn tỉnh/thành, quận/huyện, phường/xã. (2) Loại BĐS: Phòng trọ, căn hộ, nhà nguyên căn, studio, văn phòng. (3) Giá: Đặt khoảng giá tối thiểu - tối đa. (4) Diện tích: Lọc theo m². (5) Tiện nghi: WiFi, điều hòa, máy giặt, bãi đỗ xe... (6) Nội thất: Đầy đủ, cơ bản, không nội thất. (7) Sắp xếp: Giá tăng/giảm, mới nhất. Kết hợp nhiều bộ lọc để tìm chính xác hơn."
     },
     {
       "id": "feature_notifications",
       "category": "platform_features",
-      "keywords": ["thông báo", "notification", "cảnh báo", "nhắc nhở", "báo tin mới", "alert"],
+      "keywords": [
+        "thông báo",
+        "notification",
+        "cảnh báo",
+        "nhắc nhở",
+        "báo tin mới",
+        "alert",
+        "notifications",
+        "alerts",
+        "get notified",
+        "notification settings",
+        "push alerts"
+      ],
       "question": "Hệ thống thông báo trên SmartRent hoạt động như thế nào?",
       "answer": "SmartRent gửi thông báo khi: (1) Có tin đăng mới phù hợp với tìm kiếm đã lưu. (2) Chủ nhà/người thuê gửi tin nhắn cho bạn. (3) Tin đăng của bạn được duyệt hoặc sắp hết hạn. (4) Có cập nhật về gói VIP. Bạn có thể quản lý thông báo trong 'Cài đặt thông báo' để bật/tắt từng loại thông báo theo nhu cầu."
     },
     {
       "id": "feature_report_listing",
       "category": "platform_features",
-      "keywords": ["báo cáo", "report", "tố cáo", "tin giả", "tin lừa đảo", "khiếu nại", "vi phạm"],
+      "keywords": [
+        "báo cáo",
+        "report",
+        "tố cáo",
+        "tin giả",
+        "tin lừa đảo",
+        "khiếu nại",
+        "vi phạm",
+        "report listing",
+        "report scam",
+        "report fake",
+        "flag listing",
+        "complaint"
+      ],
       "question": "Cách báo cáo tin đăng vi phạm trên SmartRent?",
       "answer": "Để báo cáo tin vi phạm: (1) Mở tin đăng muốn báo cáo. (2) Nhấn nút 'Báo cáo' (biểu tượng cờ). (3) Chọn lý do: tin giả, giá không chính xác, ảnh không đúng, nội dung không phù hợp, lừa đảo. (4) Mô tả chi tiết (nếu có). (5) Gửi báo cáo. Đội ngũ SmartRent sẽ xem xét trong 24-48 giờ và xử lý nếu xác nhận vi phạm."
     },
     {
       "id": "feature_share_listing",
       "category": "platform_features",
-      "keywords": ["chia sẻ", "share", "gửi tin", "gửi link", "chia sẻ tin đăng"],
+      "keywords": [
+        "chia sẻ",
+        "share",
+        "gửi tin",
+        "gửi link",
+        "chia sẻ tin đăng",
+        "share listing",
+        "send link",
+        "forward listing",
+        "share with friend"
+      ],
       "question": "Cách chia sẻ tin đăng cho bạn bè?",
       "answer": "Để chia sẻ tin đăng: (1) Mở tin đăng muốn chia sẻ. (2) Nhấn nút 'Chia sẻ'. (3) Chọn kênh: sao chép link, chia sẻ qua Zalo, Facebook, hoặc tin nhắn. Mỗi tin đăng đều có link riêng, bạn có thể sao chép và gửi trực tiếp cho bất kỳ ai."
     },
     {
       "id": "feature_recommendations",
       "category": "platform_features",
-      "keywords": ["gợi ý", "đề xuất", "recommendation", "gợi ý cho tôi", "phù hợp với tôi", "tư vấn phòng"],
+      "keywords": [
+        "gợi ý",
+        "đề xuất",
+        "recommendation",
+        "gợi ý cho tôi",
+        "phù hợp với tôi",
+        "tư vấn phòng",
+        "recommendations",
+        "suggestions",
+        "personalized listings",
+        "recommended for me"
+      ],
       "question": "Hệ thống gợi ý BĐS trên SmartRent hoạt động như thế nào?",
       "answer": "SmartRent sử dụng AI để gợi ý BĐS phù hợp: (1) Dựa trên lịch sử tìm kiếm và xem tin của bạn. (2) Phân tích sở thích về vị trí, giá, loại BĐS. (3) Tìm các tin đăng tương tự với những tin bạn đã quan tâm. (4) Ưu tiên tin mới đăng và tin VIP. Bạn càng sử dụng SmartRent nhiều, gợi ý càng chính xác. Bạn cũng có thể hỏi chatbot 'gợi ý cho tôi' để nhận đề xuất."
     },
     {
       "id": "feature_verified_listing",
       "category": "platform_features",
-      "keywords": ["tin xác minh", "verified", "tin đã duyệt", "uy tín", "chất lượng tin"],
+      "keywords": [
+        "tin xác minh",
+        "verified",
+        "tin đã duyệt",
+        "uy tín",
+        "chất lượng tin",
+        "verified listing",
+        "trust badge",
+        "authenticated listing",
+        "quality check"
+      ],
       "question": "Tin đăng xác minh trên SmartRent là gì?",
       "answer": "Tin đăng xác minh là tin đã được SmartRent kiểm tra: (1) AI tự động phân tích ảnh và nội dung tin đăng. (2) Kiểm tra tính nhất quán giữa ảnh, mô tả và giá. (3) Đánh giá chất lượng ảnh và mức độ đầy đủ thông tin. Tin xác minh có nhãn đặc biệt, giúp người thuê an tâm hơn. Chủ nhà có thể tăng khả năng xác minh bằng cách đăng ảnh rõ ràng và mô tả chi tiết."
     },
     {
       "id": "feature_listing_expiry",
       "category": "platform_features",
-      "keywords": ["hết hạn", "gia hạn", "thời hạn tin", "expire", "renew", "đăng lại", "tin hết hạn"],
+      "keywords": [
+        "hết hạn",
+        "gia hạn",
+        "thời hạn tin",
+        "expire",
+        "renew",
+        "đăng lại",
+        "tin hết hạn",
+        "listing expired",
+        "renew listing",
+        "extend listing",
+        "expiration",
+        "republish"
+      ],
       "question": "Tin đăng hết hạn thì phải làm sao?",
       "answer": "Khi tin đăng hết hạn: (1) Tin sẽ không còn hiển thị trên trang tìm kiếm. (2) Bạn có thể gia hạn tin trong mục 'Quản lý tin đăng'. (3) Chọn 'Gia hạn' → chọn thời gian mới → thanh toán (nếu là tin VIP). (4) Tin gia hạn sẽ được cập nhật ngày đăng và hiển thị lại. Nếu BĐS đã cho thuê/bán, hãy đánh dấu 'Đã cho thuê' thay vì gia hạn."
     },
     {
       "id": "safety_viewing_tips",
       "category": "safety",
-      "keywords": ["an toàn", "xem phòng", "đi xem nhà", "gặp chủ nhà", "safety", "cẩn thận", "lưu ý khi xem"],
+      "keywords": [
+        "an toàn",
+        "xem phòng",
+        "đi xem nhà",
+        "gặp chủ nhà",
+        "safety",
+        "cẩn thận",
+        "lưu ý khi xem",
+        "viewing safety",
+        "safe viewing",
+        "safety tips visiting",
+        "visit property safely"
+      ],
       "question": "Lưu ý an toàn khi đi xem phòng/nhà?",
       "answer": "Để an toàn khi đi xem nhà: (1) Đi cùng bạn bè hoặc người thân, tránh đi một mình. (2) Hẹn xem vào ban ngày, ở khu vực công cộng gần đó. (3) Thông báo cho ai đó biết địa chỉ và thời gian đi xem. (4) Không mang theo nhiều tiền mặt hoặc đồ quý. (5) Kiểm tra khu vực xung quanh: an ninh, hàng xóm, tiện ích. (6) Không đặt cọc ngay trong lần xem đầu tiên — hãy suy nghĩ kỹ."
     },
     {
       "id": "safety_scam_detection",
       "category": "safety",
-      "keywords": ["lừa đảo", "scam", "tin giả", "cảnh giác", "phòng tránh", "dấu hiệu lừa đảo", "giả mạo"],
+      "keywords": [
+        "lừa đảo",
+        "scam",
+        "tin giả",
+        "cảnh giác",
+        "phòng tránh",
+        "dấu hiệu lừa đảo",
+        "giả mạo",
+        "spot a scam",
+        "rental scam signs",
+        "fake listing signs",
+        "fraud detection",
+        "avoid scam"
+      ],
       "question": "Cách nhận biết tin đăng lừa đảo trên các nền tảng BĐS?",
       "answer": "Dấu hiệu tin đăng lừa đảo: (1) Giá quá rẻ so với thị trường (rẻ hơn 30-50%). (2) Ảnh quá đẹp, có watermark của trang khác hoặc ảnh lấy từ internet. (3) Yêu cầu chuyển cọc trước khi xem nhà. (4) Chủ nhà không cho xem trực tiếp, chỉ trao đổi online. (5) Thông tin mâu thuẫn (ảnh và mô tả không khớp). (6) Số điện thoại liên hệ không hoạt động. Khi nghi ngờ, hãy báo cáo tin đăng trên SmartRent."
     },
     {
       "id": "safety_dispute",
       "category": "safety",
-      "keywords": ["tranh chấp", "khiếu nại", "dispute", "giải quyết", "vấn đề", "hỗ trợ", "phàn nàn"],
+      "keywords": [
+        "tranh chấp",
+        "khiếu nại",
+        "dispute",
+        "giải quyết",
+        "vấn đề",
+        "hỗ trợ",
+        "phàn nàn",
+        "dispute resolution",
+        "complaint",
+        "landlord conflict",
+        "report dispute",
+        "support"
+      ],
       "question": "Khi gặp tranh chấp với chủ nhà, SmartRent có hỗ trợ không?",
       "answer": "SmartRent hỗ trợ giải quyết tranh chấp: (1) Liên hệ bộ phận hỗ trợ qua email hoặc hotline trên trang SmartRent. (2) Cung cấp bằng chứng: hợp đồng, tin nhắn, ảnh chụp. (3) SmartRent sẽ xem xét và hòa giải giữa hai bên. (4) Trong trường hợp nghiêm trọng, SmartRent có thể cấm tài khoản vi phạm. Lưu ý: SmartRent khuyến nghị luôn ký hợp đồng và giao dịch qua nền tảng để có bằng chứng rõ ràng."
     },
     {
       "id": "safety_transaction_tips",
       "category": "safety",
-      "keywords": ["giao dịch an toàn", "thanh toán an toàn", "chuyển tiền", "đặt cọc an toàn", "trả tiền"],
+      "keywords": [
+        "giao dịch an toàn",
+        "thanh toán an toàn",
+        "chuyển tiền",
+        "đặt cọc an toàn",
+        "trả tiền",
+        "safe transaction",
+        "safe payment",
+        "secure deposit",
+        "payment safety"
+      ],
       "question": "Lời khuyên để giao dịch thuê nhà an toàn?",
       "answer": "Giao dịch thuê nhà an toàn: (1) Luôn xem nhà trực tiếp trước khi đặt cọc. (2) Kiểm tra giấy tờ sở hữu nhà của chủ nhà (sổ đỏ/hợp đồng thuê lại). (3) Ký hợp đồng thuê nhà có đầy đủ điều khoản. (4) Chuyển khoản ngân hàng thay vì tiền mặt để có chứng từ. (5) Giữ biên lai, hóa đơn tất cả các khoản thanh toán. (6) Chụp ảnh hiện trạng phòng khi nhận bàn giao."
     },
     {
       "id": "feature_chatbot_help",
       "category": "platform_features",
-      "keywords": ["chatbot", "trợ lý", "ai", "hỗ trợ", "trợ giúp", "bot", "tư vấn tự động", "hỏi đáp"],
+      "keywords": [
+        "chatbot",
+        "trợ lý",
+        "ai",
+        "hỗ trợ",
+        "trợ giúp",
+        "bot",
+        "tư vấn tự động",
+        "hỏi đáp",
+        "what can chatbot do",
+        "ai assistant",
+        "bot help",
+        "chatbot features"
+      ],
       "question": "Chatbot SmartRent có thể giúp gì?",
       "answer": "Chatbot AI SmartRent có thể hỗ trợ: (1) Tìm kiếm BĐS theo yêu cầu bằng ngôn ngữ tự nhiên. (2) Xem chi tiết và so sánh các tin đăng. (3) Đánh giá giá thuê có hợp lý không. (4) Gợi ý BĐS phù hợp với sở thích. (5) Trả lời câu hỏi về cách sử dụng SmartRent. (6) Tư vấn kinh nghiệm thuê nhà, pháp lý cơ bản. Bạn chỉ cần gõ yêu cầu bằng tiếng Việt và chatbot sẽ hỗ trợ."
     }

@@ -21,10 +21,11 @@ Flow per request
 import asyncio
 import functools
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vertexai.generative_models import Content, Part  # type: ignore[import]
+from google.genai import types  # type: ignore[import]
 
 from app.agent.rag.retriever import RAGRetriever
 from app.agent.tools.registry import ToolRegistry
@@ -36,6 +37,118 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 5  # safety cap — prevents infinite loops on misbehaving models
 REQUEST_TIMEOUT_SECONDS = 120  # overall timeout for one orchestrator.run() call
+
+# Token-budgeted sliding window — bounds LLM-bound history regardless of
+# session length. Two complementary caps are enforced:
+#   1. HISTORY_TOKEN_BUDGET — primary, character-based token estimate
+#   2. MAX_HISTORY_MESSAGES — hard safety cap if estimation drifts
+#
+# Walking newest-first: always keep the current user message, then accumulate
+# older messages until the token budget is exhausted. Entity continuity for
+# follow-ups like "details of #2" is preserved separately via the
+# `last_listings` field on ChatRequest, so we can drop old prose without
+# losing referential meaning.
+HISTORY_TOKEN_BUDGET = 4000  # ~3-4K tokens of history sent to LLM
+MAX_HISTORY_MESSAGES = 20  # hard cap (safety)
+
+# Listing-list compaction: assistant messages that enumerate listings as
+# `1. [ID:35201] ... 2. [ID:35202] ...` are bulky and re-sent every turn.
+# After the initial UI render, the listing IDs are the only thing the LLM
+# needs for follow-up. We compact such messages in the LLM-bound history
+# while keeping the FE-stored copy intact for the user-visible chat.
+_LISTING_ID_RE = re.compile(r"\[ID:(\d+)\]")
+_COMPACT_THRESHOLD = 2  # only compact when 2+ listing IDs present
+
+
+def _estimate_tokens(text: str) -> int:
+    """
+    Rough token estimate. Conservative (~3 chars/token) — Vietnamese is
+    slightly less efficient than English in Gemini's tokenizer, plus the
+    extra +5 covers role prefix and message overhead per turn.
+    """
+    return (len(text) // 3) + 5
+
+
+def _compact_assistant_message(content: str) -> str:
+    """
+    Compact assistant messages that enumerate listings. Preserves the leading
+    summary sentence and the listing IDs (so the model can still resolve
+    "cái thứ 2"-style references), drops the per-item titles/descriptions.
+
+    Returns content unchanged when fewer than `_COMPACT_THRESHOLD` listing
+    IDs are present.
+    """
+    ids = _LISTING_ID_RE.findall(content)
+    if len(ids) < _COMPACT_THRESHOLD:
+        return content
+
+    # Find the first line that contains a [ID:...] — that's where the
+    # numbered list begins. Take only the prose before that line as header.
+    lines = content.split("\n")
+    list_start = next(
+        (i for i, line in enumerate(lines) if _LISTING_ID_RE.search(line)),
+        len(lines),
+    )
+    header = "\n".join(lines[:list_start]).rstrip(" :\n").rstrip()
+    if not header:
+        header = "Đã trả về danh sách kết quả."
+
+    return f"{header}\n[Đã hiển thị {len(ids)} tin: {', '.join(ids)}]"
+
+
+def _trim_history(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """
+    Token-budgeted sliding window over conversation history.
+
+    Strategy:
+      1. Always keep the current (last) user message — that's the query.
+      2. Walk older messages newest-first, accumulating into the kept set
+         until either the token budget or the hard message cap is reached.
+      3. Ensure the trimmed window starts with a user message (Gemini chat
+         history requires user-first alternation).
+
+    The token budget is the primary cap; MAX_HISTORY_MESSAGES is a safety
+    fallback in case the character-based estimate drifts (e.g. very long
+    English passages tokenizing more efficiently than expected).
+    """
+    if not messages:
+        return messages
+
+    # Apply per-message compaction first so token accounting reflects what
+    # actually goes to the LLM, not the FE-stored verbatim version.
+    compacted = [
+        ChatMessage(
+            role=m.role,
+            content=(
+                _compact_assistant_message(m.content)
+                if m.role == "assistant"
+                else m.content
+            ),
+        )
+        for m in messages
+    ]
+
+    current = compacted[-1]
+    history = compacted[:-1]
+
+    used_tokens = _estimate_tokens(current.content)
+    kept: List[ChatMessage] = [current]
+
+    for msg in reversed(history):
+        if len(kept) >= MAX_HISTORY_MESSAGES:
+            break
+        msg_tokens = _estimate_tokens(msg.content)
+        if used_tokens + msg_tokens > HISTORY_TOKEN_BUDGET:
+            break
+        used_tokens += msg_tokens
+        kept.insert(0, msg)
+
+    # Conversation must start with a user message (Gemini requirement).
+    while kept and kept[0].role != "user":
+        kept = kept[1:]
+
+    return kept
+
 
 # ---------------------------------------------------------------------------
 # Result type
@@ -249,6 +362,18 @@ class AgentOrchestrator:
         Returns:
             AgentResult with the assistant message, optional listings, and metadata.
         """
+        original_count = len(messages)
+        messages = _trim_history(messages)
+        kept_tokens = sum(_estimate_tokens(m.content) for m in messages)
+        if len(messages) < original_count:
+            logger.info(
+                "Token-budgeted window: trimmed history %d → %d messages "
+                "(~%d tokens, budget=%d)",
+                original_count,
+                len(messages),
+                kept_tokens,
+                HISTORY_TOKEN_BUDGET,
+            )
         user_message = messages[-1].content
 
         try:
@@ -318,15 +443,24 @@ class AgentOrchestrator:
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            model = self._gateway.build_model(
-                model_name=settings.GEMINI_CHAT_MODEL,
-                system_instruction=system_instruction,
-                tools=self._tools.get_tool(),
-            )
-
             # ── 4. Build chat session with prior history ───────────────────
             history = _to_vertex_history(messages[:-1])
-            chat = self._gateway.start_chat(model, history)
+            tools_obj = self._tools.get_tool()
+            # Try to use Vertex CachedContent for the stable prefix.
+            # Returns None on first call / cache miss / unavailable — start_chat
+            # then falls back to passing system_instruction inline as before.
+            cached_content = await self._gateway.get_or_create_cache(
+                model_name=settings.GEMINI_CHAT_MODEL,
+                system_instruction=system_instruction,
+                tools=tools_obj,
+            )
+            chat = self._gateway.start_chat(
+                model_name=settings.GEMINI_CHAT_MODEL,
+                system_instruction=system_instruction,
+                tools=tools_obj,
+                history=history,
+                cached_content=cached_content,
+            )
 
             # ── 5. Agentic loop ────────────────────────────────────────────
             # Per-request RAG context rides on the user message so the
@@ -405,14 +539,15 @@ class AgentOrchestrator:
                     tools_used.append(fc.name)
 
                     tool_response_parts.append(
-                        Part.from_function_response(
+                        types.Part.from_function_response(
                             name=fc.name,
                             response=result,
                         )
                     )
 
                 # Feed all tool results back to the model in one turn
-                message_to_send = Content(role="user", parts=tool_response_parts)
+                # New SDK: pass the list of Parts directly; chat session adds role=user
+                message_to_send = tool_response_parts
 
             # ── 6. Extract final text ──────────────────────────────────────
             final_text = _extract_text(response)
@@ -446,7 +581,7 @@ class AgentOrchestrator:
     # Streaming entry point (SSE — ChatService.process_chat_stream)
     # ------------------------------------------------------------------
 
-    async def run_stream(
+    async def run_stream(  # noqa: C901
         self,
         messages: List[ChatMessage],
         session_id: Optional[str] = None,
@@ -461,12 +596,24 @@ class AgentOrchestrator:
         Events yielded (dicts with "event" + "data"):
             {"event": "status",   "data": {"phase": "thinking", "round": int}}
             {"event": "status",   "data": {"phase": "tool_call", "tool": str}}
-            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str}}
+            {"event": "status",   "data": {"phase": "tool_result", "tool": str, "status": str, "error"?: str}}
             {"event": "text",     "data": {"delta": str}}
             {"event": "listings", "data": {...listings payload...}}
             {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
             {"event": "error",    "data": {"message": str}}
         """
+        original_count = len(messages)
+        messages = _trim_history(messages)
+        kept_tokens = sum(_estimate_tokens(m.content) for m in messages)
+        if len(messages) < original_count:
+            logger.info(
+                "Token-budgeted window: trimmed history %d → %d messages "
+                "(~%d tokens, budget=%d)",
+                original_count,
+                len(messages),
+                kept_tokens,
+                HISTORY_TOKEN_BUDGET,
+            )
         user_message = messages[-1].content
 
         trace = self._gateway.create_trace(
@@ -475,7 +622,9 @@ class AgentOrchestrator:
             input={"message": user_message},
             metadata={
                 "model": settings.GEMINI_CHAT_MODEL,
-                "turns": len(messages),
+                "turns_original": original_count,
+                "turns_used": len(messages),
+                "history_tokens_est": kept_tokens,
                 "streamed": True,
             },
         )
@@ -505,13 +654,20 @@ class AgentOrchestrator:
                 self._static_prefix,
                 settings.MAX_LISTINGS_RETURN,
             )
-            model = self._gateway.build_model(
+            history = _to_vertex_history(messages[:-1])
+            tools_obj = self._tools.get_tool()
+            cached_content = await self._gateway.get_or_create_cache(
                 model_name=settings.GEMINI_CHAT_MODEL,
                 system_instruction=system_instruction,
-                tools=self._tools.get_tool(),
+                tools=tools_obj,
             )
-            history = _to_vertex_history(messages[:-1])
-            chat = self._gateway.start_chat(model, history)
+            chat = self._gateway.start_chat(
+                model_name=settings.GEMINI_CHAT_MODEL,
+                system_instruction=system_instruction,
+                tools=tools_obj,
+                history=history,
+                cached_content=cached_content,
+            )
 
             # ── Agentic loop ─────────────────────────────────────────────
             # Per-request RAG context rides on the user message so the
@@ -594,20 +750,23 @@ class AgentOrchestrator:
                     )
                     tools_used.append(fc.name)
 
-                    yield {
-                        "event": "status",
-                        "data": {
-                            "phase": "tool_result",
-                            "tool": fc.name,
-                            "status": result.get("status"),
-                        },
+                    tool_result_data: Dict[str, Any] = {
+                        "phase": "tool_result",
+                        "tool": fc.name,
+                        "status": result.get("status"),
                     }
+                    # Surface the error message to FE when a tool fails so
+                    # the UI can show it instead of a generic "tool failed".
+                    if result.get("status") == "error" and result.get("error"):
+                        tool_result_data["error"] = str(result["error"])[:500]
+                    yield {"event": "status", "data": tool_result_data}
 
                     tool_response_parts.append(
-                        Part.from_function_response(name=fc.name, response=result)
+                        types.Part.from_function_response(name=fc.name, response=result)
                     )
 
-                message_to_send = Content(role="user", parts=tool_response_parts)
+                # New SDK: pass the list of Parts directly; chat session adds role=user
+                message_to_send = tool_response_parts
 
             # ── Fallback text if model ended without prose ───────────────
             if not any_text_streamed:
@@ -651,12 +810,14 @@ class AgentOrchestrator:
 # ---------------------------------------------------------------------------
 
 
-def _to_vertex_history(messages: List[ChatMessage]) -> List[Content]:
-    """Convert ChatMessage list to Vertex AI Content objects."""
-    history: List[Content] = []
+def _to_vertex_history(messages: List[ChatMessage]) -> List[Any]:
+    """Convert ChatMessage list to google-genai Content objects."""
+    history: List[Any] = []
     for msg in messages:
         role = "user" if msg.role == "user" else "model"
-        history.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+        history.append(
+            types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
+        )
     return history
 
 
