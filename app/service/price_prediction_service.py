@@ -44,7 +44,7 @@ def _get_search_tool() -> Any:
             types.FunctionDeclaration(
                 name="search_listings",
                 description="Search for rental property listings in SmartRent database.",
-                parameters={
+                parameters={  # type: ignore[arg-type]
                     "type": "object",
                     "properties": {
                         "listing_type": {
