@@ -164,4 +164,13 @@ def default_model_settings(temperature: float = 0.7) -> ModelSettings:
             "thinking": {"type": "disabled"},
             "reasoning_effort": "disable",
         },
+        # Backup path: raw Vertex generationConfig.thinkingConfig. Some
+        # LiteLLM versions don't normalise the Anthropic-style `thinking`
+        # kwarg to Gemini's native field, so we set both. Vertex ignores
+        # unknown sibling keys — safe to pass.
+        extra_body={
+            "generationConfig": {
+                "thinkingConfig": {"thinkingBudget": 0},
+            },
+        },
     )
