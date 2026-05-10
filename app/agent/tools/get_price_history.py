@@ -11,7 +11,8 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 import httpx
-from google.genai import types  # type: ignore[import]
+from agents import RunContextWrapper, function_tool  # type: ignore[import]
+from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
@@ -30,90 +31,21 @@ def _compact_history_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-class GetPriceHistoryTool(BaseTool):
-    name = "get_price_history"
-    description = (
-        "Get pricing history, price statistics, or recent price changes for listings. "
-        "Use when the user asks about price trends, whether a listing's price has "
-        "changed, or wants to find listings with recent price drops. "
-        "Example: 'tin này có giảm giá không?', 'lịch sử giá', 'tin nào mới giảm giá?'."
-    )
+def _normalize_listing_id(raw_id: Optional[str]) -> Optional[str]:
+    if not raw_id:
+        return None
+    try:
+        return str(int(float(raw_id)))
+    except (ValueError, TypeError):
+        return raw_id
 
-    def to_function_declaration(self) -> Any:
-        return types.FunctionDeclaration(
-            name=self.name,
-            description=self.description,
-            parameters={  # type: ignore[arg-type]
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "description": (
-                            "'history' — full price change timeline for a listing. "
-                            "'statistics' — min/max/avg price and change counts. "
-                            "'recent_changes' — find listings with recent price changes."
-                        ),
-                        "enum": ["history", "statistics", "recent_changes"],
-                    },
-                    "listingId": {
-                        "type": "string",
-                        "description": (
-                            "Listing ID to check price history/statistics for. "
-                            "Required for 'history' and 'statistics' actions."
-                        ),
-                    },
-                    "daysBack": {
-                        "type": "integer",
-                        "description": (
-                            "Number of days to look back for 'recent_changes' action. "
-                            "Default 7. Example: 30 = price changes in the last month."
-                        ),
-                    },
-                },
-                "required": ["action"],
-            },
-        )
 
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
-        action = kwargs["action"]
-        raw_id = kwargs.get("listingId")
-        if raw_id:
-            try:
-                listing_id = str(int(float(raw_id)))
-            except (ValueError, TypeError):
-                listing_id = str(raw_id)
-        else:
-            listing_id = None
-        days_back = max(1, min(int(kwargs.get("daysBack", 7)), 365))
-
-        try:
-            if action == "history":
-                return await self._get_history(listing_id)
-            elif action == "statistics":
-                return await self._get_statistics(listing_id)
-            elif action == "recent_changes":
-                return await self._get_recent_changes(days_back)
-            else:
-                return {"status": "error", "error": f"Unknown action: {action}"}
-
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                "Backend HTTP %s for get_price_history", e.response.status_code
-            )
-            return {
-                "status": "error",
-                "error": f"Backend returned HTTP {e.response.status_code}",
-            }
-        except Exception as e:
-            logger.error("get_price_history failed: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
-
-    async def _get_history(self, listing_id: str | None) -> Dict[str, Any]:
-        if not listing_id:
-            return {
-                "status": "error",
-                "error": "listingId is required for 'history' action.",
-            }
+async def _get_history(listing_id: Optional[str]) -> Dict[str, Any]:
+    if not listing_id:
+        return {
+            "status": "error",
+            "error": "listingId is required for 'history' action.",
+        }
 
     data = await backend_client.get_pricing_history(int(listing_id))
     if "error" in data:

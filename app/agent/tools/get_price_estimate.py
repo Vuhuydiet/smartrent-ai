@@ -15,7 +15,8 @@ import os
 from datetime import datetime
 from typing import Annotated, Any, Dict, Optional
 
-from google.genai import types  # type: ignore[import]
+from agents import RunContextWrapper, function_tool  # type: ignore[import]
+from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 
@@ -147,80 +148,58 @@ def _rule_based_estimate(
     }
 
 
-# ---------------------------------------------------------------------------
-# Tool class
-# ---------------------------------------------------------------------------
-
-
-class GetPriceEstimateTool(BaseTool):
-    name = "get_price_estimate"
-    description = (
-        "Estimate the fair market monthly rental price for a property based on "
-        "its location, type, and size. Use this when the user asks whether a price "
-        "is reasonable, wants to know the going rate for a property, or wants to "
-        "compare a listing price against market expectations."
-    )
-
-    def to_function_declaration(self) -> Any:
-        return types.FunctionDeclaration(
-            name=self.name,
-            description=self.description,
-            parameters={  # type: ignore[arg-type]
-                "type": "object",
-                "properties": {
-                    "city": {
-                        "type": "string",
-                        "description": (
-                            "City/province name in Vietnamese or English "
-                            "(e.g. 'Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng')."
-                        ),
-                    },
-                    "district": {
-                        "type": "string",
-                        "description": "District name (e.g. 'Cầu Giấy', 'Quận 1').",
-                    },
-                    "ward": {
-                        "type": "string",
-                        "description": "Ward name (optional).",
-                    },
-                    "propertyType": {
-                        "type": "string",
-                        "description": "ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE.",
-                    },
-                    "area": {
-                        "type": "number",
-                        "description": "Property area in m².",
-                    },
-                    "latitude": {
-                        "type": "number",
-                        "description": "Latitude (improves ML model accuracy).",
-                    },
-                    "longitude": {
-                        "type": "number",
-                        "description": "Longitude (improves ML model accuracy).",
-                    },
-                    "askingPrice": {
-                        "type": "number",
-                        "description": (
-                            "Optional: the price being asked (VND/month). "
-                            "When provided, the tool also evaluates whether the price is fair."
-                        ),
-                    },
-                },
-                "required": ["city", "district", "propertyType", "area"],
-            },
-        )
-
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:  # noqa: C901
-        city: str = kwargs["city"]
-        district: str = kwargs["district"]
-        propertyType: str = kwargs["propertyType"]  # noqa: N806
-        area: float = float(kwargs["area"])
-        ward: str = kwargs.get("ward", "")
-        latitude: Optional[float] = kwargs.get("latitude")
-        longitude: Optional[float] = kwargs.get("longitude")
-        askingPrice: Optional[float] = kwargs.get("askingPrice")  # noqa: N806
-        predictor = _get_predictor()
+@function_tool(
+    name_override="get_price_estimate",
+    description_override=(
+        "Estimate the fair market monthly rental price for a property based "
+        "on its location, type, and size. Use this when the user asks whether "
+        "a price is reasonable, wants to know the going rate for a property, "
+        "or wants to compare a listing price against market expectations."
+    ),
+)
+async def get_price_estimate(
+    ctx: RunContextWrapper[ToolContext],
+    city: Annotated[
+        str,
+        Field(
+            description=(
+                "City/province name in Vietnamese or English "
+                "(e.g. 'Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng')."
+            )
+        ),
+    ],
+    district: Annotated[
+        str,
+        Field(description="District name (e.g. 'Cầu Giấy', 'Quận 1')."),
+    ],
+    propertyType: Annotated[
+        str,
+        Field(description="ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE."),
+    ],
+    area: Annotated[float, Field(description="Property area in m².")],
+    ward: Annotated[
+        Optional[str],
+        Field(description="Ward name (optional)."),
+    ] = None,
+    latitude: Annotated[
+        Optional[float],
+        Field(description="Latitude (improves ML model accuracy)."),
+    ] = None,
+    longitude: Annotated[
+        Optional[float],
+        Field(description="Longitude (improves ML model accuracy)."),
+    ] = None,
+    askingPrice: Annotated[
+        Optional[float],
+        Field(
+            description=(
+                "Optional: the price being asked (VND/month). When provided, "
+                "the tool also evaluates whether the price is fair."
+            )
+        ),
+    ] = None,
+) -> Dict[str, Any]:  # noqa: C901
+    predictor = _get_predictor()
 
     # --- ML model path -----------------------------------------------------
     if predictor is not None and latitude is not None and longitude is not None:
@@ -265,7 +244,7 @@ class GetPriceEstimateTool(BaseTool):
             )
 
     # --- Rule-based fallback ----------------------------------------------
-    result = _rule_based_estimate(city, district, propertyType, float(area))
+    result = _rule_based_estimate(city, district, propertyType, area)
 
     if askingPrice is not None:
         mid = (result["priceRange"]["min"] + result["priceRange"]["max"]) / 2

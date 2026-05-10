@@ -20,7 +20,6 @@ Flow per request
 import asyncio
 import functools
 import logging
-import re
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional, cast
 
@@ -42,6 +41,41 @@ logger = logging.getLogger(__name__)
 # rough equivalent of the old MAX_TOOL_ROUNDS=5 cap.
 MAX_AGENT_TURNS = 12
 REQUEST_TIMEOUT_SECONDS = 120
+
+# Rough token budget for the conversation history sent to the LLM. Covers a
+# few full turns of Vietnamese conversation while leaving headroom for the
+# system prompt + RAG context. We use a char-based heuristic (no tokenizer
+# dependency) — provider-side counting will differ but stays in the ballpark.
+HISTORY_TOKEN_BUDGET = 6000
+_CHARS_PER_TOKEN = 4  # rough average for Vietnamese text
+
+
+def _estimate_tokens(text: str) -> int:
+    """Approximate token count for a string (chars / 4)."""
+    return max(1, len(text) // _CHARS_PER_TOKEN)
+
+
+def _trim_history(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """
+    Drop oldest messages until the running total fits under HISTORY_TOKEN_BUDGET.
+
+    The last message (current user turn) is always kept. We accumulate from
+    the end backwards and stop once we'd exceed the budget.
+    """
+    if not messages:
+        return messages
+
+    kept_reversed: List[ChatMessage] = []
+    total = 0
+    for msg in reversed(messages):
+        cost = _estimate_tokens(msg.content)
+        # Always keep the last message (current user turn) even if it alone
+        # exceeds the budget — better to send something than nothing.
+        if kept_reversed and total + cost > HISTORY_TOKEN_BUDGET:
+            break
+        kept_reversed.append(msg)
+        total += cost
+    return list(reversed(kept_reversed))
 
 
 # ---------------------------------------------------------------------------

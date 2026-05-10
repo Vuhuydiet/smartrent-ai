@@ -7,7 +7,8 @@ import logging
 from typing import Annotated, Any, Dict
 
 import httpx
-from google.genai import types  # type: ignore[import]
+from agents import RunContextWrapper, function_tool  # type: ignore[import]
+from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
@@ -15,85 +16,19 @@ from app.core import backend_client
 logger = logging.getLogger(__name__)
 
 
-class GetUserInfoTool(BaseTool):
-    name = "get_user_info"
-    description = (
-        "Get the current user's account information. "
-        "Use when the user asks about their profile, subscription/membership, "
-        "or saved/bookmarked listings. "
-        "Example: 'tài khoản của tôi', 'gói dịch vụ của tôi', 'tin đã lưu'."
-    )
-
-    def to_function_declaration(self) -> Any:
-        return types.FunctionDeclaration(
-            name=self.name,
-            description=self.description,
-            parameters={  # type: ignore[arg-type]
-                "type": "object",
-                "properties": {
-                    "infoType": {
-                        "type": "string",
-                        "description": (
-                            "Type of information to retrieve: "
-                            "'profile' (user profile), "
-                            "'membership' (subscription/VIP status), "
-                            "'saved_listings' (bookmarked listings)."
-                        ),
-                        "enum": ["profile", "membership", "saved_listings"],
-                    },
-                },
-                "required": ["infoType"],
-            },
-        )
-
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
-        info_type = kwargs["infoType"]
-        context = kwargs.get("context") or {}
-        token = context.get("auth_token")
-
-        if not token:
-            return {
-                "status": "error",
-                "error": (
-                    "Người dùng chưa đăng nhập. "
-                    "Hãy hướng dẫn người dùng đăng nhập để xem thông tin tài khoản."
-                ),
-            }
-
-        try:
-            if info_type == "profile":
-                return await self._get_profile(token)
-            elif info_type == "membership":
-                return await self._get_membership(token)
-            elif info_type == "saved_listings":
-                return await self._get_saved(token)
-            else:
-                return {"status": "error", "error": f"Unknown info type: {info_type}"}
-
-        except httpx.HTTPStatusError as e:
-            logger.error("Backend HTTP %s for get_user_info", e.response.status_code)
-            return {
-                "status": "error",
-                "error": f"Backend returned HTTP {e.response.status_code}",
-            }
-        except Exception as e:
-            logger.error("get_user_info failed: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
-
-    async def _get_profile(self, token: str) -> Dict[str, Any]:
-        data = await backend_client.get_user_profile(token)
-        if "error" in data:
-            return {"status": "error", "error": data["error"]}
-
-        return {
-            "status": "success",
-            "profile": {
-                "name": f'{data.get("firstName", "")} {data.get("lastName", "")}'.strip(),
-                "email": data.get("email", ""),
-                "phone": data.get("contactPhoneNumber", ""),
-                "phoneVerified": data.get("contactPhoneVerified", False),
-            },
-        }
+async def _get_profile(token: str) -> Dict[str, Any]:
+    data = await backend_client.get_user_profile(token)
+    if "error" in data:
+        return {"status": "error", "error": data["error"]}
+    return {
+        "status": "success",
+        "profile": {
+            "name": f'{data.get("firstName", "")} {data.get("lastName", "")}'.strip(),
+            "email": data.get("email", ""),
+            "phone": data.get("contactPhoneNumber", ""),
+            "phoneVerified": data.get("contactPhoneVerified", False),
+        },
+    }
 
 
 async def _get_membership(token: str) -> Dict[str, Any]:
@@ -151,6 +86,39 @@ async def _get_saved(token: str) -> Dict[str, Any]:
     return {"status": "success", "count": 0, "savedListings": []}
 
 
+async def _dispatch_user_info(
+    ctx: RunContextWrapper[ToolContext], info_type: str
+) -> Dict[str, Any]:
+    """Core dispatch logic — separated so it can be called directly in tests."""
+    token = ctx.context.auth_token
+    if not token:
+        return {
+            "status": "error",
+            "error": (
+                "Người dùng chưa đăng nhập. "
+                "Hãy hướng dẫn người dùng đăng nhập để xem thông tin tài khoản."
+            ),
+        }
+
+    try:
+        if info_type == "profile":
+            return await _get_profile(token)
+        if info_type == "membership":
+            return await _get_membership(token)
+        if info_type == "saved_listings":
+            return await _get_saved(token)
+        return {"status": "error", "error": f"Unknown info type: {info_type}"}
+    except httpx.HTTPStatusError as e:
+        logger.error("Backend HTTP %s for get_user_info", e.response.status_code)
+        return {
+            "status": "error",
+            "error": f"Backend returned HTTP {e.response.status_code}",
+        }
+    except Exception as e:
+        logger.error("get_user_info failed: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 @function_tool(
     name_override="get_user_info",
     description_override=(
@@ -174,30 +142,4 @@ async def get_user_info(
         ),
     ],
 ) -> Dict[str, Any]:
-    token = ctx.context.auth_token
-    if not token:
-        return {
-            "status": "error",
-            "error": (
-                "Người dùng chưa đăng nhập. "
-                "Hãy hướng dẫn người dùng đăng nhập để xem thông tin tài khoản."
-            ),
-        }
-
-    try:
-        if infoType == "profile":
-            return await _get_profile(token)
-        if infoType == "membership":
-            return await _get_membership(token)
-        if infoType == "saved_listings":
-            return await _get_saved(token)
-        return {"status": "error", "error": f"Unknown info type: {infoType}"}
-    except httpx.HTTPStatusError as e:
-        logger.error("Backend HTTP %s for get_user_info", e.response.status_code)
-        return {
-            "status": "error",
-            "error": f"Backend returned HTTP {e.response.status_code}",
-        }
-    except Exception as e:
-        logger.error("get_user_info failed: %s", e, exc_info=True)
-        return {"status": "error", "error": str(e)}
+    return await _dispatch_user_info(ctx, infoType)

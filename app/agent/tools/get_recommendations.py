@@ -13,7 +13,8 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 import httpx
-from google.genai import types  # type: ignore[import]
+from agents import RunContextWrapper, function_tool  # type: ignore[import]
+from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
@@ -42,75 +43,15 @@ def _compact_recommendation_item(item: Dict[str, Any]) -> Dict[str, Any]:
     return summary
 
 
-class GetRecommendationsTool(BaseTool):
-    name = "get_recommendations"
-    description = (
-        "Get property recommendations for the user. "
-        "Use this when the user asks for suggestions, recommendations, or says "
-        "'gợi ý cho tôi', 'đề xuất phòng', 'tìm phòng phù hợp'. "
-        "Can also find listings similar to a specific listing the user likes."
-    )
-
-    def to_function_declaration(self) -> Any:
-        return types.FunctionDeclaration(
-            name=self.name,
-            description=self.description,
-            parameters={  # type: ignore[arg-type]
-                "type": "object",
-                "properties": {
-                    "listingId": {
-                        "type": "string",
-                        "description": (
-                            "Optional: ID of a listing to find similar ones. "
-                            "Use when user says 'tìm phòng tương tự' or likes a specific listing."
-                        ),
-                    },
-                    "topN": {
-                        "type": "integer",
-                        "description": "Number of recommendations to return (default 5, max 20).",
-                    },
-                },
-            },
-        )
-
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
-        raw_id = kwargs.get("listingId")
-        if raw_id:
-            try:
-                listing_id = str(int(float(raw_id)))
-            except (ValueError, TypeError):
-                listing_id = str(raw_id)
-        else:
-            listing_id = None
-        top_n = max(1, min(int(kwargs.get("topN", 5)), 20))
-
-        # Extract auth token from execution context if available
-        context = kwargs.get("context") or {}
-        token = context.get("auth_token")
-
-        try:
-            if listing_id:
-                return await self._similar(int(listing_id), top_n, token)
-            else:
-                return await self._personalized(top_n, token)
-        except httpx.HTTPStatusError as e:
-            logger.error("Backend HTTP %s for recommendations", e.response.status_code)
-            return {
-                "status": "error",
-                "error": f"Backend returned HTTP {e.response.status_code}",
-            }
-        except Exception as e:
-            logger.error("get_recommendations failed: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
-
-    async def _similar(
-        self, listing_id: int, top_n: int, token: str | None
-    ) -> Dict[str, Any]:
-        """Get similar listings from the backend recommendation engine."""
-        data = await backend_client.get_similar_listings(listing_id, top_n, token)
-
-        if "error" in data:
-            return {"status": "error", "error": data["error"]}
+async def _similar(
+    ctx: RunContextWrapper[ToolContext],
+    listing_id: int,
+    top_n: int,
+    token: Optional[str],
+) -> Dict[str, Any]:
+    data = await backend_client.get_similar_listings(listing_id, top_n, token)
+    if "error" in data:
+        return {"status": "error", "error": data["error"]}
 
     listings = data.get("listings", [])
     ctx.context.collected_listings.extend(listings)

@@ -8,10 +8,19 @@ Falls back to a rule-based estimate when the AI agent fails.
 
 import json
 import logging
-from typing import Any, Dict
+from dataclasses import dataclass, field
+from typing import Annotated, Any, Dict, List, Optional
 
-from google.genai import types  # type: ignore[import]
+import httpx
+from agents import (  # type: ignore[import]
+    Agent,
+    RunContextWrapper,
+    Runner,
+    function_tool,
+)
+from pydantic import Field
 
+from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
 from app.core import backend_client
 from app.core.config import settings
@@ -46,56 +55,79 @@ If no listings found, use estimation based on Vietnam rental market standards:
 - Da Nang: 130k-180k VND/m²/month"""
 
 
-def _get_search_tool() -> Any:
-    """Build google-genai Tool declaration for search_listings."""
-    return types.Tool(
-        function_declarations=[
-            types.FunctionDeclaration(
-                name="search_listings",
-                description="Search for rental property listings in SmartRent database.",
-                parameters={  # type: ignore[arg-type]
-                    "type": "object",
-                    "properties": {
-                        "listing_type": {
-                            "type": "string",
-                            "description": "Type of listing",
-                            "enum": ["RENT", "SELL"],
-                        },
-                        "latitude": {
-                            "type": "number",
-                            "description": "Latitude coordinate",
-                        },
-                        "longitude": {
-                            "type": "number",
-                            "description": "Longitude coordinate",
-                        },
-                        "radius_km": {
-                            "type": "number",
-                            "description": "Search radius in kilometers",
-                        },
-                        "product_type": {
-                            "type": "string",
-                            "description": "Property type",
-                            "enum": ["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"],
-                        },
-                        "min_area": {
-                            "type": "number",
-                            "description": "Minimum area in m²",
-                        },
-                        "max_area": {
-                            "type": "number",
-                            "description": "Maximum area in m²",
-                        },
-                        "size": {
-                            "type": "integer",
-                            "description": "Number of results to return",
-                        },
-                    },
-                    "required": ["listing_type", "latitude", "longitude"],
-                },
-            )
-        ]
-    )
+@dataclass
+class _PriceCtx:
+    """Context for the price-prediction agent."""
+
+    last_listings: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@function_tool(
+    name_override="search_comparable_listings",
+    description_override="Search for rental property listings in SmartRent database.",
+)
+async def _search_comparable_listings(
+    ctx: RunContextWrapper[_PriceCtx],
+    listing_type: Annotated[
+        str,
+        Field(
+            description="Type of listing",
+            json_schema_extra={"enum": ["RENT", "SELL"]},
+        ),
+    ],
+    latitude: Annotated[float, Field(description="Latitude coordinate")],
+    longitude: Annotated[float, Field(description="Longitude coordinate")],
+    radius_km: Annotated[
+        Optional[float], Field(description="Search radius in kilometers")
+    ] = None,
+    product_type: Annotated[
+        Optional[str],
+        Field(
+            description="Property type",
+            json_schema_extra={
+                "enum": ["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"]
+            },
+        ),
+    ] = None,
+    min_area: Annotated[
+        Optional[float], Field(description="Minimum area in m²")
+    ] = None,
+    max_area: Annotated[
+        Optional[float], Field(description="Maximum area in m²")
+    ] = None,
+    size: Annotated[
+        Optional[int], Field(description="Number of results to return")
+    ] = None,
+) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        "listingType": listing_type,
+        "latitude": latitude,
+        "longitude": longitude,
+        "excludeExpired": True,
+    }
+    if radius_km is not None:
+        params["radiusKm"] = radius_km
+    if product_type is not None:
+        params["propertyType"] = product_type
+    if min_area is not None:
+        params["minArea"] = min_area
+    if max_area is not None:
+        params["maxArea"] = max_area
+    if size is not None:
+        params["size"] = size
+
+    try:
+        data = await backend_client.search_listings(params)
+        listings = data.get("listings", [])
+        ctx.context.last_listings.extend(listings)
+        logger.info("price-search returned %d results", len(listings))
+        return {"listings": listings, "total": len(listings)}
+    except httpx.HTTPStatusError as e:
+        logger.error("Backend HTTP %s in price-search", e.response.status_code)
+        return {"listings": [], "total": 0, "error": str(e)}
+    except Exception as e:
+        logger.error("price-search failed: %s", e, exc_info=True)
+        return {"listings": [], "total": 0, "error": str(e)}
 
 
 class PricePredictionService:
@@ -120,62 +152,39 @@ class PricePredictionService:
             trace = self._gateway.create_trace(
                 name="price-prediction",
                 input={"location": f"{request.district}, {request.city}"},
-                metadata={"property_type": request.property_type},
+                metadata={
+                    "property_type": request.property_type,
+                    "model": settings.LLM_PRICE_MODEL,
+                    "provider": settings.LLM_PROVIDER,
+                },
             )
 
-            # Start chat with function-calling tool configured
-            chat = self._gateway.start_chat(
-                model_name=settings.GEMINI_PRICE_MODEL,
-                system_instruction=_SYSTEM_INSTRUCTION,
-                tools=_get_search_tool(),
+            agent = Agent[_PriceCtx](
+                name="Price Prediction Agent",
+                instructions=_SYSTEM_INSTRUCTION,
+                model=make_model(settings.LLM_PRICE_MODEL),
+                model_settings=default_model_settings(temperature=0.3),
+                tools=[_search_comparable_listings],
             )
 
-            # First call
-            response = await self._gateway.send_message(
-                chat, prompt, trace, span_name="price-initial"
+            generation = trace.generation(
+                name="price-agent-run",
+                model=settings.LLM_PRICE_MODEL,
+                input=prompt[:2000],
             )
-
-            # Handle function calls
-            round_num = 0
-            while round_num < 5:
-                parts = response.candidates[0].content.parts
-                function_calls = [
-                    p.function_call
-                    for p in parts
-                    if p.function_call is not None and p.function_call.name
-                ]
-                if not function_calls:
-                    break
-
-                tool_response_parts = []
-                for fc in function_calls:
-                    args = dict(fc.args) if fc.args else {}
-                    logger.info("Price prediction calling tool: %s", fc.name)
-                    result = await self._execute_tool(fc.name, args)
-                    tool_response_parts.append(
-                        types.Part.from_function_response(
-                            name=fc.name,
-                            response={"result": result},
-                        )
-                    )
-
-                response = await self._gateway.send_message(
-                    chat,
-                    tool_response_parts,
-                    trace,
-                    span_name=f"price-round-{round_num}",
-                )
-                round_num += 1
-
-            # Parse final response
             try:
-                result_text = response.text
-            except (ValueError, AttributeError):
-                result_text = ""
-                for part in response.candidates[0].content.parts:
-                    if part.text:
-                        result_text = part.text
-                        break
+                run_result = await Runner.run(
+                    starting_agent=agent,
+                    input=prompt,
+                    context=_PriceCtx(),
+                    max_turns=12,
+                )
+                result_text = str(run_result.final_output or "")
+                generation.end(output=result_text[:2000])
+            except Exception as e:
+                generation.end(level="ERROR", status_message=str(e))
+                raise
+
             trace.update(output={"response": result_text[:500]})
             result = self._parse_json(result_text)
 
