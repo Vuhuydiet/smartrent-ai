@@ -6,6 +6,7 @@ from . import (
     listing_verification,
     price_suggestion,
     recommendation,
+    search,
     users,
 )
 
@@ -29,4 +30,9 @@ api_router.include_router(
     recommendation.router,
     prefix="/api/v1/recommendations",
     tags=["Recommendations"],
+)
+api_router.include_router(
+    search.router,
+    prefix="/api/v1/search",
+    tags=["Search Parsing"],
 )
