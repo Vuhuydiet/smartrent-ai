@@ -304,6 +304,183 @@ async def get_recent_price_changes(
 
 
 # ---------------------------------------------------------------------------
+# Owner / dashboard endpoints
+# ---------------------------------------------------------------------------
+
+
+async def get_my_listings(
+    params: Optional[Dict[str, Any]] = None, token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    POST /v1/listings/my-listings
+
+    Owner-scoped paginated list with pre-computed `statistics` summary
+    (drafts/pendingVerification/rejected/active/expired counts + VIP tier
+    breakdown). Auth required.
+    """
+    body: Dict[str, Any] = {**(params or {})}
+    body.setdefault("page", 1)
+    body.setdefault("size", 20)
+
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/my-listings",
+            json=body,
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+    return {
+        "error": result.get("message", "Failed to fetch my listings"),
+        "code": result.get("code"),
+    }
+
+
+async def update_listing_price(
+    listing_id: str,
+    new_price: float,
+    token: Optional[str] = None,
+    effective_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    PUT /v1/listings/{listingId}/price
+
+    Owner-only. Records a new entry in pricing history. Auth required.
+    """
+    body: Dict[str, Any] = {"newPrice": new_price}
+    if effective_at:
+        body["effectiveAt"] = effective_at
+
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.put(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/price",
+            json=body,
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999":
+        return result.get("data") or {"updated": True}
+    return {
+        "error": result.get("message", "Failed to update price"),
+        "code": result.get("code"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Address translator endpoint
+# ---------------------------------------------------------------------------
+
+
+async def search_new_address(
+    keyword: str, page: int = 1, limit: int = 10
+) -> Dict[str, Any]:
+    """
+    GET /v1/addresses/search-new-address
+
+    Search across NEW (post-2025-07) provinces and wards by keyword. Public.
+    Used by the address_translator tool to find new-structure codes for a
+    district/ward name the user mentions.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/addresses/search-new-address",
+            params={"keyword": keyword, "page": page, "limit": limit},
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+    return {
+        "error": result.get("message", "Failed to search new address"),
+        "code": result.get("code"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+async def list_notifications(
+    page: int = 1, size: int = 20, token: Optional[str] = None
+) -> Dict[str, Any]:
+    """GET /v1/notifications — paginated. Auth required."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/notifications",
+            params={"page": page, "size": size},
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+    return {"error": result.get("message", "Failed to list notifications")}
+
+
+async def mark_all_notifications_read(token: Optional[str] = None) -> Dict[str, Any]:
+    """PATCH /v1/notifications/read-all. Auth required."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.patch(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/notifications/read-all",
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+    if result.get("code") == "999999":
+        return result.get("data") or {"updated": True}
+    return {"error": result.get("message", "Failed to mark all read")}
+
+
+# ---------------------------------------------------------------------------
+# Listing reports
+# ---------------------------------------------------------------------------
+
+
+async def get_report_reasons() -> Dict[str, Any]:
+    """GET /v1/listings/reports/reasons — public list of report categories."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.get(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/reports/reasons",
+        )
+        response.raise_for_status()
+        result = response.json()
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+    return {"error": result.get("message", "Failed to fetch report reasons")}
+
+
+async def submit_listing_report(
+    listing_id: str,
+    body: Dict[str, Any],
+    token: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    POST /v1/listings/{listingId}/reports
+
+    Body shape per backend: reasonIds[], otherFeedback, reporterName,
+    reporterPhone, reporterEmail. Auth optional (anonymous reports allowed).
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/reports",
+            json=body,
+            headers=_auth_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+    if result.get("code") == "999999":
+        return result.get("data") or {"submitted": True}
+    return {"error": result.get("message", "Failed to submit report")}
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

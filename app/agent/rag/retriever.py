@@ -232,13 +232,42 @@ class RAGRetriever:
     def get_system_prompt_prefix(self) -> str:
         """
         Return a static block injected into the system prompt once at startup.
-        It tells the model about all available province codes and common amenity IDs
-        so it can use them without requiring per-query retrieval.
+        Explains Vietnam's 2025-07 admin reform (63→34 provinces, 3-tier→2-tier),
+        province codes, LEGACY district codes, and common amenity IDs.
         """
         lines: List[str] = []
 
+        # Address structure explainer — must come BEFORE the codes so the
+        # model reads it in context. Backend resolves bidirectionally via
+        # address_mapping; AI normally sends provinceCode + districtId and
+        # lets backend do the lookup.
+        lines.append("CẤU TRÚC ĐỊA CHỈ (Việt Nam đổi cấu trúc hành chính 1/7/2025):")
+        lines.append("  - Cũ (3 tầng): tỉnh → quận/huyện → phường/xã. 63 tỉnh.")
+        lines.append(
+            "  - Mới (2 tầng): tỉnh → phường/xã (KHÔNG còn quận/huyện). 34 tỉnh."
+        )
+        lines.append(
+            "  - Listings có thể thuộc 1 trong 2 cấu trúc. Backend tự ánh xạ "
+            "(bidirectional) qua bảng address_mapping → bạn KHÔNG cần lo."
+        )
+        lines.append("  - Quy tắc khi gọi search_listings:")
+        lines.append("      • LUÔN gửi provinceCode (hoạt động cho cả 2 cấu trúc).")
+        lines.append(
+            "      • Khi user nói tên quận/huyện cũ (vd 'Bình Thạnh', 'Quận 1', "
+            "'Cầu Giấy') → gửi districtId (LEGACY 3-digit). Backend reverse-map "
+            "sang phường mới. Đây là cách user VN vẫn quen nói."
+        )
+        lines.append(
+            "      • Chỉ gửi newWardCode khi user nói rõ tên phường mới VÀ bạn "
+            "có code từ tài liệu — tình huống hiếm."
+        )
+
         # Province codes
-        lines.append("MÃ TỈNH/THÀNH PHỐ (dùng cho tham số provinceCode):")
+        lines.append("")
+        lines.append(
+            "MÃ TỈNH/THÀNH PHỐ (dùng cho tham số provinceCode — chuỗi 2 ký tự, "
+            "hoạt động cho cả cấu trúc cũ lẫn mới):"
+        )
         for p in self._provinces:
             aliases = ", ".join(p.get("aliases", []))
             lines.append(
@@ -246,7 +275,10 @@ class RAGRetriever:
             )
 
         lines.append("")
-        lines.append("MÃ QUẬN/HUYỆN (dùng cho tham số districtId — kiểu INTEGER):")
+        lines.append(
+            "MÃ QUẬN/HUYỆN (dùng cho tham số districtId — kiểu INTEGER, LEGACY "
+            "pre-2025-07; backend tự reverse-map sang phường mới):"
+        )
         for prov_code, districts in self._districts.items():
             prov_name = next(
                 (p["name"] for p in self._provinces if p["code"] == prov_code),
