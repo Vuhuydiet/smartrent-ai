@@ -17,7 +17,9 @@ class ChatService:
 
     def __init__(self) -> None:
         # Initialises the singleton orchestrator (and all its dependencies)
-        # on the first request. Raises ValueError if GCP_PROJECT_ID is missing.
+        # on the first request. Raises ValueError if the configured LLM
+        # provider has no API key set (e.g. GEMINI_API_KEY for the gemini
+        # provider).
         self._orchestrator = get_orchestrator()
 
     async def process_chat(

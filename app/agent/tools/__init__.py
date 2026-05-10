@@ -1,36 +1,41 @@
-from app.agent.tools.base_tool import BaseTool
-from app.agent.tools.get_listing_detail import GetListingDetailTool
-from app.agent.tools.get_price_estimate import GetPriceEstimateTool
-from app.agent.tools.get_price_history import GetPriceHistoryTool
-from app.agent.tools.get_recommendations import GetRecommendationsTool
-from app.agent.tools.get_user_info import GetUserInfoTool
-from app.agent.tools.registry import ToolRegistry
-from app.agent.tools.save_listing import SaveListingTool
-from app.agent.tools.search_listings import SearchListingsTool
+"""
+Public registry for all chat-agent tools.
+
+Tools are plain `@function_tool` decorated coroutines — pass them straight
+into `Agent(tools=[...])`. No per-tool class hierarchy is needed.
+"""
+
+from typing import Any, List
+
+from app.agent.tools.get_listing_detail import get_listing_detail
+from app.agent.tools.get_price_estimate import get_price_estimate
+from app.agent.tools.get_price_history import get_price_history
+from app.agent.tools.get_recommendations import get_recommendations
+from app.agent.tools.get_user_info import get_user_info
+from app.agent.tools.save_listing import save_listing
+from app.agent.tools.search_listings import search_listings
 
 
-def build_default_registry() -> ToolRegistry:
-    """Build and return a ToolRegistry pre-loaded with all agent tools."""
-    registry = ToolRegistry()
-    registry.register(SearchListingsTool())
-    registry.register(GetListingDetailTool())
-    registry.register(GetPriceEstimateTool())
-    registry.register(GetPriceHistoryTool())
-    registry.register(GetRecommendationsTool())
-    registry.register(GetUserInfoTool())
-    registry.register(SaveListingTool())
-    return registry
+def get_chat_tools() -> List[Any]:
+    """Return the list of @function_tool callables registered with the chat agent."""
+    return [
+        search_listings,
+        get_listing_detail,
+        get_price_estimate,
+        get_price_history,
+        get_recommendations,
+        get_user_info,
+        save_listing,
+    ]
 
 
 __all__ = [
-    "BaseTool",
-    "ToolRegistry",
-    "SearchListingsTool",
-    "GetListingDetailTool",
-    "GetPriceEstimateTool",
-    "GetPriceHistoryTool",
-    "GetRecommendationsTool",
-    "GetUserInfoTool",
-    "SaveListingTool",
-    "build_default_registry",
+    "get_chat_tools",
+    "search_listings",
+    "get_listing_detail",
+    "get_price_estimate",
+    "get_price_history",
+    "get_recommendations",
+    "get_user_info",
+    "save_listing",
 ]

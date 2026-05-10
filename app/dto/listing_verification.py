@@ -206,7 +206,7 @@ class ListingVerificationResponse(BaseModel):
         description="Suggested action for the backend",
     )
     verification_timestamp: datetime = Field(default_factory=datetime.now)
-    model_used: str = Field(default_factory=lambda: settings.GEMINI_VISION_MODEL)
+    model_used: str = Field(default_factory=lambda: settings.LLM_VISION_MODEL)
     processing_time_seconds: Optional[float] = None
 
 

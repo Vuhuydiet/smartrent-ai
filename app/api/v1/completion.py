@@ -1,10 +1,12 @@
 import logging
 from typing import Optional
 
+from agents import Agent, ModelSettings, Runner  # type: ignore[import]
 from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException, status
 
+from app.ai.llm.agent_factory import make_model
 from app.ai.llm.gateway import get_gateway
 from app.core.config import settings
 
@@ -28,9 +30,9 @@ class CompletionResponse(BaseModel):
 @router.post("/", response_model=CompletionResponse, status_code=status.HTTP_200_OK)
 async def completion(request: CompletionRequest) -> CompletionResponse:
     """
-    Raw completion endpoint: sends a prompt directly to Gemini via the shared
-    LLMGateway (so all calls are traced through Langfuse and benefit from
-    quota retry). Used by backend to generate listing descriptions.
+    Raw completion endpoint — sends a prompt to the configured LLM provider
+    via the OpenAI Agents SDK. Used by the backend to generate listing
+    descriptions. Calls are traced through Langfuse via the gateway.
     """
     if not request.prompt or not request.prompt.strip():
         raise HTTPException(
@@ -38,39 +40,40 @@ async def completion(request: CompletionRequest) -> CompletionResponse:
         )
 
     gateway = get_gateway()
-    model_name = request.model or settings.GEMINI_CHAT_MODEL
+    model_name = request.model or settings.LLM_CHAT_MODEL
 
-    generation_config: dict = {}
+    settings_kwargs: dict = {}
     if request.temperature is not None:
-        generation_config["temperature"] = request.temperature
+        settings_kwargs["temperature"] = request.temperature
     if request.max_tokens is not None:
-        generation_config["max_output_tokens"] = request.max_tokens
+        settings_kwargs["max_tokens"] = request.max_tokens
 
     trace = gateway.create_trace(
         name="completion",
         input=request.prompt[:500],
-        metadata={"model": model_name},
+        metadata={"model": model_name, "provider": settings.LLM_PROVIDER},
     )
 
+    agent = Agent(
+        name="Raw Completion",
+        instructions="Respond with exactly what the user asks for. Do not add commentary.",
+        model=make_model(model_name),
+        model_settings=ModelSettings(**settings_kwargs),
+    )
+
+    span = trace.generation(
+        name="completion-generate",
+        model=model_name,
+        input=request.prompt[:2000],
+    )
     try:
-        response = await gateway.generate(
-            prompt=request.prompt,
-            model_name=model_name,
-            generation_config=generation_config or None,
-            trace=trace,
-            span_name="completion-generate",
+        result = await Runner.run(
+            starting_agent=agent,
+            input=request.prompt,
+            max_turns=2,
         )
-
-        # Safe text extraction — response.text raises ValueError on non-text parts
-        try:
-            text = response.text
-        except (ValueError, AttributeError):
-            text = ""
-            for part in response.candidates[0].content.parts:
-                if getattr(part, "text", None):
-                    text = part.text
-                    break
-
+        text = str(result.final_output or "")
+        span.end(output=text[:2000])
         trace.update(output={"text": text[:500]})
 
         return CompletionResponse(text=text, model_used=model_name)
@@ -78,6 +81,7 @@ async def completion(request: CompletionRequest) -> CompletionResponse:
     except HTTPException:
         raise
     except Exception as e:
+        span.end(level="ERROR", status_message=str(e))
         logger.error("Error calling completion endpoint: %s", e, exc_info=True)
         trace.update(output={"error": str(e)})
         raise HTTPException(

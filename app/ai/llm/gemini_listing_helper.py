@@ -1,23 +1,45 @@
+"""
+Listing-verification helper.
+
+Uses the OpenAI Agents SDK to send a vision-enabled prompt to the configured
+LLM provider (Gemini by default via LiteLLM) and parse the JSON output.
+The class name is kept for backward compatibility with services that import
+`GeminiListingVerificationHelper`; under the hood, the provider is selectable.
+
+Video handling: the OpenAI Responses input format does not have a native
+video type. We extract keyframes from each video (via OpenCV in
+`app.utils.video_utils.extract_keyframes`) and feed them as additional images.
+Videos that fail keyframe extraction are skipped with a warning.
+"""
+
 import asyncio
+import base64
 import json
 import logging
 import re
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, cast
 
 import httpx
+from agents import Agent, Runner  # type: ignore[import]
 from PIL import Image
 
+from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_MAX_IMAGES = 8
 
 
 class GeminiListingVerificationHelper:
     """
-    Enhanced Gemini client specifically for listing verification with multimodal capabilities.
+    Multimodal listing-verification helper. Wraps a single-turn Agents-SDK
+    `Agent` (no tools) and parses the JSON response.
 
-    Uses LLMGateway so all calls are traced through Langfuse.
+    Despite the legacy name, this class is provider-agnostic — see
+    `app.ai.llm.agent_factory.make_model`.
     """
 
     def __init__(self) -> None:
@@ -34,157 +56,80 @@ class GeminiListingVerificationHelper:
         text_content: str,
         analysis_prompt: str,
     ) -> Dict[str, Any]:
-        """
-        Analyze images and videos along with text content.
-        """
+        """Analyze images and (keyframes from) videos along with text content."""
         try:
             # Download images and videos in parallel
-            images_task = self._download_images(image_urls)
-            videos_task = self._download_videos(video_urls)
-            image_objects, video_objects = await asyncio.gather(
-                images_task, videos_task
-            )
+            images_task = self._download_image_data_uris(image_urls)
+            videos_task = self._download_video_bytes(video_urls)
+            image_uris, video_blobs = await asyncio.gather(images_task, videos_task)
 
             logger.info(
-                "Media download complete: %d images, %d videos loaded successfully.",
-                len(image_objects),
-                len(video_objects),
+                "Media download complete: %d images, %d videos loaded.",
+                len(image_uris),
+                len(video_blobs),
             )
 
-            # Extract keyframes from videos if possible to speed up
-            processed_images = list(image_objects)
-            final_videos = []
-
+            # Extract keyframes from videos to feed alongside the images
+            extra_image_uris = await self._video_keyframes_to_data_uris(video_blobs)
+            all_image_uris = image_uris + extra_image_uris
             logger.info(
-                "Starting media processing: %d images, %d video objects",
-                len(processed_images),
-                len(video_objects),
+                "Final payload: %d images (incl. %d keyframes from %d videos)",
+                len(all_image_uris),
+                len(extra_image_uris),
+                len(video_blobs),
             )
 
-            try:
-                from app.utils.video_utils import extract_keyframes
-
-                for v_data in video_objects:
-                    try:
-                        logger.info("Attempting keyframe extraction for a video...")
-                        frames = extract_keyframes(v_data["data"])
-                        if frames:
-                            logger.info(
-                                "Extracted %d frames from video to speed up analysis",
-                                len(frames),
-                            )
-                            processed_images.extend(frames)
-                        else:
-                            logger.warning(
-                                "No frames extracted from video, falling back to full video"
-                            )
-                            final_videos.append(v_data)
-                    except Exception as ve:
-                        logger.error(
-                            "Keyframe extraction failed for a video: %s. Falling back.",
-                            ve,
-                        )
-                        final_videos.append(v_data)
-            except ImportError:
-                logger.warning("OpenCV not found, sending full videos to Gemini")
-                final_videos = video_objects
-            except Exception as e:
-                logger.error("Unexpected error in video processing block: %s", e)
-                final_videos = video_objects
-
-            if not processed_images and not final_videos:
+            if not all_image_uris:
                 logger.warning(
-                    "No media downloaded (images: %d, videos: %d). Falling back to text-only.",
-                    len(image_objects),
-                    len(video_objects),
+                    "No usable media after processing; falling back to text-only."
                 )
                 return await self.analyze_text_content(text_content, analysis_prompt)
 
-            logger.info(
-                "Final payload: %d images, %d videos",
-                len(processed_images),
-                len(final_videos),
-            )
-
             full_prompt = (
-                "CRITICAL: YOU MUST ANALYZE ALL ATTACHED MEDIA (IMAGES/VIDEOS) CAREFULLY.\n"
-                "I am providing you with actual binary media data alongside this text.\n"
+                "CRITICAL: YOU MUST ANALYZE ALL ATTACHED MEDIA CAREFULLY.\n"
                 f"{analysis_prompt}\n\n"
                 "### TEXT DATA TO VERIFY:\n"
                 f"{text_content}\n\n"
                 "### YOUR TASK:\n"
-                "1. Cross-reference the provided text with the visual details in the images and videos.\n"
-                "2. Check for stock photos/videos, watermarks, and consistency.\n"
+                "1. Cross-reference the provided text with the visual details in the images.\n"
+                "2. Check for stock photos, watermarks, and consistency.\n"
                 "3. Ensure the media matches the described property.\n"
                 "4. Return valid JSON only."
             )
 
+            content_parts: List[Dict[str, Any]] = [
+                {"type": "input_text", "text": full_prompt}
+            ]
+            for uri in all_image_uris:
+                content_parts.append(
+                    {"type": "input_image", "detail": "auto", "image_url": uri}
+                )
+            input_items = [{"role": "user", "content": content_parts}]
+
             trace = self._gateway.create_trace(
                 name="listing-verification",
                 metadata={
-                    "image_count": len(image_objects),
-                    "video_count": len(video_objects),
+                    "image_count": len(image_uris),
+                    "video_count": len(video_blobs),
+                    "extra_keyframes": len(extra_image_uris),
                     "mode": "multimodal",
+                    "model": settings.LLM_VISION_MODEL,
                 },
             )
 
-            response = await self._gateway.generate_multimodal(
-                prompt=full_prompt,
-                images=processed_images,
-                videos=final_videos,
-                system_instruction=self.create_system_instruction(),
-                generation_config={
-                    "temperature": 0.0,
-                    "response_mime_type": "application/json",
-                },
-                trace=trace,
+            response_text = await self._run_one_shot(
+                input_items, trace, span_name="verify-multimodal", temperature=0.0
             )
-
-            return self._handle_api_response(self._response_text(response))
+            return self._handle_api_response(response_text)
 
         except Exception as e:
             logger.error("Multimodal analysis failed: %s", e, exc_info=True)
             return self._handle_generation_error(str(e))
 
-    async def _download_videos(self, urls: List[str]) -> List[Dict[str, Any]]:
-        """Download videos in parallel and prepare for Gemini."""
-        if not urls:
-            return []
-
-        async def _download_one(i, url, client):
-            try:
-                logger.info("Attempting to download video %d from: %s", i + 1, url)
-                # Limit to 10MB for speed
-                resp = await client.get(
-                    url, headers={"Range": "bytes=0-10485760"}, timeout=20.0
-                )
-
-                if resp.status_code not in [200, 206]:
-                    resp = await client.get(url, timeout=30.0)
-
-                if resp.status_code in [200, 206] and len(resp.content) > 0:
-                    mime_type = resp.headers.get("Content-Type", "video/mp4")
-                    return {"data": resp.content, "mime_type": mime_type}
-            except Exception as e:
-                logger.error("Exception downloading video %d: %s", i + 1, str(e))
-            return None
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        }
-
-        async with httpx.AsyncClient(headers=headers) as client:
-            tasks = [_download_one(i, url, client) for i, url in enumerate(urls)]
-            results = await asyncio.gather(*tasks)
-
-        return [v for v in results if v is not None]
-
     async def analyze_text_content(
         self, text_content: str, analysis_prompt: str
     ) -> Dict[str, Any]:
-        """
-        Analyze text content for listing verification (no images).
-        """
+        """Analyze text content for listing verification (no images)."""
         try:
             full_prompt = (
                 f"{analysis_prompt}\n\n"
@@ -194,23 +139,14 @@ class GeminiListingVerificationHelper:
 
             trace = self._gateway.create_trace(
                 name="listing-verification",
-                metadata={"mode": "text-only"},
+                metadata={"mode": "text-only", "model": settings.LLM_VISION_MODEL},
             )
 
-            response = await self._gateway.generate(
-                prompt=full_prompt,
-                system_instruction=self.create_system_instruction(),
-                generation_config={
-                    "temperature": 0.0,
-                    "top_p": 0.95,
-                    "max_output_tokens": 4096,
-                    "response_mime_type": "application/json",
-                },
-                trace=trace,
-                span_name="verify-text",
+            input_items = [{"role": "user", "content": full_prompt}]
+            response_text = await self._run_one_shot(
+                input_items, trace, span_name="verify-text", temperature=0.0
             )
-
-            return self._handle_api_response(self._response_text(response))
+            return self._handle_api_response(response_text)
 
         except Exception as e:
             import traceback
@@ -221,7 +157,7 @@ class GeminiListingVerificationHelper:
             return self._handle_generation_error(str(e))
 
     def create_system_instruction(self) -> str:
-        """Create a concise system instruction for fast listing verification"""
+        """Concise system instruction for fast listing verification."""
         return """
 You are an AI expert in rental property listing verification.
 ### CORE RULES:
@@ -256,47 +192,70 @@ You are an AI expert in rental property listing verification.
     # Private helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _response_text(response: Any) -> str:
-        """
-        Safely extract text from a google-genai response.
+    async def _run_one_shot(
+        self,
+        input_items: List[Dict[str, Any]],
+        trace: Any,
+        *,
+        span_name: str,
+        temperature: float,
+    ) -> str:
+        """Run a one-shot Agent (no tools) and return its final text output."""
+        agent = Agent(
+            name="Listing Verifier",
+            instructions=self.create_system_instruction(),
+            model=make_model(settings.LLM_VISION_MODEL),
+            model_settings=default_model_settings(temperature=temperature),
+        )
 
-        `response.text` raises ValueError when the response contains no
-        text parts (safety filter, empty candidate, function call).
-        Fall back to iterating parts and return empty string if nothing.
-        """
+        generation = trace.generation(
+            name=span_name,
+            model=settings.LLM_VISION_MODEL,
+            input=str(input_items[0])[:2000],
+        )
         try:
-            text = response.text
-            return text.strip() if text else ""
-        except (ValueError, AttributeError):
-            pass
-        try:
-            for part in response.candidates[0].content.parts:
-                if getattr(part, "text", None):
-                    return part.text.strip()
-        except (AttributeError, IndexError):
-            pass
-        return ""
+            result = await Runner.run(
+                starting_agent=agent,
+                input=cast(Any, input_items),
+                max_turns=2,
+            )
+            text = str(result.final_output or "")
+            generation.end(output=text[:2000])
+            return text
+        except Exception as e:
+            generation.end(level="ERROR", status_message=str(e))
+            raise
 
     @staticmethod
-    async def _download_images(image_urls: List[str], max_images: int = 8) -> List[Any]:
-        """
-        Download and preprocess images from URLs concurrently.
+    def _pil_to_data_uri(img: Image.Image, *, max_dim: int = 1024) -> str:
+        """Encode a PIL image as a base64 JPEG data URI."""
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        if img.width > max_dim or img.height > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{b64}"
 
-        Uses httpx.AsyncClient so we don't block the event loop while waiting
-        on network IO, and PIL decoding is offloaded to a worker thread so the
-        loop keeps serving other requests during CPU-bound image resizing.
-        """
-        urls = image_urls[:max_images]
+    @classmethod
+    async def _download_image_data_uris(cls, image_urls: List[str]) -> List[str]:
+        """Download image URLs concurrently and return base64 data URIs."""
+        urls = image_urls[:_MAX_IMAGES]
         if not urls:
             return []
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            ),
         }
-        async with httpx.AsyncClient(headers=headers, timeout=5.0) as client:
 
-            async def _fetch_and_decode(i: int, url: str) -> Any:
+        async with httpx.AsyncClient(headers=headers, timeout=10.0) as client:
+
+            async def _fetch(i: int, url: str) -> Optional[str]:
                 try:
                     resp = await client.get(url)
                     if resp.status_code != 200:
@@ -308,37 +267,109 @@ You are an AI expert in rental property listing verification.
                         return None
                     content = resp.content
 
-                    def _decode() -> Image.Image:
+                    def _encode() -> str:
                         img: Image.Image = Image.open(BytesIO(content))
-                        if img.mode != "RGB":
-                            img = img.convert("RGB")
-                        # Resize to 512px max - This is the most effective way to speed up
-                        if img.width > 512 or img.height > 512:
-                            img.thumbnail((512, 512), Image.Resampling.LANCZOS)
-                        return img
+                        return cls._pil_to_data_uri(img)
 
-                    pil_image = await asyncio.to_thread(_decode)
-                    logger.info("Successfully processed image %d", i + 1)
-                    return pil_image
+                    return await asyncio.to_thread(_encode)
                 except Exception as e:
                     logger.error("Error processing image %d: %s", i + 1, e)
                     return None
 
             results = await asyncio.gather(
-                *(_fetch_and_decode(i, url) for i, url in enumerate(urls))
+                *(_fetch(i, url) for i, url in enumerate(urls))
             )
 
-        return [img for img in results if img is not None]
+        return [u for u in results if u is not None]
+
+    @staticmethod
+    async def _download_video_bytes(urls: List[str]) -> List[bytes]:
+        """Download videos concurrently. Caps each video at ~10MB."""
+        if not urls:
+            return []
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            ),
+        }
+
+        async with httpx.AsyncClient(headers=headers) as client:
+
+            async def _fetch(i: int, url: str) -> Optional[bytes]:
+                try:
+                    logger.info("Downloading video %d: %s", i + 1, url)
+                    resp = await client.get(
+                        url,
+                        headers={"Range": "bytes=0-10485760"},
+                        timeout=20.0,
+                    )
+                    if resp.status_code not in (200, 206):
+                        resp = await client.get(url, timeout=30.0)
+                    if resp.status_code in (200, 206) and len(resp.content) > 0:
+                        return resp.content
+                except Exception as e:
+                    logger.error("Exception downloading video %d: %s", i + 1, e)
+                return None
+
+            results = await asyncio.gather(
+                *(_fetch(i, url) for i, url in enumerate(urls))
+            )
+
+        return [b for b in results if b is not None]
+
+    @classmethod
+    async def _video_keyframes_to_data_uris(cls, video_blobs: List[bytes]) -> List[str]:
+        """
+        Extract keyframes from each video (best-effort) and return them as
+        base64 data URIs. Videos that fail extraction are skipped silently
+        (with a warning) since the OpenAI Responses input format has no
+        native video type.
+        """
+        if not video_blobs:
+            return []
+
+        try:
+            from app.utils.video_utils import extract_keyframes
+        except ImportError:
+            logger.warning(
+                "OpenCV not available — videos cannot be analyzed (no keyframe extraction)."
+            )
+            return []
+
+        all_uris: List[str] = []
+        for idx, blob in enumerate(video_blobs):
+            try:
+                frames = await asyncio.to_thread(extract_keyframes, blob)
+            except Exception as e:
+                logger.error("Keyframe extraction failed for video %d: %s", idx + 1, e)
+                continue
+
+            if not frames:
+                logger.warning("No keyframes extracted from video %d", idx + 1)
+                continue
+
+            for f in frames:
+                try:
+                    uri = await asyncio.to_thread(cls._pil_to_data_uri, f)
+                    all_uris.append(uri)
+                except Exception as e:
+                    logger.error(
+                        "Failed encoding keyframe from video %d: %s", idx + 1, e
+                    )
+
+        return all_uris
 
     @staticmethod
     def _parse_json_response(response_text: str) -> Dict[str, Any]:
-        """Parse JSON response with fallback handling."""
+        """Parse JSON response with multiple fallbacks."""
         try:
             return json.loads(response_text)
         except json.JSONDecodeError:
             pass
 
-        # Try extracting JSON object from response
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_match:
             try:
@@ -346,7 +377,6 @@ You are an AI expert in rental property listing verification.
             except json.JSONDecodeError:
                 pass
 
-        # Try fixing incomplete JSON
         if response_text.count("{") > response_text.count("}"):
             missing = response_text.count("{") - response_text.count("}")
             try:
@@ -363,44 +393,49 @@ You are an AI expert in rental property listing verification.
 
     @classmethod
     def _handle_api_response(cls, response_text: str) -> Dict[str, Any]:
-        """Handle and parse API response with sanitization."""
-        logger.info("Raw Gemini response: %s...", response_text[:500])
-        data = cls._parse_json_response(response_text)
+        """Strip markdown fences, parse JSON, sanitize known shape issues."""
+        logger.info("Raw verification response: %s...", response_text[:500])
 
-        # Sanitize 'missing_fields' in 'reason' to ensure it's a list (Fixes Pydantic validation error)
+        text = response_text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+        data = cls._parse_json_response(text)
+
+        # Sanitize 'missing_fields' in 'reason' to ensure it's a list.
         if "reason" in data and isinstance(data["reason"], dict):
-            if "missing_fields" in data["reason"]:
-                if not isinstance(data["reason"]["missing_fields"], list):
-                    logger.warning(
-                        "Sanitizing 'reason.missing_fields' from %s to []",
-                        type(data["reason"]["missing_fields"]),
-                    )
-                    data["reason"]["missing_fields"] = []
+            mf = data["reason"].get("missing_fields")
+            if mf is not None and not isinstance(mf, list):
+                logger.warning(
+                    "Sanitizing 'reason.missing_fields' from %s to []", type(mf)
+                )
+                data["reason"]["missing_fields"] = []
 
-        # Sanitize 'missing_fields' in 'completeness_validation'
         if "completeness_validation" in data and isinstance(
             data["completeness_validation"], dict
         ):
-            if "missing_fields" in data["completeness_validation"]:
-                if not isinstance(
-                    data["completeness_validation"]["missing_fields"], list
-                ):
-                    logger.warning(
-                        "Sanitizing 'completeness_validation.missing_fields' from %s to []",
-                        type(data["completeness_validation"]["missing_fields"]),
-                    )
-                    data["completeness_validation"]["missing_fields"] = []
+            mf = data["completeness_validation"].get("missing_fields")
+            if mf is not None and not isinstance(mf, list):
+                logger.warning(
+                    "Sanitizing 'completeness_validation.missing_fields' from %s to []",
+                    type(mf),
+                )
+                data["completeness_validation"]["missing_fields"] = []
 
         return data
 
     @staticmethod
     def _handle_generation_error(error_msg: str) -> Dict[str, Any]:
-        """Handle generation errors with appropriate responses."""
+        """Map errors to a structured payload the service layer understands."""
         logger.error("Error in analysis: %s", error_msg)
 
         if "quota exceeded" in error_msg.lower() or "429" in error_msg:
             return {"error": "quota exceeded", "analysis_completed": False}
-        elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+        if "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
             return {"error": "invalid api key", "analysis_completed": False}
-        else:
-            return {"error": error_msg, "analysis_completed": False}
+        return {"error": error_msg, "analysis_completed": False}

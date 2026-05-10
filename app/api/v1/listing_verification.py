@@ -119,7 +119,7 @@ async def health_check() -> Dict[str, Any]:
             "status": "healthy",
             "service": "listing_verification",
             "version": "1.0.0",
-            "ai_model": settings.GEMINI_VISION_MODEL,
+            "ai_model": settings.LLM_VISION_MODEL,
             "capabilities": [
                 "image_analysis",
                 "content_verification",

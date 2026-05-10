@@ -18,6 +18,10 @@ dependencies = [
     "python-multipart>=0.0.9",
     "httpx>=0.27.0",
     "pydantic[email]",
+    "openai-agents>=0.0.18",
+    "litellm>=1.55.0",
+    # Required by litellm when LLM_PROVIDER=gemini and Vertex AI auth is used
+    # (GCP_CREDENTIALS_BASE64). Not used for direct Vertex calls in app code.
     "google-cloud-aiplatform>=1.60.0",
     "google-genai>=1.0.0",
     "langfuse>=2.7.0,<3.0.0",
@@ -99,8 +103,9 @@ exclude = [
 module = [
     "alembic.*",
     "pymysql.*",
-    "vertexai.*",
-    "google.cloud.aiplatform.*",
+    "agents.*",
+    "agents.extensions.*",
+    "litellm.*",
     "langfuse.*",
 ]
 ignore_missing_imports = true
