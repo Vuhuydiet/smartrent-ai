@@ -100,6 +100,16 @@ class AgentResult:
 _SYSTEM_BASE = """\
 Bạn là trợ lý AI của SmartRent - nền tảng cho thuê và mua bán bất động sản thông minh tại Việt Nam.
 
+PHONG CÁCH PHẢN HỒI — RẤT QUAN TRỌNG (ảnh hưởng tới UX):
+- TRƯỚC khi gọi BẤT KỲ tool nào → viết 1 câu ngắn (5-15 từ tiếng Việt) giới thiệu việc bạn sắp làm. Vd:
+  * "Để mình tìm thử các căn ở Bình Thạnh trong khoảng 5-10 triệu nhé..."
+  * "Mình đang xem chi tiết tin số 35201..."
+  * "Mình so sánh 3 tin này cho bạn..."
+  * "Mình kiểm tra danh sách tin của bạn..."
+  Câu này được STREAM ra ngay trước tool call → user thấy "AI đang gõ" thay vì im lặng. KHÔNG được bỏ qua bước này.
+- SAU khi tool xong → tiếp tục viết bình thường (kết quả + giải thích).
+- Quy tắc này áp dụng cho tool đầu tiên ở mỗi turn. Nếu cùng turn có nhiều tool liên tiếp (vd round 2 sau search), KHÔNG cần lặp lại — chỉ tự nhiên nối tiếp prose.
+
 PHẠM VI HỖ TRỢ - Bạn CHỈ được hỗ trợ các chủ đề sau:
 1. Tìm kiếm, tra cứu bất động sản cho thuê hoặc mua bán (căn hộ, nhà, phòng trọ, văn phòng, studio)
 2. Thông tin về giá thuê/bán, diện tích, vị trí, tiện nghi của bất động sản
@@ -287,6 +297,140 @@ def _tool_names_used(new_items: List[Any]) -> List[str]:
             if name:
                 names.append(name)
     return names
+
+
+# ---------------------------------------------------------------------------
+# Streaming UX: rich tool_call status events
+# ---------------------------------------------------------------------------
+
+# Short Vietnamese label per tool — surfaces in the SSE status event so the
+# FE can show "Đang tìm BĐS ở Bình Thạnh..." instead of a generic spinner.
+# Keep ≤25 chars; the FE may append derived params (location, price band).
+_TOOL_LABELS: Dict[str, str] = {
+    "search_listings": "Đang tìm BĐS",
+    "get_listing_detail": "Đang xem chi tiết tin",
+    "compare_listings": "Đang so sánh tin",
+    "get_price_estimate": "Đang ước tính giá",
+    "get_price_history": "Đang xem lịch sử giá",
+    "get_recommendations": "Đang gợi ý tin phù hợp",
+    "get_user_info": "Đang lấy thông tin tài khoản",
+    "save_listing": "Đang xử lý lưu tin",
+    "bulk_save_listings": "Đang lưu nhiều tin",
+    "my_listings_status": "Đang kiểm tra tin của bạn",
+    "address_translator": "Đang tra cứu địa chỉ",
+    "update_listing_price": "Đang xử lý cập nhật giá",
+    "notifications_inbox": "Đang xem thông báo",
+    "report_listing": "Đang xử lý báo cáo",
+}
+
+# Filter heavy / token-burner fields out of the args dict the FE sees.
+_ARG_DROP_KEYS = frozenset({"context", "auth_token"})
+
+
+def _parse_tool_arguments(raw: Any) -> Dict[str, Any]:
+    """
+    Best-effort parse of a tool_call item's raw arguments.
+
+    The OpenAI Responses API returns `arguments` as a JSON string on the
+    raw_item; fallback paths handle dict-shaped raw items and exceptions
+    (logged at debug; UI degrades to no-args display).
+    """
+    args_raw = getattr(raw, "arguments", None)
+    if args_raw is None and isinstance(raw, dict):
+        args_raw = raw.get("arguments")
+    if isinstance(args_raw, dict):
+        parsed = args_raw
+    elif isinstance(args_raw, str):
+        try:
+            import json
+
+            parsed = json.loads(args_raw)
+        except Exception:  # noqa: BLE001
+            return {}
+    else:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {k: v for k, v in parsed.items() if k not in _ARG_DROP_KEYS}
+
+
+def _friendly_tool_summary(name: str, args: Dict[str, Any]) -> str:
+    """
+    Build a one-line Vietnamese summary of what the tool is about to do.
+
+    Surfaces in the SSE `tool_call` status event so the FE can show a
+    contentful spinner ("Đang tìm phòng ở Bình Thạnh giá 5-10tr...") rather
+    than just the tool name. Falls back to the static label.
+    """
+    label = _TOOL_LABELS.get(name, "Đang xử lý")
+
+    if name == "search_listings":
+        bits: List[str] = []
+        if args.get("districtId"):
+            bits.append(f"quận {args['districtId']}")
+        elif args.get("provinceCode"):
+            bits.append(f"tỉnh {args['provinceCode']}")
+        types = args.get("productTypes") or (
+            [args["productType"]] if args.get("productType") else []
+        )
+        if types:
+            label_map = {
+                "ROOM": "phòng",
+                "APARTMENT": "căn hộ",
+                "HOUSE": "nhà",
+                "STUDIO": "studio",
+                "OFFICE": "văn phòng",
+            }
+            bits.append("/".join(label_map.get(t, t) for t in types))
+        if args.get("minPrice") and args.get("maxPrice"):
+            mn = int(args["minPrice"]) // 1_000_000
+            mx = int(args["maxPrice"]) // 1_000_000
+            bits.append(f"giá {mn}-{mx}tr")
+        elif args.get("maxPrice"):
+            mx = int(args["maxPrice"]) // 1_000_000
+            bits.append(f"dưới {mx}tr")
+        if bits:
+            return f"{label}: " + " ".join(bits) + "..."
+
+    if name == "get_listing_detail" and args.get("listingId"):
+        return f"{label} #{args['listingId']}..."
+
+    if name == "compare_listings":
+        ids = args.get("listingIds") or []
+        if isinstance(ids, list) and ids:
+            return f"{label}: {len(ids)} tin..."
+
+    if name == "save_listing":
+        action = args.get("action", "save")
+        verb = "Đang bỏ lưu" if action == "unsave" else "Đang lưu"
+        if args.get("listingId"):
+            return f"{verb} tin #{args['listingId']}..."
+        return f"{verb} tin..."
+
+    if name == "bulk_save_listings":
+        ids = args.get("listingIds") or []
+        action = args.get("action", "save")
+        verb = "Đang bỏ lưu" if action == "unsave" else "Đang lưu"
+        if isinstance(ids, list) and ids:
+            return f"{verb} {len(ids)} tin..."
+
+    if name == "address_translator" and args.get("query"):
+        return f"{label}: {args['query']}..."
+
+    if name == "my_listings_status":
+        focus = args.get("focus") or "all"
+        focus_map = {
+            "expiring": "tin sắp hết hạn",
+            "rejected": "tin bị từ chối",
+            "active": "tin đang hiển thị",
+        }
+        if focus in focus_map:
+            return f"Đang kiểm tra {focus_map[focus]}..."
+
+    if name == "update_listing_price" and args.get("newPrice"):
+        return f"{label} thành {int(args['newPrice']):,} VND..."
+
+    return f"{label}..."
 
 
 # ---------------------------------------------------------------------------
@@ -629,9 +773,15 @@ class AgentOrchestrator:
                         name = getattr(raw, "name", "") or ""
                         if name:
                             tools_used.append(name)
+                            args = _parse_tool_arguments(raw)
                             yield {
                                 "event": "status",
-                                "data": {"phase": "tool_call", "tool": name},
+                                "data": {
+                                    "phase": "tool_call",
+                                    "tool": name,
+                                    "summary": _friendly_tool_summary(name, args),
+                                    "args": args,
+                                },
                             }
                     elif item_type == "tool_call_output_item":
                         name = ""
