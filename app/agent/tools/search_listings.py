@@ -2,8 +2,16 @@
 Tool: search_listings — calls the SmartRent backend and returns a compact
 summary for the LLM. Raw listings are appended to ToolContext.collected_listings
 so the orchestrator can return them to the frontend.
+
+Supports a single `productType` (exact term) OR a `productTypes` array (for
+ambiguous Vietnamese terms like "nhà trọ" that span multiple backend enum
+values). When multiple types are passed, we fan out one backend call per
+type in parallel and merge results — the backend's `productType` filter
+is a single-enum match, so this is the only way to get a union without a
+backend change.
 """
 
+import asyncio
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
@@ -17,6 +25,8 @@ from app.core import backend_client
 logger = logging.getLogger(__name__)
 
 _MAX_SIZE = 50  # hard cap — prevents overloading the backend
+_MAX_PRODUCT_TYPES = 5
+_VALID_PRODUCT_TYPES = frozenset({"ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"})
 
 
 def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -86,6 +96,84 @@ async def _do_search(
         return {"status": "error", "error": str(e)}
 
 
+async def _do_multi_type_search(
+    ctx: RunContextWrapper[ToolContext],
+    params: Dict[str, Any],
+    product_types: List[str],
+) -> Dict[str, Any]:
+    """
+    Fan out one backend call per `productType` in `product_types`, then merge.
+
+    Pagination semantics: each underlying call asks for `size` items from
+    page `page`. We dedupe by listingId and keep insertion order across
+    types. totalCount returned is SUM across types (slight over-count when
+    a listing somehow appears in multiple — rare since the backend's
+    productType is a strict single-enum match).
+    """
+    size = params.get("size", 5)
+    logger.info(
+        "search_listings multi-type fan-out: types=%s size=%d",
+        product_types,
+        size,
+    )
+
+    async def _one(pt: str) -> Dict[str, Any]:
+        sub = {**params, "productType": pt}
+        try:
+            return await backend_client.search_listings(sub)
+        except httpx.HTTPStatusError as e:
+            logger.warning("multi-type %s HTTP %s", pt, e.response.status_code)
+            return {"error": f"HTTP {e.response.status_code}", "listings": []}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("multi-type %s failed: %s", pt, e)
+            return {"error": str(e), "listings": []}
+
+    results = await asyncio.gather(*(_one(pt) for pt in product_types))
+
+    merged_raw: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+    total_count = 0
+    per_type_counts: Dict[str, int] = {}
+    for pt, data in zip(product_types, results):
+        if "error" in data and not data.get("listings"):
+            per_type_counts[pt] = 0
+            continue
+        sub_listings = data.get("listings") or []
+        per_type_counts[pt] = len(sub_listings)
+        total_count += int(data.get("totalCount") or 0)
+        for item in sub_listings:
+            lid = str(item.get("listingId", ""))
+            if lid and lid not in seen_ids:
+                seen_ids.add(lid)
+                merged_raw.append(item)
+
+    merged_raw = merged_raw[:size]
+    ctx.context.collected_listings.extend(merged_raw)
+
+    return {
+        "status": "success",
+        "count": len(merged_raw),
+        "totalCount": total_count,
+        "currentPage": params.get("page", 1),
+        "pageSize": size,
+        "productTypes": product_types,
+        "perTypeCount": per_type_counts,
+        "listings": [_compact_search_item(item) for item in merged_raw],
+    }
+
+
+def _normalise_product_types(raw: Optional[List[str]]) -> List[str]:
+    """Uppercase, dedupe, validate against enum, cap at _MAX_PRODUCT_TYPES."""
+    if not isinstance(raw, list):
+        return []
+    out: List[str] = []
+    for t in raw:
+        tt = str(t).upper().strip()
+        if tt in _VALID_PRODUCT_TYPES and tt not in out:
+            out.append(tt)
+    return out[:_MAX_PRODUCT_TYPES]
+
+
 @function_tool(
     name_override="search_listings",
     description_override=(
@@ -107,8 +195,11 @@ async def search_listings(
         Optional[str],
         Field(
             description=(
-                "Province/city code. Common values: 01=Hà Nội, 79=TP. Hồ Chí Minh, "
-                "48=Đà Nẵng, 92=Cần Thơ, 31=Hải Phòng."
+                "Province code — works for BOTH old (63-province, pre-2025-07) "
+                "and new (34-province, post-reform) structures; backend resolves "
+                "bidirectionally. PREFERRED location parameter. Values: "
+                "01=Hà Nội, 79=TP. Hồ Chí Minh, 48=Đà Nẵng, 92=Cần Thơ, "
+                "31=Hải Phòng. Always set when the user mentions a province."
             )
         ),
     ] = None,
@@ -116,21 +207,75 @@ async def search_listings(
         Optional[str],
         Field(
             description=(
-                "Province/city ID (same value as provinceCode). Sent together "
-                "with provinceCode for backward compatibility."
+                "LEGACY province ID (pre-reform). Same numeric value as "
+                "provinceCode for major cities. Set alongside provinceCode "
+                "for backward compatibility with old-structure listings."
             )
         ),
     ] = None,
     districtId: Annotated[
         Optional[int],
-        Field(description="District ID (integer). E.g. 760=Quận 1, 765=Bình Thạnh."),
+        Field(
+            description=(
+                "LEGACY district ID (pre-2025-07 3-tier structure). Use when "
+                "the user names a district like 'Bình Thạnh', 'Quận 1', 'Cầu "
+                "Giấy' — districts no longer exist in the new 2-tier structure, "
+                "but the backend reverse-maps districtId to new ward codes via "
+                "address_mapping. Examples: 760=Quận 1, 765=Bình Thạnh, "
+                "1=Ba Đình."
+            )
+        ),
+    ] = None,
+    newWardCode: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "NEW ward code (post-2025-07 2-tier structure). Use ONLY when "
+                "the user explicitly names a post-reform ward AND you have its "
+                "exact code. For ordinary queries by district name, prefer "
+                "districtId — backend handles the mapping."
+            )
+        ),
+    ] = None,
+    wardId: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "LEGACY ward ID (pre-reform). Rarely needed; prefer districtId "
+                "or newWardCode. Backend resolves to new ward codes via "
+                "address_mapping."
+            )
+        ),
     ] = None,
     productType: Annotated[
         Optional[str],
         Field(
             description=(
-                "ROOM (phòng trọ), APARTMENT (chung cư), HOUSE (nhà nguyên căn), "
-                "OFFICE (văn phòng), STUDIO (căn hộ studio)."
+                "Single property type — use ONLY for unambiguous Vietnamese "
+                "terms. For ambiguous terms like 'nhà trọ', use `productTypes` "
+                "(array) instead. Exact mapping:\n"
+                "  ROOM       ← 'phòng trọ', 'phòng đơn', 'phòng cho thuê'\n"
+                "  APARTMENT  ← 'căn hộ', 'chung cư'\n"
+                "  HOUSE      ← 'nhà nguyên căn', 'nhà riêng'\n"
+                "  STUDIO     ← 'studio', 'căn hộ studio'\n"
+                "  OFFICE     ← 'văn phòng', 'office'\n"
+                "If `productTypes` is also set, this single value is ignored."
+            )
+        ),
+    ] = None,
+    productTypes: Annotated[
+        Optional[List[str]],
+        Field(
+            description=(
+                "Multiple property types to search across (results merged + "
+                "deduped). Use for AMBIGUOUS Vietnamese terms where intent "
+                "spans types:\n"
+                "  'nhà trọ', 'trọ' → ['ROOM', 'APARTMENT'] (VN usage covers "
+                "both small rentals and apartments)\n"
+                "  'thuê nhà', 'tìm nhà' → ['ROOM', 'APARTMENT', 'HOUSE'] "
+                "(broad rental search, exclude OFFICE/STUDIO)\n"
+                "Leave UNSET (and leave productType UNSET) for fully open "
+                "queries like 'có gì cho thuê ở Q1?'. Max 5 types."
             )
         ),
     ] = None,
@@ -226,6 +371,8 @@ async def search_listings(
         "provinceCode": provinceCode,
         "provinceId": provinceId,
         "districtId": districtId,
+        "newWardCode": newWardCode,
+        "wardId": wardId,
         "productType": productType,
         "listingType": listingType,
         "minPrice": minPrice,
@@ -257,5 +404,14 @@ async def search_listings(
         params.setdefault("provinceId", params["provinceCode"])
     elif "provinceId" in params:
         params.setdefault("provinceCode", params["provinceId"])
+
+    # productTypes (array) wins over productType (single). When 2+ types are
+    # passed, fan out and merge. A 1-element array collapses to a single call.
+    types_list = _normalise_product_types(productTypes)
+    if len(types_list) >= 2:
+        params.pop("productType", None)
+        return await _do_multi_type_search(ctx, params, types_list)
+    if len(types_list) == 1:
+        params["productType"] = types_list[0]
 
     return await _do_search(ctx, params)

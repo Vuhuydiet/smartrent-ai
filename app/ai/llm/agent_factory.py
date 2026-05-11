@@ -139,5 +139,38 @@ def make_model(model_name: Optional[str] = None) -> Model:
 
 
 def default_model_settings(temperature: float = 0.7) -> ModelSettings:
-    """Centralised place to tweak temperature/top_p across all agents."""
-    return ModelSettings(temperature=temperature)
+    """
+    Centralised place to tweak temperature/top_p/thinking across all agents.
+
+    Gemini 2.5 thinking tokens are disabled by default for the chat agent
+    path: AgentOrchestrator already runs its own tool-dispatch loop, so the
+    invisible 5-10s of "thought" Gemini spends before generating output on
+    round 2+ adds zero accuracy and is the dominant cause of perceived
+    "the response arrived all at once" UX. The kwargs reach LiteLLM via
+    `extra_args` and are forwarded to Vertex/Google AI Studio:
+
+      - `thinking={"type": "disabled"}` — Anthropic-style key LiteLLM
+        normalises across providers.
+      - `reasoning_effort="disable"` — OpenAI-style key, accepted by
+        Gemini 2.5 via LiteLLM as an alias for the same.
+
+    Set both for compatibility — LiteLLM picks whichever the underlying
+    provider accepts and drops the other when `litellm.drop_params=True`
+    (default for unsupported kwargs).
+    """
+    return ModelSettings(
+        temperature=temperature,
+        extra_args={
+            "thinking": {"type": "disabled"},
+            "reasoning_effort": "disable",
+        },
+        # Backup path: raw Vertex generationConfig.thinkingConfig. Some
+        # LiteLLM versions don't normalise the Anthropic-style `thinking`
+        # kwarg to Gemini's native field, so we set both. Vertex ignores
+        # unknown sibling keys — safe to pass.
+        extra_body={
+            "generationConfig": {
+                "thinkingConfig": {"thinkingBudget": 0},
+            },
+        },
+    )

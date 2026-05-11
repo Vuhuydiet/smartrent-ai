@@ -1,5 +1,6 @@
 {
   "_note": "Province codes follow Vietnam's official administrative division (ĐVHC). District codes should be verified against the SmartRent backend GET /v1/locations/districts API.",
+  "_structure_note": "Vietnam reorganised its admin units on 2025-07-01: the old 3-tier structure (63 provinces → district → ward) was replaced by a new 2-tier one (34 provinces → ward, no districts). This file mixes both: 'provinces' use post-reform 2-digit codes (still 79 for HCMC, 01 for Hà Nội etc.), while 'districts' are LEGACY pre-reform 3-digit codes (e.g. 765=Bình Thạnh) that no longer exist as admin units. Listings in the DB can be stored under either structure (Address.address_type = OLD | NEW); the backend reverse-maps districtId to new ward codes via the address_mapping table on every search. AI agents should keep sending provinceCode + districtId because Vietnamese users still refer to old district names in conversation; the backend handles the bidirectional mapping. New ward codes (5-digit) are NOT in this file yet.",
   "provinces": [
     {
       "code": "01",
