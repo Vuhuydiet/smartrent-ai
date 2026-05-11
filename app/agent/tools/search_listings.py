@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_SIZE = 50  # hard cap — prevents overloading the backend
 _MAX_PRODUCT_TYPES = 5
-_VALID_PRODUCT_TYPES = frozenset(
-    {"ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"}
-)
+_VALID_PRODUCT_TYPES = frozenset({"ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"})
 
 
 def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:

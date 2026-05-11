@@ -58,11 +58,7 @@ def _legacy_match(query: str) -> Optional[Dict[str, Any]]:
             for candidate in [d["name"]] + d.get("aliases", []):
                 if qn == _normalise(candidate) or qn in _normalise(candidate):
                     prov_name = next(
-                        (
-                            p["name"]
-                            for p in rag._provinces
-                            if p["code"] == prov_code
-                        ),
+                        (p["name"] for p in rag._provinces if p["code"] == prov_code),
                         prov_code,
                     )
                     return {
@@ -108,10 +104,8 @@ async def _do_translate(query: str) -> Dict[str, Any]:
                         or item.get("newProvinceCode"),
                         "provinceName": item.get("provinceName")
                         or item.get("newProvinceName"),
-                        "wardCode": item.get("wardCode")
-                        or item.get("newWardCode"),
-                        "wardName": item.get("wardName")
-                        or item.get("newWardName"),
+                        "wardCode": item.get("wardCode") or item.get("newWardCode"),
+                        "wardName": item.get("wardName") or item.get("newWardName"),
                     }
                 )
     except httpx.HTTPStatusError as e:

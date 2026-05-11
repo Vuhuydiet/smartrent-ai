@@ -47,9 +47,7 @@ def _attention_listings(listings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return flagged
 
 
-async def _do_my_listings_status(
-    token: str, focus: str
-) -> Dict[str, Any]:
+async def _do_my_listings_status(token: str, focus: str) -> Dict[str, Any]:
     """Core logic — separated so it can be called directly in tests."""
     params: Dict[str, Any] = {"page": 1, "size": 50}
     if focus == "expiring":

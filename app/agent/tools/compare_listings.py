@@ -47,9 +47,7 @@ def _normalise_for_comparison(data: Dict[str, Any]) -> Dict[str, Any]:
     addr = data.get("address") or {}
     price = data.get("price")
     area = data.get("area")
-    amenities = [
-        a.get("name") for a in (data.get("amenities") or []) if a.get("name")
-    ]
+    amenities = [a.get("name") for a in (data.get("amenities") or []) if a.get("name")]
     row: Dict[str, Any] = {
         "listingId": str(data.get("listingId", "")),
         "title": data.get("title", ""),

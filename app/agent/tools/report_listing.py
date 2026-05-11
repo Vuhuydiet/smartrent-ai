@@ -97,9 +97,7 @@ async def _do_report(
         body["otherFeedback"] = other_feedback
 
     try:
-        data = await backend_client.submit_listing_report(
-            listing_id, body, token=token
-        )
+        data = await backend_client.submit_listing_report(listing_id, body, token=token)
     except httpx.HTTPStatusError as e:
         logger.error("submit_listing_report HTTP %s", e.response.status_code)
         return {
@@ -152,17 +150,14 @@ async def report_listing(
     reasonIds: Annotated[
         Optional[List[int]],
         Field(
-            description=(
-                "Reason IDs the user selected. Required when confirm=true."
-            )
+            description=("Reason IDs the user selected. Required when confirm=true.")
         ),
     ] = None,
     otherFeedback: Annotated[
         Optional[str],
         Field(
             description=(
-                "Optional free-text detail from the user about what looked "
-                "off."
+                "Optional free-text detail from the user about what looked " "off."
             )
         ),
     ] = None,

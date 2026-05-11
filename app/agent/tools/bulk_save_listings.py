@@ -97,9 +97,7 @@ async def _do_bulk_save(
     elif not succeeded:
         message = f"Không {verb} được tin nào."
     else:
-        message = (
-            f"Đã {verb} {len(succeeded)}/{len(ids)} tin. {len(failed)} tin lỗi."
-        )
+        message = f"Đã {verb} {len(succeeded)}/{len(ids)} tin. {len(failed)} tin lỗi."
 
     return {
         "status": "success" if succeeded else "error",

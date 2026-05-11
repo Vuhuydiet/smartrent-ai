@@ -66,12 +66,7 @@ async def _do_inbox(token: str, mark_all_read: bool) -> Dict[str, Any]:
     if "error" in data:
         return {"status": "error", "error": data["error"]}
 
-    items = (
-        data.get("notifications")
-        or data.get("content")
-        or data.get("items")
-        or []
-    )
+    items = data.get("notifications") or data.get("content") or data.get("items") or []
     summary = _summarise(items)
 
     marked = False
