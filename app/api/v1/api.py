@@ -6,6 +6,7 @@ from . import (
     listing_verification,
     price_suggestion,
     recommendation,
+    search,
     users,
 )
 
@@ -14,6 +15,11 @@ api_router.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 api_router.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 api_router.include_router(
     completion.router, prefix="/api/v1/completion", tags=["completion"]
+)
+api_router.include_router(
+    search.router,
+    prefix="/api/v1/search",
+    tags=["Search Parsing"],
 )
 api_router.include_router(
     price_suggestion.router,
