@@ -127,8 +127,9 @@ async def update_listing_price(
         float,
         Field(
             description=(
-                "New price in VND (e.g. 5000000 for 5 triệu). Always pass "
-                "the full numeric VND amount."
+                "New price. Accepts plain VND (5000000), shorthand strings "
+                "('5tr' / '5_000_000' / '5,000,000'), or scientific (5e6). "
+                "All are normalised to a positive float internally."
             )
         ),
     ],

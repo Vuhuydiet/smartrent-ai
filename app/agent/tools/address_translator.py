@@ -40,44 +40,86 @@ def _rag() -> RAGRetriever:
     return _rag_singleton
 
 
+# Substring matches under this length are too noisy — "1" or "q" would
+# silently pick the first district whose normalised alias happens to
+# contain that character. We require ≥4 chars before allowing substring
+# matching, otherwise demand an exact whole-string match.
+_SUBSTRING_MATCH_MIN_LEN = 4
+
+
 def _legacy_match(query: str) -> Optional[Dict[str, Any]]:
     """
     Match `query` against legacy provinces/districts in the RAG knowledge base.
 
-    Returns the first match found (district preferred — more specific) or
-    None if nothing matches.
+    Two-pass strategy to avoid ambiguous matches: first sweep the whole
+    catalogue for an exact normalised match; only if nothing matches
+    exactly do we fall back to substring matching, and only for queries
+    of meaningful length. This prevents one-character queries like "1"
+    or "q" from silently resolving to whichever district happened to
+    appear first in the iteration order.
+
+    Districts are preferred over provinces when both match.
     """
     qn = _normalise(query)
     if not qn:
+        logger.debug("address_translator: query %r normalises to empty", query)
         return None
 
     rag = _rag()
 
-    for prov_code, districts in rag._districts.items():
-        for d in districts:
-            for candidate in [d["name"]] + d.get("aliases", []):
-                if qn == _normalise(candidate) or qn in _normalise(candidate):
-                    prov_name = next(
-                        (p["name"] for p in rag._provinces if p["code"] == prov_code),
-                        prov_code,
-                    )
-                    return {
-                        "level": "district",
-                        "name": d["name"],
-                        "provinceName": prov_name,
-                        "provinceCode": prov_code,
-                        "districtId": int(d["code"]),
-                    }
-
-    for p in rag._provinces:
-        for candidate in [p["name"]] + p.get("aliases", []):
-            if qn == _normalise(candidate) or qn in _normalise(candidate):
-                return {
-                    "level": "province",
-                    "name": p["name"],
-                    "provinceName": p["name"],
-                    "provinceCode": p["code"],
+    # Build (level, payload, candidates) iterable to traverse twice.
+    def _districts_iter() -> Any:
+        for prov_code, districts in rag._districts.items():
+            prov_name = next(
+                (p["name"] for p in rag._provinces if p["code"] == prov_code),
+                prov_code,
+            )
+            for d in districts:
+                payload = {
+                    "level": "district",
+                    "name": d["name"],
+                    "provinceName": prov_name,
+                    "provinceCode": prov_code,
+                    "districtId": int(d["code"]),
                 }
+                candidates = [_normalise(d["name"])] + [
+                    _normalise(a) for a in d.get("aliases", [])
+                ]
+                yield payload, candidates
+
+    def _provinces_iter() -> Any:
+        for p in rag._provinces:
+            payload = {
+                "level": "province",
+                "name": p["name"],
+                "provinceName": p["name"],
+                "provinceCode": p["code"],
+            }
+            candidates = [_normalise(p["name"])] + [
+                _normalise(a) for a in p.get("aliases", [])
+            ]
+            yield payload, candidates
+
+    # Pass 1: exact match on districts, then provinces.
+    for payload, candidates in _districts_iter():
+        if qn in candidates:
+            return payload
+    for payload, candidates in _provinces_iter():
+        if qn in candidates:
+            return payload
+
+    # Pass 2: substring match, only if query is long enough to be
+    # meaningful. Shorter queries are rejected to avoid false positives.
+    if len(qn) < _SUBSTRING_MATCH_MIN_LEN:
+        return None
+
+    for payload, candidates in _districts_iter():
+        if any(qn in c for c in candidates):
+            return payload
+    for payload, candidates in _provinces_iter():
+        if any(qn in c for c in candidates):
+            return payload
+
     return None
 
 
