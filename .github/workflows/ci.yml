@@ -128,18 +128,32 @@ jobs:
 
       - name: Commit and push changes
         working-directory: smartrent-deploy
+        # Pass values via env, not inline ${{ }} substitution. When the
+        # head commit message contains double quotes, parentheses, or
+        # Vietnamese text, inlining it into `git commit -m "..."` breaks
+        # bash arg parsing and git interprets the fragments as pathspecs.
+        # Reading from a file via `git commit -F` sidesteps all shell
+        # quoting issues — the message goes to disk verbatim.
+        env:
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_LINK: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add docker/tags.env
-          
+
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          
-          COMMIT_LINK="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
-          git commit -m "Deploy AI: ${{ github.event.head_commit.message }} (${COMMIT_LINK})"
+
+          {
+            printf 'Deploy AI: '
+            printf '%s' "$HEAD_COMMIT_MESSAGE"
+            printf '\n\n%s\n' "$COMMIT_LINK"
+          } > /tmp/deploy-commit-msg.txt
+
+          git commit -F /tmp/deploy-commit-msg.txt
           git push
 
       - name: Deploy to Droplet
