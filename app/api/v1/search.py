@@ -1,7 +1,6 @@
 import logging
 import json
-from fastapi import APIRouter, HTTPException, status
-from vertexai.generative_models import GenerationConfig
+from fastapi import APIRouter, status
 
 from app.ai.llm.gateway import get_gateway
 from app.core.config import settings
@@ -27,6 +26,7 @@ Rules:
 If a field is not specified in the query, omit it or set it to null.
 """
 
+
 @router.post("/parse", response_model=AiParsedCriteriaDto, status_code=status.HTTP_200_OK)
 async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto:
     if not request.query or not request.query.strip():
@@ -34,7 +34,7 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
 
     gateway = get_gateway()
     model_name = settings.GEMINI_CHAT_MODEL
-    
+
     # Define JSON schema for Vertex AI
     response_schema = {
         "type": "OBJECT",
@@ -50,7 +50,7 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
             "phoneticKeyword": {"type": "STRING"},
         }
     }
-    
+
     generation_config = {
         "response_mime_type": "application/json",
         "response_schema": response_schema,
@@ -79,7 +79,7 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
 
         parsed_data = json.loads(text)
         trace.update(output={"parsed": parsed_data})
-        
+
         return AiParsedCriteriaDto(**parsed_data)
 
     except Exception as e:

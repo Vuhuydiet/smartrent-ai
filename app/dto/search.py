@@ -1,8 +1,10 @@
 from typing import Optional
 from pydantic import BaseModel
 
+
 class SearchParseRequest(BaseModel):
     query: str
+
 
 class AiParsedCriteriaDto(BaseModel):
     propertyType: Optional[str] = None
