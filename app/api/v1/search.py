@@ -39,7 +39,7 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
         return AiParsedCriteriaDto()
 
     gateway = get_gateway()
-    model_name = settings.GEMINI_CHAT_MODEL
+    model_name = settings.LLM_CHAT_MODEL
 
     # Define JSON schema for Vertex AI
     response_schema = {
