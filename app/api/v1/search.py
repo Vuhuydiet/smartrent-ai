@@ -1,10 +1,14 @@
-import logging
 import json
+import logging
+
+from agents import Agent, ModelSettings, Runner  # type: ignore[import]
+
 from fastapi import APIRouter, status
 
+from app.ai.llm.agent_factory import make_model
 from app.ai.llm.gateway import get_gateway
 from app.core.config import settings
-from app.dto.search import SearchParseRequest, AiParsedCriteriaDto
+from app.dto.search import AiParsedCriteriaDto, SearchParseRequest
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,9 @@ If a field is not specified in the query, omit it or set it to null.
 """
 
 
-@router.post("/parse", response_model=AiParsedCriteriaDto, status_code=status.HTTP_200_OK)
+@router.post(
+    "/parse", response_model=AiParsedCriteriaDto, status_code=status.HTTP_200_OK
+)
 async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto:
     if not request.query or not request.query.strip():
         return AiParsedCriteriaDto()
@@ -48,13 +54,7 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
             "ward": {"type": "STRING"},
             "keyword": {"type": "STRING"},
             "phoneticKeyword": {"type": "STRING"},
-        }
-    }
-
-    generation_config = {
-        "response_mime_type": "application/json",
-        "response_schema": response_schema,
-        "temperature": 0.1,  # Low temperature for strict extraction
+        },
     }
 
     trace = gateway.create_trace(
@@ -64,18 +64,48 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
     )
 
     try:
-        response = await gateway.generate(
-            prompt=f"Parse this query: '{request.query}'",
-            model_name=model_name,
-            system_instruction=SYSTEM_INSTRUCTION,
-            generation_config=generation_config,
-            trace=trace,
-            span_name="search-parse-generate",
+        agent = Agent(
+            name="Search Parser",
+            instructions=SYSTEM_INSTRUCTION,
+            model=make_model(model_name),
+            model_settings=ModelSettings(
+                temperature=0.1,
+                extra_body={
+                    "generationConfig": {
+                        "responseMimeType": "application/json",
+                        "responseSchema": response_schema,
+                    }
+                },
+            ),
         )
 
-        text = response.text
+        span = trace.generation(
+            name="search-parse-generate",
+            model=model_name,
+            input=request.query,
+        )
+
+        try:
+            run_result = await Runner.run(
+                starting_agent=agent,
+                input=f"Parse this query: '{request.query}'",
+                max_turns=2,
+            )
+            text = str(run_result.final_output or "")
+            span.end(output=text[:2000])
+        except Exception as e:
+            span.end(level="ERROR", status_message=str(e))
+            raise
+
         if not text:
             return AiParsedCriteriaDto()
+
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text.rsplit("\n```", 1)[0]
+            text = text.strip()
 
         parsed_data = json.loads(text)
         trace.update(output={"parsed": parsed_data})
