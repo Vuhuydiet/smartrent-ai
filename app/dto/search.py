@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SearchParseRequest(BaseModel):
@@ -15,5 +15,16 @@ class AiParsedCriteriaDto(BaseModel):
     province: Optional[str] = None
     district: Optional[str] = None
     ward: Optional[str] = None
+    amenities: list[str] = Field(default_factory=list)
     keyword: Optional[str] = None
     phoneticKeyword: Optional[str] = None
+
+
+class SearchSuggestionRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+
+class SearchSuggestionResponse(BaseModel):
+    suggestions: list[str] = Field(default_factory=list)
+    normalizedQuery: Optional[str] = None
