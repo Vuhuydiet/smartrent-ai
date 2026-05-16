@@ -96,6 +96,51 @@ def _normalize_intent(value: str) -> str:
     return re.sub(r"\s+", " ", result).strip()
 
 
+_PRETTY_REPLACEMENTS = {
+    "phong tro": "phòng trọ",
+    "can ho": "căn hộ",
+    "nha tro": "phòng trọ",
+    "studio": "studio",
+    "van phong": "văn phòng",
+    "dai hoc quoc gia": "đại học quốc gia",
+    "dai hoc": "đại học",
+    "may lanh": "máy lạnh",
+    "full noi that": "full nội thất",
+    "noi that": "nội thất",
+    "duoi": "dưới",
+    "tren": "trên",
+    "trieu": "triệu",
+    "gan": "gần",
+    "quan": "quận",
+    "binh thanh": "bình thạnh",
+    "tan binh": "tân bình",
+    "tan phu": "tân phú",
+    "thu duc": "thủ đức",
+    "go vap": "gò vấp",
+    "phu nhuan": "phú nhuận",
+}
+
+
+def _synthesize(normalized: str) -> str:
+    """Build a single readable suggestion from the user's own normalized query
+    so the response always reflects what they typed (incl. the location),
+    instead of only ever returning the static canned list."""
+    text = f" {normalized} "
+    for source, target in _PRETTY_REPLACEMENTS.items():
+        text = text.replace(f" {source} ", f" {target} ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _query_covered_by_local(normalized: str, local: list[str]) -> bool:
+    """True only when a canned suggestion genuinely contains the full query
+    (a real prefix/substring match), meaning the LLM adds nothing. Mere token
+    overlap is NOT enough — that is what caused location-blind results."""
+    for suggestion in local:
+        if normalized and normalized in _normalize_text(suggestion):
+            return True
+    return False
+
+
 def _local_suggestions(query: str, limit: int) -> list[str]:
     normalized = _normalize_intent(query)
     tokens = [token for token in normalized.split() if len(token) >= 2]
@@ -218,10 +263,16 @@ async def suggest_search_queries(
     safe_limit = max(1, min(request.limit or 5, 8))
     normalized = _normalize_intent(request.query)
     local = _local_suggestions(request.query, safe_limit)
+    synthesized = _synthesize(normalized)
 
-    if len(local) >= min(3, safe_limit):
+    # Short-circuit the LLM only when the canned list genuinely covers the
+    # query. Mere token overlap is not enough: a query like
+    # "tro tan binh duoi 5tr" must still surface the user's own intent
+    # ("phòng trọ tân bình dưới 5 triệu"), which the static list lacks.
+    if _query_covered_by_local(normalized, local):
+        merged = [synthesized] + [s for s in local if s != synthesized]
         return SearchSuggestionResponse(
-            suggestions=local[:safe_limit],
+            suggestions=merged[:safe_limit],
             normalizedQuery=normalized,
         )
 
@@ -290,7 +341,7 @@ async def suggest_search_queries(
         parsed = json.loads(text or "{}")
         ai_suggestions = parsed.get("suggestions") or []
         merged = []
-        for suggestion in [*local, *ai_suggestions]:
+        for suggestion in [synthesized, *local, *ai_suggestions]:
             if not isinstance(suggestion, str) or not suggestion.strip():
                 continue
             if suggestion not in merged:
@@ -306,7 +357,8 @@ async def suggest_search_queries(
     except Exception as e:
         logger.error("Error calling search suggestions endpoint: %s", e, exc_info=True)
         trace.update(output={"error": str(e)})
+        fallback = [synthesized] + [s for s in local if s != synthesized]
         return SearchSuggestionResponse(
-            suggestions=local[:safe_limit],
+            suggestions=fallback[:safe_limit],
             normalizedQuery=normalized,
         )
