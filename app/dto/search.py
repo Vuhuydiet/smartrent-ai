@@ -48,12 +48,11 @@ class AppliedFilters(BaseModel):
     amenities: List[str] = Field(default_factory=list)
     amenityMatchMode: Optional[str] = None
 
-    # Only set when the location phrase could NOT be resolved to ids — the
-    # consumer folds it back into a keyword so recall is preserved.
-    locationText: Optional[str] = None
-    # Residual descriptive text only (e.g. "gần đại học") — NEVER the whole
-    # query. Empty when everything parsed into structured filters.
-    keyword: Optional[str] = None
+    # NOTE: intentionally NO `keyword` / `locationText`. appliedFilters is a
+    # STRUCTURED-ONLY payload — a residual/location keyword would make the
+    # consumer run a title FULLTEXT search off an error-prone parse, which is
+    # exactly what this feature exists to avoid. When nothing structured can
+    # be resolved the resolver returns None instead of a keyword-only object.
 
 
 class AiParsedCriteriaDto(BaseModel):

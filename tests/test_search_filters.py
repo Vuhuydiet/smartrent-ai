@@ -28,9 +28,9 @@ def test_reported_query_resolves_to_filters_not_keyword():
     # "máy lạnh" → amenity id 2 (Điều hòa).
     assert af.amenityIds == [2]
     assert af.amenityMatchMode == "ALL"
-    # The whole sentence must NOT be echoed back as a keyword.
-    assert not af.keyword
-    assert af.locationText is None
+    # appliedFilters is structured-only — no keyword/locationText field exists.
+    assert not hasattr(af, "keyword")
+    assert not hasattr(af, "locationText")
 
 
 def test_price_range_and_bedrooms():
@@ -74,15 +74,11 @@ def test_province_only_resolves_without_district():
     assert af.legacyDistrictId is None
 
 
-def test_pure_free_text_stays_keyword_not_location():
-    # No structured signal at all → plain keyword search, never a bogus
-    # district filter (that was the downstream bug for the /parse fallback).
-    af = resolve_applied_filters("hello world random text")
-    assert af is not None
-    assert af.keyword == "hello world random text"
-    assert af.locationText is None
-    assert af.provinceCode is None
-    assert not af.productTypes
+def test_pure_free_text_returns_none():
+    # No structured signal at all → return None so the caller shows NO
+    # "ready to apply" suggestion (an applied filter with only a keyword is
+    # meaningless) and falls back to a plain raw-query keyword search.
+    assert resolve_applied_filters("hello world random text") is None
 
 
 def test_empty_query_returns_none():
