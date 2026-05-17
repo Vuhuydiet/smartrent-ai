@@ -169,9 +169,11 @@ def _criteria_from_filters(query: str, af: AppliedFilters) -> AiParsedCriteriaDt
     Build an AiParsedCriteriaDto from resolved filters for the no-AI fallback.
 
     Populates the legacy text fields so the Java NL-search path (which builds
-    its JPA spec from `propertyType`/`district`/`amenities`) still works, and
-    attaches `appliedFilters` so the suggestion passthrough gets the resolved
-    ids. Only sets `keyword` when literally nothing structured was found.
+    its JPA spec from `propertyType`/`amenities`) still works, and attaches the
+    STRUCTURED-ONLY `appliedFilters` so the suggestion passthrough gets the
+    resolved ids. No `keyword`/`district` text is derived from the parse — only
+    structured criteria (resolver returns None when nothing structured exists,
+    so the caller keeps the raw-query keyword fallback for that case).
     """
     return AiParsedCriteriaDto(
         propertyType=af.productType,
@@ -181,9 +183,7 @@ def _criteria_from_filters(query: str, af: AppliedFilters) -> AiParsedCriteriaDt
         minArea=af.minArea,
         maxArea=af.maxArea,
         bedrooms=af.bedrooms,
-        district=af.locationText if af.legacyProvinceId is None else None,
         amenities=af.amenities,
-        keyword=af.keyword,
         appliedFilters=af,
     )
 

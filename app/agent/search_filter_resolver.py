@@ -240,57 +240,6 @@ _LISTING_TYPES: List[Tuple[str, str]] = [
     ("thue", "RENT"),
 ]
 
-# Tokens that are never a location and carry no filter on their own — used to
-# decide what (if anything) is left as a residual keyword.
-_STOPWORDS = {
-    "gan",
-    "o",
-    "tai",
-    "khu",
-    "vuc",
-    "vung",
-    "quanh",
-    "gia",
-    "re",
-    "dep",
-    "moi",
-    "rong",
-    "rai",
-    "co",
-    "va",
-    "can",
-    "tim",
-    "thue",
-    "muon",
-    "mua",
-    "phong",
-    "nha",
-    "cho",
-    "duoi",
-    "tren",
-    "tu",
-    "den",
-    "khoang",
-    "tam",
-    "khong",
-    "qua",
-    "toi",
-    "da",
-    "it",
-    "nhat",
-    "dien",
-    "tich",
-    "m2",
-    "met",
-    "vuong",
-    "mv",
-    "ngu",
-    "pn",
-    "lon",
-    "nho",
-    "hon",
-}
-
 
 def _match_product_types(working: str) -> Tuple[str, List[str]]:
     for phrase, enums in _PRODUCT_TYPES:
@@ -418,8 +367,8 @@ def resolve_applied_filters(
     working, product_types = _match_product_types(working)
     working, listing_type = _match_listing_type(working)
 
-    province_code, district_code, loc_phrases = _resolve_location(query_norm)
-    amenity_ids, amenity_names, amen_phrases = _resolve_amenities(query_norm)
+    province_code, district_code, _ = _resolve_location(query_norm)
+    amenity_ids, amenity_names, _ = _resolve_amenities(query_norm)
 
     # Overlay explicit values the LLM parsed (it wins for numbers/type/listing).
     if criteria is not None:
@@ -452,22 +401,13 @@ def resolve_applied_filters(
             if extra_ids:
                 amenity_ids = extra_ids
 
-    # Build the residual keyword from genuinely-unconsumed content tokens. We
-    # deliberately do NOT echo the whole query back — that is the bug.
-    consumed = set()
-    for phrase in loc_phrases + amen_phrases:
-        consumed.update(phrase.split())
-    residual_tokens = [
-        tok
-        for tok in working.split()
-        if len(tok) >= 2
-        and not tok.isdigit()
-        and tok not in _STOPWORDS
-        and tok not in consumed
-    ]
-    residual = " ".join(residual_tokens).strip() or None
-
-    has_other_structured = bool(
+    # appliedFilters is STRUCTURED-ONLY: no residual / location keyword is
+    # emitted. A parsed keyword would drive a title FULLTEXT search off an
+    # error-prone parse — the exact failure mode this feature removes. When
+    # nothing structured resolves we return None so the caller shows no
+    # (meaningless) "ready to apply" suggestion and just keyword-searches the
+    # raw text instead.
+    has_structured = bool(
         product_types
         or listing_type
         or min_price is not None
@@ -475,18 +415,13 @@ def resolve_applied_filters(
         or min_area is not None
         or max_area is not None
         or bedrooms is not None
+        or province_code
         or amenity_ids
     )
-    # Promote leftover text to `locationText` ONLY when the location didn't
-    # resolve to ids AND the query carried other structured intent — then the
-    # leftover is almost certainly the place we couldn't map. With no other
-    # signal it's just a free-text query, so keep it as a plain `keyword`
-    # (a bare keyword must never become a bogus district filter downstream).
-    location_text: Optional[str] = None
-    if province_code is None and residual and has_other_structured:
-        location_text, residual = residual, None
+    if not has_structured:
+        return None
 
-    af = AppliedFilters(
+    return AppliedFilters(
         productType=product_types[0] if product_types else None,
         productTypes=product_types,
         listingType=listing_type,
@@ -502,23 +437,4 @@ def resolve_applied_filters(
         amenityIds=amenity_ids,
         amenities=amenity_names,
         amenityMatchMode="ALL" if amenity_ids else None,
-        locationText=location_text,
-        keyword=residual,
     )
-
-    # Nothing structured at all → let the caller decide (keyword search).
-    if not (
-        af.productTypes
-        or af.listingType
-        or af.minPrice is not None
-        or af.maxPrice is not None
-        or af.minArea is not None
-        or af.maxArea is not None
-        or af.bedrooms is not None
-        or af.provinceCode
-        or af.amenityIds
-        or af.locationText
-        or af.keyword
-    ):
-        return None
-    return af
