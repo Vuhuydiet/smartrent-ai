@@ -30,8 +30,10 @@ Rules:
 - propertyType: must be one of APARTMENT, HOUSE, ROOM, STUDIO, OFFICE. (e.g. "phòng trọ" -> ROOM, "căn hộ" -> APARTMENT, "nhà" -> HOUSE).
 - listingType: must be one of RENT, SALE, SHARE. If missing, assume RENT.
 - minPrice / maxPrice: extract the price in VND. (e.g. "dưới 5 triệu" -> maxPrice: 5000000. "từ 2 đến 3 triệu" -> minPrice: 2000000, maxPrice: 3000000).
+- minArea / maxArea: extract the area in square metres as a number. (e.g. "trên 25m2" -> minArea: 25. "dưới 30m2" -> maxArea: 30. "từ 20 đến 30 m2" -> minArea: 20, maxArea: 30. A bare "25m2" -> minArea: 25).
+- bedrooms: extract the minimum number of bedrooms as an integer. (e.g. "2 phòng ngủ", "2pn", "2 pn" -> bedrooms: 2). Do NOT confuse this with bathrooms or with the number of rooms to rent.
 - province / district / ward: extract the location explicitly. If "quận 1" is found, set district="1". If "hồ chí minh" is found, set province="Hồ Chí Minh".
-- amenities: extract concrete amenities as Vietnamese text, e.g. ["máy lạnh", "full nội thất"].
+- amenities: extract concrete amenities as Vietnamese text, e.g. ["máy lạnh", "máy giặt", "full nội thất", "wifi", "ban công", "thang máy", "bảo vệ", "chỗ để xe", "hồ bơi", "camera"]. Extract every amenity the user asks for, not just the first one.
 - keyword: remaining descriptive keywords that are not already structured filters or amenities, e.g. "gần đại học", "hẻm xe hơi".
 - phoneticKeyword: write the keyword parameter in a way that captures its sound without accents if typo-tolerance is needed (e.g. "may lanh").
 
@@ -178,6 +180,9 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
             "listingType": {"type": "STRING"},
             "minPrice": {"type": "NUMBER"},
             "maxPrice": {"type": "NUMBER"},
+            "minArea": {"type": "NUMBER"},
+            "maxArea": {"type": "NUMBER"},
+            "bedrooms": {"type": "INTEGER"},
             "province": {"type": "STRING"},
             "district": {"type": "STRING"},
             "ward": {"type": "STRING"},

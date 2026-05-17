@@ -12,6 +12,9 @@ class AiParsedCriteriaDto(BaseModel):
     listingType: Optional[str] = None
     minPrice: Optional[float] = None
     maxPrice: Optional[float] = None
+    minArea: Optional[float] = None
+    maxArea: Optional[float] = None
+    bedrooms: Optional[int] = None
     province: Optional[str] = None
     district: Optional[str] = None
     ward: Optional[str] = None
