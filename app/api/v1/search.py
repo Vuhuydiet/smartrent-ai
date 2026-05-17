@@ -7,11 +7,13 @@ from agents import Agent, ModelSettings, Runner  # type: ignore[import]
 
 from fastapi import APIRouter, status
 
+from app.agent.search_filter_resolver import resolve_applied_filters
 from app.ai.llm.agent_factory import make_model
 from app.ai.llm.gateway import get_gateway
 from app.core.config import settings
 from app.dto.search import (
     AiParsedCriteriaDto,
+    AppliedFilters,
     SearchParseRequest,
     SearchSuggestionRequest,
     SearchSuggestionResponse,
@@ -162,6 +164,30 @@ def _local_suggestions(query: str, limit: int) -> list[str]:
     return [text for _, text in ranked[:limit]]
 
 
+def _criteria_from_filters(query: str, af: AppliedFilters) -> AiParsedCriteriaDto:
+    """
+    Build an AiParsedCriteriaDto from resolved filters for the no-AI fallback.
+
+    Populates the legacy text fields so the Java NL-search path (which builds
+    its JPA spec from `propertyType`/`district`/`amenities`) still works, and
+    attaches `appliedFilters` so the suggestion passthrough gets the resolved
+    ids. Only sets `keyword` when literally nothing structured was found.
+    """
+    return AiParsedCriteriaDto(
+        propertyType=af.productType,
+        listingType=af.listingType,
+        minPrice=af.minPrice,
+        maxPrice=af.maxPrice,
+        minArea=af.minArea,
+        maxArea=af.maxArea,
+        bedrooms=af.bedrooms,
+        district=af.locationText if af.legacyProvinceId is None else None,
+        amenities=af.amenities,
+        keyword=af.keyword,
+        appliedFilters=af,
+    )
+
+
 @router.post(
     "/parse", response_model=AiParsedCriteriaDto, status_code=status.HTTP_200_OK
 )
@@ -245,12 +271,22 @@ async def parse_search_query(request: SearchParseRequest) -> AiParsedCriteriaDto
         parsed_data = json.loads(text)
         trace.update(output={"parsed": parsed_data})
 
-        return AiParsedCriteriaDto(**parsed_data)
+        criteria = AiParsedCriteriaDto(**parsed_data)
+        # Resolve names → backend-ready ids (location/amenity/type) using the
+        # chatbox RAG knowledge base, so consumers get apply-ready filters
+        # instead of a raw keyword. The LLM's explicit values still win.
+        criteria.appliedFilters = resolve_applied_filters(request.query, criteria)
+        return criteria
 
     except Exception as e:
         logger.error("Error calling search parse endpoint: %s", e, exc_info=True)
         trace.update(output={"error": str(e)})
-        # Instead of failing the user request, return empty criteria so the backend falls back to FULLTEXT search.
+        # AI unavailable → resolve filters deterministically from the RAG
+        # knowledge base rather than dumping the whole query into `keyword`
+        # (which made the backend FULLTEXT-AND every token and match nothing).
+        af = resolve_applied_filters(request.query)
+        if af is not None:
+            return _criteria_from_filters(request.query, af)
         return AiParsedCriteriaDto(keyword=request.query)
 
 
@@ -269,6 +305,11 @@ async def suggest_search_queries(
     normalized = _normalize_intent(request.query)
     local = _local_suggestions(request.query, safe_limit)
     synthesized = _synthesize(normalized)
+    # Resolve backend-ready filters from the RAG knowledge base (same context
+    # the chatbox uses). Returned alongside the text suggestions so the Java
+    # passthrough can hand the frontend apply-ready filters instead of letting
+    # it FULLTEXT-search the raw query. Deterministic — no extra LLM call.
+    applied = resolve_applied_filters(request.query)
 
     # Short-circuit the LLM only when the canned list genuinely covers the
     # query. Mere token overlap is not enough: a query like
@@ -279,6 +320,7 @@ async def suggest_search_queries(
         return SearchSuggestionResponse(
             suggestions=merged[:safe_limit],
             normalizedQuery=normalized,
+            appliedFilters=applied,
         )
 
     gateway = get_gateway()
@@ -358,6 +400,7 @@ async def suggest_search_queries(
         return SearchSuggestionResponse(
             suggestions=merged,
             normalizedQuery=normalized,
+            appliedFilters=applied,
         )
     except Exception as e:
         logger.error("Error calling search suggestions endpoint: %s", e, exc_info=True)
@@ -366,4 +409,5 @@ async def suggest_search_queries(
         return SearchSuggestionResponse(
             suggestions=fallback[:safe_limit],
             normalizedQuery=normalized,
+            appliedFilters=applied,
         )
