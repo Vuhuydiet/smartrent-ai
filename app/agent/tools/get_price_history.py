@@ -37,7 +37,11 @@ def _normalize_listing_id(raw_id: Optional[str]) -> Optional[str]:
     try:
         return str(int(float(raw_id)))
     except (ValueError, TypeError):
-        return raw_id
+        # Surface the bad input rather than swallowing it: callers
+        # downstream (_get_history, _get_statistics) used to call
+        # int(...) on this value and crash with an uncaught ValueError
+        # when a non-numeric string slipped through.
+        return None
 
 
 async def _get_history(listing_id: Optional[str]) -> Dict[str, Any]:

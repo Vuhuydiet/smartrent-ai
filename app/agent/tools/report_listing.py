@@ -24,6 +24,11 @@ from app.core import backend_client
 
 logger = logging.getLogger(__name__)
 
+# otherFeedback is free-text from the user. Backend will store it and may
+# display in admin moderation queues, so cap defensively to keep the
+# payload bounded and prevent oversized inputs from running through.
+_MAX_OTHER_FEEDBACK_CHARS = 500
+
 
 def _coerce_id(raw: Any) -> str:
     try:
@@ -90,6 +95,16 @@ async def _do_report(
         return {
             "status": "error",
             "error": "Cần ít nhất 1 reasonId khi confirm=true.",
+        }
+
+    if len(other_feedback) > _MAX_OTHER_FEEDBACK_CHARS:
+        return {
+            "status": "error",
+            "error": (
+                f"otherFeedback quá dài ({len(other_feedback)} ký tự, "
+                f"giới hạn {_MAX_OTHER_FEEDBACK_CHARS}). Hãy rút gọn nội "
+                "dung phản hồi."
+            ),
         }
 
     body: Dict[str, Any] = {"reasonIds": reason_ids}
