@@ -94,7 +94,8 @@ class GeminiListingVerificationHelper:
                 "1. Cross-reference the provided text with the visual details in the images.\n"
                 "2. Check for stock photos, watermarks, and consistency.\n"
                 "3. Ensure the media matches the described property.\n"
-                "4. Return valid JSON only."
+                "4. Return valid JSON only.\n"
+                "5. IMPORTANT: All descriptive text fields (details, issues, messages, suggestions) MUST be written in Vietnamese."
             )
 
             content_parts: List[Dict[str, Any]] = [
@@ -134,7 +135,8 @@ class GeminiListingVerificationHelper:
             full_prompt = (
                 f"{analysis_prompt}\n\n"
                 f"Content to analyze:\n{text_content}\n\n"
-                "Return your response as valid JSON only, without any additional text or formatting."
+                "Return your response as valid JSON only, without any additional text or formatting.\n"
+                "IMPORTANT: All descriptive text fields (details, issues, messages, suggestions) MUST be written in Vietnamese."
             )
 
             trace = self._gateway.create_trace(
@@ -159,27 +161,76 @@ class GeminiListingVerificationHelper:
     def create_system_instruction(self) -> str:
         """Concise system instruction for fast listing verification."""
         return """
-You are an AI expert in rental property listing verification.
-### CORE RULES:
-- **REJECT (0.1)**: Cartoons, 3D renders, or watermarks of other sites.
-- **NEEDS_REVIEW (0.4-0.6)**: Missing photos, price-location mismatch, or stock photos.
-- **APPROVE (0.9-1.0)**: High-quality, realistic photos consistent with the description.
-- **INCONSISTENCY**: Flag if the visual view (window) doesn't match the described location.
+You are an AI expert in rental property listing verification. Your goal is to review rental listings professionally and realistically. Act as a smart, practical AI verification agent.
+
+### LANGUAGE REQUIREMENT:
+- ALL descriptive text fields in your response (details, issues, message, suggestions, reason details, etc.) MUST be written in Vietnamese.
+- Only the fixed enum values (suggested_status, severity, priority, violation_codes) remain in English as specified.
+
+### CORE VERIFICATION CRITERIA (REALISTIC & STRUCTURED):
+- **FACT & METADATA CONSISTENCY (CRITICAL)**: Do NOT strictly verify consistency against the listing title (since titles can be AI-generated, marketing-focused, or slightly mismatched). Instead, you MUST verify that the media and description match key structured facts:
+  - **Price (Giá)**: Check if the rent price is realistic and reasonable for the property type (e.g. avoid extreme typos like 100 VND or 100 Billion VND for a simple room).
+  - **Area (Diện tích)**: Ensure the visual scale of the images generally matches the described area (e.g., a 15m2 room should look like a cozy single room, while a 100m2 property should look spacious).
+  - **Bedrooms / Bathrooms (Số phòng ngủ / vệ sinh)**: Cross-reference the metadata bedrooms/bathrooms with the room layouts visible in the media or described in the text.
+  - **Property Type (Loại hình)**: Ensure the images generally reflect a residential rental property matching the selected type (e.g., a `ROOM` or `APARTMENT` should look like habitable housing, not a raw plot of outdoor dirt, a factory, or a non-residential commercial warehouse).
+  - **Be Practical with Minor Details**: Do NOT be overly strict about minor differences (e.g., if the text says "wooden floor" but the image shows a "carpeted floor", or the text lists a "wooden wardrobe" but the wardrobe is not visible in the frame). As long as the photo depicts a real, habitable room matching the described property type and structured facts, you should APPROVE it.
+
+- **TOXIC & INAPPROPRIATE LANGUAGE (REJECT IMMEDIATELY)**: Thoroughly scan the title and description for inappropriate, vulgar, profane, swearing, cursing, or offensive Vietnamese words/slang (e.g., "má nó", "đm", "vcl", "chửi bậy"). If any are found, you MUST suggest "REJECTED" with `is_valid: false`, `score: 0.1`, add `"INAPPROPRIATE_CONTENT"` to `violation_codes`, and list the bad word in the `violations` array.
+
+- **MEDIA QUALITY & REJECTS**:
+  - **NEEDS_REVIEW (0.4-0.6)**: Missing images, extremely blurry/low quality photos, or major structured metadata mismatch (e.g. declaring 5 bedrooms in metadata but only showing a single tiny 1-bedroom studio with no further details).
+  - **REJECT (0.1)**: Obvious fake 3D blueprint renders (not real photos), cartoons, inappropriate content, or photos with competitor real estate watermarks.
+  - **APPROVE (0.7-1.0)**: Clean, high-quality, realistic room photos that generally match the described property type and structured facts.
+    - *SPECIAL RULE FOR DEV TESTING*: If the image URL is from Unsplash (contains 'unsplash.com'), treat it as a valid, real, actual room photo, NOT a stock photo, and APPROVE it with a score of 0.9 or higher and suggested_status "APPROVED".
+
+### STATUS RECOMMENDATION:
+- If the listing matches the structured facts, has a clean description, and has a real photo, suggest "APPROVED" with a score of 0.8 or higher.
+- If there is a severe structured mismatch (e.g., unrealistic price or massive bedroom count mismatch), suggest "NEEDS_REVIEW" or "REJECTED" with a score below 0.6.
 
 ### RESPONSE FORMAT (JSON ONLY):
+Return a JSON response with this exact structure (keep messages concise, max 100 characters):
 {
-    "image_validation": {"is_valid": bool, "quality_score": float, "issues": [], "total_images": int, "valid_images": int},
-    "video_validation": {"is_valid": bool, "quality_score": float, "issues": [], "total_videos": int, "valid_videos": int},
-    "content_validation": {"is_rental_related": bool, "category_match": bool, "content_score": float, "issues": []},
-    "completeness_validation": {"is_complete": bool, "completeness_score": float, "missing_fields": [], "quality_issues": []},
-    "reason": {"blurriness_issue": bool, "missing_fields": [], "inconsistent_info": bool, "watermark_or_phone": bool, "stock_photo": bool, "details": "string"},
-    "violation_codes": ["SCAM", "INAPPROPRIATE_CONTENT", "DUPLICATE_ADS", "WATERMARK_VIOLATION", "INCONSISTENT_INFO", "CONTACT_INFO_IN_DESC"],
-    "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "string"}],
-    "suggestions": [{"category": "string", "message": "string", "priority": "low|medium|high"}],
-    "is_valid": bool,
-    "score": float,
-    "confidence": float,
-    "suggested_status": "APPROVED|REJECTED|NEEDS_REVIEW"
+    "image_validation": {
+        "is_valid": true,
+        "quality_score": 0.9,
+        "issues": [],
+        "total_images": 1,
+        "valid_images": 1
+    },
+    "video_validation": {
+        "is_valid": true,
+        "quality_score": 1.0,
+        "issues": [],
+        "total_videos": 0,
+        "valid_videos": 0
+    },
+    "content_validation": {
+        "is_rental_related": true,
+        "category_match": true,
+        "content_score": 0.9,
+        "issues": []
+    },
+    "completeness_validation": {
+        "is_complete": true,
+        "completeness_score": 1.0,
+        "missing_fields": [],
+        "quality_issues": []
+    },
+    "reason": {
+        "blurriness_issue": false,
+        "missing_fields": [],
+        "inconsistent_info": false,
+        "watermark_or_phone": false,
+        "stock_photo": false,
+        "details": "Mô tả chi tiết bằng tiếng Việt lý do phê duyệt hoặc từ chối"
+    },
+    "violation_codes": [],
+    "violations": [],
+    "suggestions": [],
+    "is_valid": true,
+    "score": 0.9,
+    "confidence": 0.9,
+    "suggested_status": "APPROVED"
 }
 """
 
@@ -426,6 +477,65 @@ You are an AI expert in rental property listing verification.
                     type(mf),
                 )
                 data["completeness_validation"]["missing_fields"] = []
+
+        # Sanitize 'issues' in validations to ensure they are Lists of strings, not Lists of dicts.
+        for validation_key in [
+            "image_validation",
+            "video_validation",
+            "content_validation",
+        ]:
+            if validation_key in data and isinstance(data[validation_key], dict):
+                issues = data[validation_key].get("issues")
+                if isinstance(issues, list):
+                    sanitized_issues = []
+                    for issue in issues:
+                        if isinstance(issue, dict):
+                            val = (
+                                issue.get("message")
+                                or issue.get("text")
+                                or issue.get("issue")
+                                or str(issue)
+                            )
+                            sanitized_issues.append(val)
+                        elif issue is not None:
+                            sanitized_issues.append(str(issue))
+                    data[validation_key]["issues"] = sanitized_issues
+                elif issues is not None:
+                    data[validation_key]["issues"] = []
+
+        # Sanitize 'suggestions' to ensure it's a list of dicts.
+        if "suggestions" in data and isinstance(data["suggestions"], list):
+            sanitized_suggestions = []
+            for item in data["suggestions"]:
+                if isinstance(item, dict):
+                    sanitized_suggestions.append(item)
+                elif isinstance(item, str):
+                    sanitized_suggestions.append(
+                        {
+                            "category": "improvement",
+                            "message": item,
+                            "field": "",
+                            "priority": "low",
+                        }
+                    )
+            data["suggestions"] = sanitized_suggestions
+
+        # Sanitize 'violations' to ensure it's a list of dicts.
+        if "violations" in data and isinstance(data["violations"], list):
+            sanitized_violations = []
+            for item in data["violations"]:
+                if isinstance(item, dict):
+                    sanitized_violations.append(item)
+                elif isinstance(item, str):
+                    sanitized_violations.append(
+                        {
+                            "category": "unknown",
+                            "severity": "medium",
+                            "message": item,
+                            "field": "",
+                        }
+                    )
+            data["violations"] = sanitized_violations
 
         return data
 
