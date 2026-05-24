@@ -1,0 +1,61 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+build/
+dist/
+
+# Test / lint caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/coverage.xml
+tests/htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local config / secrets — MUST NOT be baked into the image
+.env
+.env.*
+!.env.example
+smartrent-key.json
+*.pem
+*.key
+gcp-*.json
+*service-account*.json
+
+# Dev tooling / docs not needed at runtime
+docs/
+examples/
+tests/
+*.md
+!README.md
+*.docx.md
+.pre-commit-config.yaml
+.flake8
+.mypy.ini
+justfile
+
+# CI/CD
+.github/
+
+# Docker (avoid recursive copy)
+Dockerfile
+.dockerignore
+docker-compose*.yml
