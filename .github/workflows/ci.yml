@@ -176,3 +176,25 @@ jobs:
               --env-file docker/tags.env \
               -f docker/docker-compose.yml \
               up -d --no-deps ai
+
+            # ---- Image retention (best-effort, never fails the deploy) ----
+            # Without this the Droplet accumulates one ~2.4GB image per push
+            # because each build is tagged with the commit SHA and never
+            # overwritten. `docker rmi` on the currently-running image fails
+            # with "image is being used" — that's the safety net.
+            set +e
+            REPO="vuhuydiet/smartrent-ai"
+            KEEP=5
+            docker container prune -f
+            docker images "$REPO" --format '{{.Tag}} {{.CreatedAt}}' \
+              | grep -Ev '^(dev|prd|prod|main|latest) ' \
+              | grep -v '^<none>' \
+              | sort -k2,2 -r \
+              | tail -n +$((KEEP + 1)) \
+              | awk '{print $1}' \
+              | while read -r tag; do
+                  docker rmi "${REPO}:${tag}" 2>/dev/null || true
+                done
+            docker image prune -f
+            docker builder prune -f --keep-storage 2GB
+            docker system df
