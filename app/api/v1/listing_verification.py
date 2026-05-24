@@ -87,11 +87,14 @@ async def verify_listing(
         )
 
     except Exception as e:
-        logger.error(f"Unexpected error during listing verification: {str(e)}")
+        import traceback
+
+        tb = traceback.format_exc()
+        logger.error(f"Unexpected error during listing verification:\n{tb}")
         error = ListingVerificationError(
             error="internal_error",
             message="An unexpected error occurred during verification",
-            details={"error_type": type(e).__name__},
+            details={"error_type": type(e).__name__, "traceback": tb},
         )
         from fastapi.encoders import jsonable_encoder
 
