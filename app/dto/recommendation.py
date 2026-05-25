@@ -16,6 +16,8 @@ class ListingFeature(BaseModel):
     ward_code: Optional[str] = None
     vip_type: str  # NORMAL | SILVER | GOLD | DIAMOND
     post_date_days_ago: int  # freshness
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class InteractionEntry(BaseModel):

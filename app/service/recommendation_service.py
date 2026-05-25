@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -22,6 +22,60 @@ class RecommendationService:
             "DIAMOND": 1.15,
         }
         self.VIP_RANKS = {"DIAMOND": 4, "GOLD": 3, "SILVER": 2, "NORMAL": 1}
+
+    def _calculate_haversine_vectorized(
+        self,
+        target_lat: float,
+        target_lon: float,
+        c_lats: np.ndarray,
+        c_lons: np.ndarray,
+    ) -> np.ndarray:
+        t_lat_rad = np.radians(target_lat)
+        t_lon_rad = np.radians(target_lon)
+        c_lats_rad = np.radians(c_lats)
+        c_lons_rad = np.radians(c_lons)
+
+        dlat = c_lats_rad - t_lat_rad
+        dlon = c_lons_rad - t_lon_rad
+
+        a = (
+            np.sin(dlat / 2.0) ** 2
+            + np.cos(t_lat_rad) * np.cos(c_lats_rad) * np.sin(dlon / 2.0) ** 2
+        )
+        c = 2.0 * np.arcsin(np.sqrt(a))
+        return c * 6371.0
+
+    def _compute_virtual_distance(self, target, candidate) -> float:
+        if (
+            target.ward_id and candidate.ward_id and target.ward_id == candidate.ward_id
+        ) or (
+            target.ward_code
+            and candidate.ward_code
+            and target.ward_code == candidate.ward_code
+        ):
+            return 1.0
+        if (
+            target.district_id
+            and candidate.district_id
+            and target.district_id == candidate.district_id
+        ):
+            return 3.0
+        if (
+            target.province_code
+            and candidate.province_code
+            and target.province_code == candidate.province_code
+        ):
+            return 8.0
+        return 35.0
+
+    def _normalize_scores_minmax(self, scores: np.ndarray) -> np.ndarray:
+        if len(scores) == 0:
+            return scores
+        min_val = np.min(scores)
+        max_val = np.max(scores)
+        if max_val == min_val:
+            return np.ones_like(scores)
+        return (scores - min_val) / (max_val - min_val)
 
     async def get_similar_listings(
         self, req: SimilarListingRequest
@@ -73,87 +127,80 @@ class RecommendationService:
         else:
             raw_pers_scores = np.zeros(len(req.candidates))
 
-        # --- Score each candidate ---
+        # --- Stage 2: Calculate Base AI Score & MinMax Normalize to [0, 1] ---
+        if has_personalization:
+            base_scores = 0.9 * raw_sim_scores + 0.1 * raw_pers_scores
+        else:
+            base_scores = raw_sim_scores
+
+        base_scores_norm = self._normalize_scores_minmax(base_scores)
+
+        # --- Compute Physical or Virtual Distances ---
+        distances = []
+        target_lat = req.target.latitude
+        target_lon = req.target.longitude
+
+        has_gps = []
+        c_lats = []
+        c_lons = []
+        for candidate in req.candidates:
+            if (
+                target_lat is not None
+                and target_lon is not None
+                and candidate.latitude is not None
+                and candidate.longitude is not None
+            ):
+                has_gps.append(True)
+                c_lats.append(candidate.latitude)
+                c_lons.append(candidate.longitude)
+            else:
+                has_gps.append(False)
+                c_lats.append(0.0)
+                c_lons.append(0.0)
+
+        has_gps = np.array(has_gps)
+        c_lats = np.array(c_lats)
+        c_lons = np.array(c_lons)
+
+        if target_lat is not None and target_lon is not None and np.any(has_gps):
+            gps_distances = self._calculate_haversine_vectorized(
+                target_lat, target_lon, c_lats, c_lons
+            )
+        else:
+            gps_distances = np.zeros(len(req.candidates))
+
+        for idx, candidate in enumerate(req.candidates):
+            if has_gps[idx]:
+                distances.append(float(gps_distances[idx]))
+            else:
+                distances.append(self._compute_virtual_distance(req.target, candidate))
+
+        dist_array = np.array(distances)
+        decay_factors = np.exp(-0.138 * dist_array)
+        geospatial_scores = base_scores_norm * decay_factors
+
+        # --- Score each candidate and apply VIP/Freshness Boosts ---
         results = []
         for idx, candidate in enumerate(req.candidates):
-            # Apply geographical penalty to base similarity score
-            similarity_score = float(raw_sim_scores[idx])
-            if candidate.province_code != req.target.province_code:
-                similarity_score *= 0.1
-            elif (
-                req.target.district_id
-                and candidate.district_id
-                and candidate.district_id != req.target.district_id
-            ):
-                similarity_score *= 0.7
-            elif (
-                req.target.ward_id
-                and candidate.ward_id
-                and candidate.ward_id != req.target.ward_id
-            ) or (
-                req.target.ward_code
-                and candidate.ward_code
-                and candidate.ward_code != req.target.ward_code
-            ):
-                similarity_score *= 0.9
+            geo_score = float(geospatial_scores[idx])
+            pers_score = float(raw_pers_scores[idx])
+            sim_score = float(raw_sim_scores[idx])
 
-            personalization_score = float(raw_pers_scores[idx])
-
-            # 3. Blended & Boosted final score
-            final_score = self._calculate_final_score(
-                similarity_score, personalization_score, candidate, has_personalization
-            )
+            vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
+            freshness_boost = max(0.0, 1.0 - (candidate.post_date_days_ago * 0.01))
+            final_score = geo_score * vip_boost * (1.0 + 0.1 * freshness_boost)
 
             results.append(
                 RecommendationItem(
                     listing_id=candidate.listing_id,
                     score=round(final_score, 4),
-                    cf_score=round(personalization_score, 4),
-                    cbf_score=round(similarity_score, 4),
+                    cf_score=round(pers_score, 4),
+                    cbf_score=round(sim_score, 4),
                 )
             )
 
         results.sort(key=lambda x: x.score, reverse=True)
         return results[: req.top_n]
-
-    def _compute_similarity_with_penalty(
-        self, target_vec, candidate_vec, target_feat, candidate_feat
-    ) -> float:
-        similarity_score = cosine_similarity(
-            target_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
-        )[0][0]
-
-        if candidate_feat.province_code != target_feat.province_code:
-            similarity_score *= 0.1
-        elif (
-            target_feat.district_id
-            and candidate_feat.district_id
-            and candidate_feat.district_id != target_feat.district_id
-        ):
-            similarity_score *= 0.7
-        elif (
-            target_feat.ward_id
-            and candidate_feat.ward_id
-            and candidate_feat.ward_id != target_feat.ward_id
-        ) or (
-            target_feat.ward_code
-            and candidate_feat.ward_code
-            and candidate_feat.ward_code != target_feat.ward_code
-        ):
-            similarity_score *= 0.9
-        return float(similarity_score)
-
-    def _calculate_final_score(
-        self, sim_score, pers_score, candidate, has_pers
-    ) -> float:
-        if has_pers:
-            blended = (0.9 * sim_score) + (0.1 * pers_score)
-        else:
-            blended = sim_score
-
-        vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
-        freshness_boost = max(0, 1 - (candidate.post_date_days_ago * 0.01))
-        return float(blended * vip_boost * (1 + 0.1 * freshness_boost))
 
     async def get_personalized_feed(
         self, req: PersonalizedFeedRequest
@@ -211,22 +258,111 @@ class RecommendationService:
         else:
             cbf_scores_raw = np.zeros(len(req.candidates))
 
+        # --- Calculate Base Hybrid Scores for candidates ---
+        base_scores = []
+        for idx, candidate in enumerate(req.candidates):
+            cf_val = cf_scores.get(candidate.listing_id, 0.0)
+            cbf_val = float(cbf_scores_raw[idx])
+            if cf_val > 0:
+                bs = (0.4 * cf_val) + (0.6 * cbf_val)
+            else:
+                bs = cbf_val * 0.9
+            base_scores.append(bs)
+        base_scores = np.array(base_scores)
+
+        # MinMax Normalization with safety guard clause
+        base_scores_norm = self._normalize_scores_minmax(base_scores)
+
+        # --- Compute Physical or Virtual Distances ---
+        target_lat = None
+        target_lon = None
+        ref_listing = None
+        if req.interaction_features:
+            for feat in req.interaction_features:
+                if feat.latitude is not None and feat.longitude is not None:
+                    target_lat = feat.latitude
+                    target_lon = feat.longitude
+                    ref_listing = feat
+                    break
+
+        distances = []
+        has_gps = []
+        c_lats = []
+        c_lons = []
+        for candidate in req.candidates:
+            if (
+                target_lat is not None
+                and target_lon is not None
+                and candidate.latitude is not None
+                and candidate.longitude is not None
+            ):
+                has_gps.append(True)
+                c_lats.append(candidate.latitude)
+                c_lons.append(candidate.longitude)
+            else:
+                has_gps.append(False)
+                c_lats.append(0.0)
+                c_lons.append(0.0)
+
+        has_gps = np.array(has_gps)
+        c_lats = np.array(c_lats)
+        c_lons = np.array(c_lons)
+
+        if target_lat is not None and target_lon is not None and np.any(has_gps):
+            gps_distances = self._calculate_haversine_vectorized(
+                target_lat, target_lon, c_lats, c_lons
+            )
+        else:
+            gps_distances = np.zeros(len(req.candidates))
+
+        # Fallback VirtualTarget class for unified administrative matching
+        class VirtualTarget:
+            def __init__(self, province_code, district_id, ward_id, ward_code):
+                self.province_code = province_code
+                self.district_id = district_id
+                self.ward_id = ward_id
+                self.ward_code = ward_code
+
+        fallback_target: Any = ref_listing
+        if fallback_target is None:
+            fallback_target = VirtualTarget(
+                shift_prov or pref_prov,
+                shift_dist or pref_dist,
+                shift_ward_id or pref_ward_id,
+                shift_ward_code or pref_ward_code,
+            )
+
+        for idx, candidate in enumerate(req.candidates):
+            if has_gps[idx]:
+                distances.append(float(gps_distances[idx]))
+            else:
+                distances.append(
+                    self._compute_virtual_distance(fallback_target, candidate)
+                )
+
+        dist_array = np.array(distances)
+        decay_factors = np.exp(-0.138 * dist_array)
+        geospatial_scores = base_scores_norm * decay_factors
+
+        # --- Score each candidate and apply VIP/Freshness Boosts ---
         results = []
         for idx, candidate in enumerate(req.candidates):
-            score_data = self._score_personalized_candidate(
-                candidate,
-                float(cbf_scores_raw[idx]),
-                cf_scores.get(candidate.listing_id, 0.0),
-                pref_prov,
-                pref_dist,
-                pref_ward_id,
-                pref_ward_code,
-                shift_prov,
-                shift_dist,
-                shift_ward_id,
-                shift_ward_code,
+            geo_score = float(geospatial_scores[idx])
+            cf_val = cf_scores.get(candidate.listing_id, 0.0)
+            cbf_val = float(cbf_scores_raw[idx])
+
+            vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
+            freshness_boost = max(0.0, 1.0 - (candidate.post_date_days_ago * 0.01))
+            final_score = geo_score * vip_boost * (1.0 + 0.1 * freshness_boost)
+
+            results.append(
+                RecommendationItem(
+                    listing_id=candidate.listing_id,
+                    score=round(final_score, 4),
+                    cf_score=round(cf_val, 4),
+                    cbf_score=round(cbf_val, 4),
+                )
             )
-            results.append(score_data)
 
         results.sort(key=lambda x: x.score, reverse=True)
 
@@ -288,63 +424,6 @@ class RecommendationService:
         if total_weight > 0:
             profile_vector /= total_weight
         return profile_vector, total_weight
-
-    def _score_personalized_candidate(
-        self,
-        candidate,
-        cbf_score: float,
-        cf_score: float,
-        pref_prov,
-        pref_dist,
-        pref_ward_id,
-        pref_ward_code,
-        shift_prov,
-        shift_dist,
-        shift_ward_id,
-        shift_ward_code,
-    ) -> RecommendationItem:
-        # Geographic Penalty (uses preferred location unless there's a shift)
-        target_prov = shift_prov or pref_prov
-        target_dist = shift_dist or pref_dist
-        target_ward_id = shift_ward_id or pref_ward_id
-        target_ward_code = shift_ward_code or pref_ward_code
-
-        if target_prov and candidate.province_code != target_prov:
-            cbf_score *= 0.5
-        elif target_dist and candidate.district_id != target_dist:
-            cbf_score *= 0.7
-        elif (
-            target_ward_id and candidate.ward_id and candidate.ward_id != target_ward_id
-        ) or (
-            target_ward_code
-            and candidate.ward_code
-            and candidate.ward_code != target_ward_code
-        ):
-            cbf_score *= 0.9
-
-        # Feature Weighting is applied via the _build_feature_matrix (weights were applied conceptually there,
-        # or we can apply it on the base cbf score if product_type matches but matrix takes care of one-hot similarity)
-        # To specifically boost product_type and price:
-        # Product type one-hot is in the matrix, price is in the matrix.
-        # We can add explicit boost if we know what product type is preferred.
-        # The user profile vector naturally has higher values for the mode product type.
-
-        # 2. Hybrid Base
-        base_score = (
-            (0.4 * cf_score) + (0.6 * cbf_score) if cf_score > 0 else cbf_score * 0.9
-        )
-
-        # 3. Boosts
-        vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
-        freshness_boost = max(0, 1 - (candidate.post_date_days_ago * 0.01))
-        final_score = base_score * vip_boost * (1 + 0.1 * freshness_boost)
-
-        return RecommendationItem(
-            listing_id=candidate.listing_id,
-            score=round(float(final_score), 4),
-            cf_score=round(float(cf_score), 4),
-            cbf_score=round(float(cbf_score), 4),
-        )
 
     def _detect_preferred_location(self, interaction_features):
         if not interaction_features:
