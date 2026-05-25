@@ -58,22 +58,46 @@ class RecommendationService:
             else:
                 has_personalization = False
 
+        # Vectorized similarity and personalization computations (eliminates loop overhead)
+        candidate_matrix = np.array(
+            [features_matrix[id_to_index[c.listing_id]] for c in req.candidates]
+        )
+        raw_sim_scores = cosine_similarity(target_vec.reshape(1, -1), candidate_matrix)[
+            0
+        ]
+
+        if has_personalization:
+            raw_pers_scores = cosine_similarity(
+                profile_vector.reshape(1, -1), candidate_matrix
+            )[0]
+        else:
+            raw_pers_scores = np.zeros(len(req.candidates))
+
         # --- Score each candidate ---
         results = []
-        for candidate in req.candidates:
-            candidate_vec = features_matrix[id_to_index[candidate.listing_id]]
+        for idx, candidate in enumerate(req.candidates):
+            # Apply geographical penalty to base similarity score
+            similarity_score = float(raw_sim_scores[idx])
+            if candidate.province_code != req.target.province_code:
+                similarity_score *= 0.1
+            elif (
+                req.target.district_id
+                and candidate.district_id
+                and candidate.district_id != req.target.district_id
+            ):
+                similarity_score *= 0.7
+            elif (
+                req.target.ward_id
+                and candidate.ward_id
+                and candidate.ward_id != req.target.ward_id
+            ) or (
+                req.target.ward_code
+                and candidate.ward_code
+                and candidate.ward_code != req.target.ward_code
+            ):
+                similarity_score *= 0.9
 
-            # 1. Similarity score
-            similarity_score = self._compute_similarity_with_penalty(
-                target_vec, candidate_vec, req.target, candidate
-            )
-
-            # 2. Personalization score
-            personalization_score = 0.0
-            if has_personalization:
-                personalization_score = cosine_similarity(
-                    profile_vector.reshape(1, -1), candidate_vec.reshape(1, -1)
-                )[0][0]
+            personalization_score = float(raw_pers_scores[idx])
 
             # 3. Blended & Boosted final score
             final_score = self._calculate_final_score(
@@ -176,13 +200,22 @@ class RecommendationService:
             [c.listing_id for c in req.candidates],
         )
 
+        # Vectorized CBF similarity computation (eliminates loop overhead)
+        candidate_matrix = np.array(
+            [features_matrix[id_to_index[c.listing_id]] for c in req.candidates]
+        )
+        if total_w > 0:
+            cbf_scores_raw = cosine_similarity(
+                profile_vec.reshape(1, -1), candidate_matrix
+            )[0]
+        else:
+            cbf_scores_raw = np.zeros(len(req.candidates))
+
         results = []
-        for candidate in req.candidates:
+        for idx, candidate in enumerate(req.candidates):
             score_data = self._score_personalized_candidate(
                 candidate,
-                features_matrix[id_to_index[candidate.listing_id]],
-                profile_vec,
-                total_w,
+                float(cbf_scores_raw[idx]),
                 cf_scores.get(candidate.listing_id, 0.0),
                 pref_prov,
                 pref_dist,
@@ -259,10 +292,8 @@ class RecommendationService:
     def _score_personalized_candidate(
         self,
         candidate,
-        candidate_vec,
-        profile_vec,
-        total_w,
-        cf_score,
+        cbf_score: float,
+        cf_score: float,
         pref_prov,
         pref_dist,
         pref_ward_id,
@@ -272,13 +303,6 @@ class RecommendationService:
         shift_ward_id,
         shift_ward_code,
     ) -> RecommendationItem:
-        # 1. CBF Score
-        cbf_score = 0.0
-        if total_w > 0:
-            cbf_score = cosine_similarity(
-                profile_vec.reshape(1, -1), candidate_vec.reshape(1, -1)
-            )[0][0]
-
         # Geographic Penalty (uses preferred location unless there's a shift)
         target_prov = shift_prov or pref_prov
         target_dist = shift_dist or pref_dist
@@ -463,39 +487,48 @@ class RecommendationService:
         all_interactions: List[InteractionEntry],
         candidate_ids: List[int],
     ) -> Dict[int, float]:
-        # Build user-item matrix from all_interactions
-        user_item_matrix: Dict[
-            str, Dict[int, float]
-        ] = {}  # { user_id: { listing_id: weight } }
+        # Build item-to-users index: { listing_id: { user_id: weight } }
+        item_to_users: Dict[int, Dict[str, float]] = {}
         for interaction in all_interactions:
             u_id = interaction.user_id
             l_id = interaction.listing_id
             w = interaction.weight
 
-            if u_id not in user_item_matrix:
-                user_item_matrix[u_id] = {}
-            # Keep max weight if multiple interactions
-            user_item_matrix[u_id][l_id] = max(user_item_matrix[u_id].get(l_id, 0.0), w)
+            if l_id not in item_to_users:
+                item_to_users[l_id] = {}
+            item_to_users[l_id][u_id] = max(item_to_users[l_id].get(u_id, 0.0), w)
 
         # Target user items
         target_user_items = {i.listing_id: i.weight for i in user_interactions}
-        if not target_user_items or not user_item_matrix:
+        if not target_user_items or not item_to_users:
             return {c: 0.0 for c in candidate_ids}
 
         # Item-Item co-occurrence
         cf_scores = {}
         for candidate_id in candidate_ids:
             if candidate_id in target_user_items:
-                continue  # User already interacted with this, backend should have filtered it, but just in case
+                continue
 
             score = 0.0
-            for target_id, t_weight in target_user_items.items():
-                co_occur_users = 0.0
-                for u_id, items in user_item_matrix.items():
-                    if target_id in items and candidate_id in items:
-                        co_occur_users += min(items[target_id], items[candidate_id])
+            candidate_users = item_to_users.get(candidate_id, {})
+            if not candidate_users:
+                cf_scores[candidate_id] = 0.0
+                continue
 
-                # Adding normalized co-occurrence score
+            for target_id, t_weight in target_user_items.items():
+                target_users = item_to_users.get(target_id, {})
+                if not target_users:
+                    continue
+
+                # Intersection of users who interacted with both candidate and target
+                # dict.keys() in Python 3 supports set-like operations (&) implemented in C
+                common_users = target_users.keys() & candidate_users.keys()
+                if not common_users:
+                    continue
+
+                co_occur_users = sum(
+                    min(target_users[u], candidate_users[u]) for u in common_users
+                )
                 score += co_occur_users * t_weight
 
             # Normalize score
