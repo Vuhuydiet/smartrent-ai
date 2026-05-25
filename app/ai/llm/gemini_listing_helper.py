@@ -458,10 +458,24 @@ Return a JSON response with this exact structure (keep messages concise, max 100
 
         data = cls._parse_json_response(text)
 
-        # Sanitize 'missing_fields' in 'reason' to ensure it's a list.
+        # Sanitize 'missing_fields' in 'reason' to ensure it's a list of strings.
         if "reason" in data and isinstance(data["reason"], dict):
             mf = data["reason"].get("missing_fields")
-            if mf is not None and not isinstance(mf, list):
+            if isinstance(mf, list):
+                sanitized_mf = []
+                for field in mf:
+                    if isinstance(field, dict):
+                        val = (
+                            field.get("field")
+                            or field.get("message")
+                            or field.get("text")
+                            or str(field)
+                        )
+                        sanitized_mf.append(val)
+                    elif field is not None:
+                        sanitized_mf.append(str(field))
+                data["reason"]["missing_fields"] = sanitized_mf
+            elif mf is not None:
                 logger.warning(
                     "Sanitizing 'reason.missing_fields' from %s to []", type(mf)
                 )
@@ -471,12 +485,44 @@ Return a JSON response with this exact structure (keep messages concise, max 100
             data["completeness_validation"], dict
         ):
             mf = data["completeness_validation"].get("missing_fields")
-            if mf is not None and not isinstance(mf, list):
+            if isinstance(mf, list):
+                sanitized_mf = []
+                for field in mf:
+                    if isinstance(field, dict):
+                        val = (
+                            field.get("field")
+                            or field.get("message")
+                            or field.get("text")
+                            or str(field)
+                        )
+                        sanitized_mf.append(val)
+                    elif field is not None:
+                        sanitized_mf.append(str(field))
+                data["completeness_validation"]["missing_fields"] = sanitized_mf
+            elif mf is not None:
                 logger.warning(
                     "Sanitizing 'completeness_validation.missing_fields' from %s to []",
                     type(mf),
                 )
                 data["completeness_validation"]["missing_fields"] = []
+
+            qi = data["completeness_validation"].get("quality_issues")
+            if isinstance(qi, list):
+                sanitized_qi = []
+                for issue in qi:
+                    if isinstance(issue, dict):
+                        val = (
+                            issue.get("message")
+                            or issue.get("text")
+                            or issue.get("issue")
+                            or str(issue)
+                        )
+                        sanitized_qi.append(val)
+                    elif issue is not None:
+                        sanitized_qi.append(str(issue))
+                data["completeness_validation"]["quality_issues"] = sanitized_qi
+            elif qi is not None:
+                data["completeness_validation"]["quality_issues"] = []
 
         # Sanitize 'issues' in validations to ensure they are Lists of strings, not Lists of dicts.
         for validation_key in [
@@ -502,6 +548,26 @@ Return a JSON response with this exact structure (keep messages concise, max 100
                     data[validation_key]["issues"] = sanitized_issues
                 elif issues is not None:
                     data[validation_key]["issues"] = []
+
+        # Sanitize 'violation_codes' to ensure it is a list of strings
+        if "violation_codes" in data:
+            vc = data["violation_codes"]
+            if isinstance(vc, list):
+                sanitized_vc = []
+                for code in vc:
+                    if isinstance(code, dict):
+                        val = (
+                            code.get("code")
+                            or code.get("category")
+                            or code.get("message")
+                            or str(code)
+                        )
+                        sanitized_vc.append(val)
+                    elif code is not None:
+                        sanitized_vc.append(str(code))
+                data["violation_codes"] = sanitized_vc
+            elif vc is not None:
+                data["violation_codes"] = []
 
         # Sanitize 'suggestions' to ensure it's a list of dicts.
         if "suggestions" in data and isinstance(data["suggestions"], list):
