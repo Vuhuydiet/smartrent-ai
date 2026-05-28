@@ -22,6 +22,15 @@ class RecommendationService:
             "DIAMOND": 1.15,
         }
         self.VIP_RANKS = {"DIAMOND": 4, "GOLD": 3, "SILVER": 2, "NORMAL": 1}
+        # Geospatial decay in exp(-k * dist_km). k = ln(2)/10 → score halves
+        # every 10 km, so cross-district listings stay competitive.
+        self.DECAY_COEFFICIENT = float(np.log(2.0) / 10.0)
+        # Freshness boost weight: a brand-new listing gets +30%, a 100-day-old
+        # one gets +0%. Larger weight = freshness matters more in ranking.
+        self.FRESHNESS_WEIGHT = 0.3
+        # MinMax normalization floor: the weakest candidate is mapped to this
+        # value instead of 0.0, so a relevant listing never shows a 0 score.
+        self.NORMALIZATION_FLOOR = 0.1
 
     def _calculate_haversine_vectorized(
         self,
@@ -75,13 +84,24 @@ class RecommendationService:
         max_val = np.max(scores)
         if max_val == min_val:
             return np.ones_like(scores)
-        return (scores - min_val) / (max_val - min_val)
+        norm = (scores - min_val) / (max_val - min_val)
+        floor = self.NORMALIZATION_FLOOR
+        return floor + (1.0 - floor) * norm
 
     async def get_similar_listings(
         self, req: SimilarListingRequest
     ) -> List[RecommendationItem]:
         if not req.candidates:
             return []
+
+        # Deduplicate candidates by listing_id
+        seen = set()
+        unique_candidates = []
+        for c in req.candidates:
+            if c.listing_id not in seen:
+                seen.add(c.listing_id)
+                unique_candidates.append(c)
+        req.candidates = unique_candidates
 
         # Feature matrix — includes target, candidates, and historical interaction features
         all_listings_for_matrix = [req.target] + req.candidates
@@ -176,7 +196,7 @@ class RecommendationService:
                 distances.append(self._compute_virtual_distance(req.target, candidate))
 
         dist_array = np.array(distances)
-        decay_factors = np.exp(-0.138 * dist_array)
+        decay_factors = np.exp(-self.DECAY_COEFFICIENT * dist_array)
         geospatial_scores = base_scores_norm * decay_factors
 
         # --- Score each candidate and apply VIP/Freshness Boosts ---
@@ -188,7 +208,9 @@ class RecommendationService:
 
             vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
             freshness_boost = max(0.0, 1.0 - (candidate.post_date_days_ago * 0.01))
-            final_score = geo_score * vip_boost * (1.0 + 0.1 * freshness_boost)
+            final_score = (
+                geo_score * vip_boost * (1.0 + self.FRESHNESS_WEIGHT * freshness_boost)
+            )
 
             results.append(
                 RecommendationItem(
@@ -207,6 +229,15 @@ class RecommendationService:
     ) -> List[RecommendationItem]:
         if not req.candidates:
             return []
+
+        # Deduplicate candidates by listing_id
+        seen = set()
+        unique_candidates = []
+        for c in req.candidates:
+            if c.listing_id not in seen:
+                seen.add(c.listing_id)
+                unique_candidates.append(c)
+        req.candidates = unique_candidates
 
         # Feature matrix
         all_listings_for_matrix = req.candidates
@@ -229,16 +260,6 @@ class RecommendationService:
             pref_ward_id,
             pref_ward_code,
         ) = self._detect_preferred_location(req.interaction_features)
-
-        # Shift Detection
-        (
-            shift_prov,
-            shift_dist,
-            shift_ward_id,
-            shift_ward_code,
-        ) = self._detect_shift_location(
-            req.interaction_features, pref_prov, pref_dist, pref_ward_id, pref_ward_code
-        )
 
         # CF Computation
         cf_scores = self._compute_cf_scores(
@@ -326,10 +347,7 @@ class RecommendationService:
         fallback_target: Any = ref_listing
         if fallback_target is None:
             fallback_target = VirtualTarget(
-                shift_prov or pref_prov,
-                shift_dist or pref_dist,
-                shift_ward_id or pref_ward_id,
-                shift_ward_code or pref_ward_code,
+                pref_prov, pref_dist, pref_ward_id, pref_ward_code
             )
 
         for idx, candidate in enumerate(req.candidates):
@@ -341,7 +359,7 @@ class RecommendationService:
                 )
 
         dist_array = np.array(distances)
-        decay_factors = np.exp(-0.138 * dist_array)
+        decay_factors = np.exp(-self.DECAY_COEFFICIENT * dist_array)
         geospatial_scores = base_scores_norm * decay_factors
 
         # --- Score each candidate and apply VIP/Freshness Boosts ---
@@ -353,7 +371,9 @@ class RecommendationService:
 
             vip_boost = self.VIP_WEIGHTS.get(candidate.vip_type.upper(), 1.0)
             freshness_boost = max(0.0, 1.0 - (candidate.post_date_days_ago * 0.01))
-            final_score = geo_score * vip_boost * (1.0 + 0.1 * freshness_boost)
+            final_score = (
+                geo_score * vip_boost * (1.0 + self.FRESHNESS_WEIGHT * freshness_boost)
+            )
 
             results.append(
                 RecommendationItem(
@@ -365,47 +385,9 @@ class RecommendationService:
             )
 
         results.sort(key=lambda x: x.score, reverse=True)
-
-        # Position Pinning
-        # If there is a shift, find the top 3 candidates that match the shift location and pin them to pos 8,9,10
-        if shift_ward_id or shift_ward_code or shift_dist or shift_prov:
-            pinned: List[RecommendationItem] = []
-            non_pinned: List[RecommendationItem] = []
-            for item in results:
-                c = next(
-                    cand
-                    for cand in req.candidates
-                    if cand.listing_id == item.listing_id
-                )
-                match = False
-                if shift_ward_id and c.ward_id == shift_ward_id:
-                    match = True
-                elif shift_ward_code and c.ward_code == shift_ward_code:
-                    match = True
-                elif (
-                    shift_dist
-                    and not shift_ward_id
-                    and not shift_ward_code
-                    and c.district_id == shift_dist
-                ):
-                    match = True
-                elif (
-                    shift_prov
-                    and not shift_dist
-                    and not shift_ward_id
-                    and not shift_ward_code
-                    and c.province_code == shift_prov
-                ):
-                    match = True
-
-                if match and len(pinned) < 3:
-                    pinned.append(item)
-                else:
-                    non_pinned.append(item)
-
-            final_results = non_pinned[:7] + pinned + non_pinned[7:]
-            return final_results[: req.top_n]
-
+        # Position pinning (discovery-shift slots 8/9/10) is handled by the Java
+        # backend, which owns the final feed assembly. Here we only return the
+        # relevance-ranked list.
         return results[: req.top_n]
 
     def _build_user_profile(
@@ -441,61 +423,6 @@ class RecommendationService:
             Counter(wards_code).most_common(1)[0][0] if wards_code else None
         )
         return pref_prov, pref_dist, pref_ward_id, pref_ward_code
-
-    def _detect_shift_location(
-        self, interaction_features, pref_prov, pref_dist, pref_ward_id, pref_ward_code
-    ):
-        if not interaction_features or len(interaction_features) == 0:
-            return None, None, None, None
-
-        weights = [0.5, 0.3, 0.2]
-        recent_features = interaction_features[:3]
-
-        prov_weights = {}
-        dist_weights = {}
-        ward_id_weights = {}
-        ward_code_weights = {}
-
-        for i, f in enumerate(recent_features):
-            w = weights[i] if i < len(weights) else 0.0
-            if f.province_code:
-                prov_weights[f.province_code] = (
-                    prov_weights.get(f.province_code, 0.0) + w
-                )
-            if f.district_id:
-                dist_weights[f.district_id] = dist_weights.get(f.district_id, 0.0) + w
-            if f.ward_id:
-                ward_id_weights[f.ward_id] = ward_id_weights.get(f.ward_id, 0.0) + w
-            if f.ward_code:
-                ward_code_weights[f.ward_code] = (
-                    ward_code_weights.get(f.ward_code, 0.0) + w
-                )
-
-        # Highest precision first: Ward > District > Province
-        for ward_id, weight in ward_id_weights.items():
-            if weight > 0.7 and ward_id != pref_ward_id:
-                ward_code = next(
-                    (f.ward_code for f in recent_features if f.ward_id == ward_id), None
-                )
-                return None, None, ward_id, ward_code
-
-        for ward_code, weight in ward_code_weights.items():
-            if weight > 0.7 and ward_code != pref_ward_code:
-                ward_id = next(
-                    (f.ward_id for f in recent_features if f.ward_code == ward_code),
-                    None,
-                )
-                return None, None, ward_id, ward_code
-
-        for district_id, weight in dist_weights.items():
-            if weight > 0.7 and district_id != pref_dist:
-                return None, district_id, None, None
-
-        for province_code, weight in prov_weights.items():
-            if weight > 0.7 and province_code != pref_prov:
-                return province_code, None, None, None
-
-        return None, None, None, None
 
     def _build_feature_matrix(
         self, listings: List[ListingFeature]

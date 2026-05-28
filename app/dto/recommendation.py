@@ -30,7 +30,6 @@ class SimilarListingRequest(BaseModel):
     target: ListingFeature
     candidates: List[ListingFeature]
     top_n: int = 8
-    alpha: float = 0.4  # CF weight vs CBF weight (unused for similar, kept for compat)
     user_interactions: Optional[
         List[InteractionEntry]
     ] = None  # Optional: user interaction weights
@@ -47,7 +46,6 @@ class PersonalizedFeedRequest(BaseModel):
     ]  # interactions for candidate items from all users
     candidates: List[ListingFeature]
     top_n: int = 20
-    alpha: float = 0.4  # CF vs CBF weighting
     interaction_features: Optional[List[ListingFeature]] = None
 
 
