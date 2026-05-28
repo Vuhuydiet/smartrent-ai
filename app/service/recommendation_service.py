@@ -136,13 +136,13 @@ class RecommendationService:
         candidate_matrix = np.array(
             [features_matrix[id_to_index[c.listing_id]] for c in req.candidates]
         )
-        raw_sim_scores = cosine_similarity(target_vec.reshape(1, -1), candidate_matrix)[
+        raw_sim_scores = cosine_similarity(target_vec.reshape(1, -1), candidate_matrix)[  # type: ignore
             0
         ]
 
         if has_personalization:
             raw_pers_scores = cosine_similarity(
-                profile_vector.reshape(1, -1), candidate_matrix
+                profile_vector.reshape(1, -1), candidate_matrix  # type: ignore
             )[0]
         else:
             raw_pers_scores = np.zeros(len(req.candidates))
@@ -274,7 +274,7 @@ class RecommendationService:
         )
         if total_w > 0:
             cbf_scores_raw = cosine_similarity(
-                profile_vec.reshape(1, -1), candidate_matrix
+                profile_vec.reshape(1, -1), candidate_matrix  # type: ignore
             )[0]
         else:
             cbf_scores_raw = np.zeros(len(req.candidates))
@@ -437,9 +437,9 @@ class RecommendationService:
         )
 
         scaler = MinMaxScaler()
-        prices_norm = scaler.fit_transform(prices)
-        areas_norm = scaler.fit_transform(areas)
-        bedrooms_norm = scaler.fit_transform(bedrooms)
+        prices_norm = scaler.fit_transform(prices)  # type: ignore
+        areas_norm = scaler.fit_transform(areas)  # type: ignore
+        bedrooms_norm = scaler.fit_transform(bedrooms)  # type: ignore
 
         # One-hot encoding simple emulation
         product_types = ["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"]
