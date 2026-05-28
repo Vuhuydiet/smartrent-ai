@@ -299,6 +299,34 @@ The service provides detailed logging:
 - Error conditions
 - Performance metrics
 
+## Backend Orchestration & Scheduler Toggles
+
+The Python AI service is orchestrated by the Spring Boot backend, which runs a scheduled job every 5 minutes to verify pending listings in batches.
+
+To manage the AI Auto-Moderation scheduler at runtime, administrators can use the following backend APIs:
+
+### 1. Get Scheduler Status
+`GET /v1/ai/listings/scheduler/status`
+* **Role required**: `ROLE_SA`, `ROLE_UA`, `ROLE_SPA` (Admin only)
+* **Headers**:
+  * `X-Admin-Id`: Admin ID performing the check (required)
+  * `Authorization`: `Bearer <token>`
+* **Description**: Returns whether the AI auto-moderation scheduler is currently enabled or disabled at runtime.
+
+### 2. Toggle Scheduler On/Off
+`PUT /v1/ai/listings/scheduler/toggle`
+* **Role required**: `ROLE_SA`, `ROLE_UA`, `ROLE_SPA` (Admin only)
+* **Headers**:
+  * `X-Admin-Id`: Admin ID performing the change (required)
+  * `Authorization`: `Bearer <token>`
+* **Query Parameters**:
+  * `enabled`: (Boolean) `true` to enable, `false` to disable (e.g., `?enabled=false`)
+* **Description**:
+  * `enabled=true`: Scheduler runs every 5 minutes to automatically process pending listings.
+  * `enabled=false`: Pauses the scheduler. Pending listings remain in the `PENDING` state and require manual review.
+
+---
+
 ## Future Enhancements
 
 - [ ] Support for additional image formats
