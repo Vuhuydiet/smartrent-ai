@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import MinMaxScaler
 
 from app.dto.recommendation import (
     InteractionEntry,
@@ -430,62 +429,46 @@ class RecommendationService:
         if not listings:
             return np.array([]), {}
 
-        prices = np.array([listing.price for listing in listings]).reshape(-1, 1)
-        areas = np.array([listing.area or 0.0 for listing in listings]).reshape(-1, 1)
-        bedrooms = np.array([listing.bedrooms or 0 for listing in listings]).reshape(
-            -1, 1
-        )
-
-        scaler = MinMaxScaler()
-        prices_norm = scaler.fit_transform(prices)  # type: ignore
-        areas_norm = scaler.fit_transform(areas)  # type: ignore
-        bedrooms_norm = scaler.fit_transform(bedrooms)  # type: ignore
-
-        # One-hot encoding simple emulation
-        product_types = ["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"]
-        listing_types = ["RENT", "SALE", "SHARE"]
-
-        # Location features
-        province_codes = [listing.province_code or "UNKNOWN" for listing in listings]
-
-        # Unique province codes for one-hot
-        unique_provinces = list(set(province_codes))
-
-        matrix = []
-        id_to_index = {}
-        for idx, listing in enumerate(listings):
-            id_to_index[listing.listing_id] = idx
-
-            # Base features: price, area, bedrooms (normalized)
-            # Apply weights: Price 1.2x, Area 1.0x, Bedrooms 1.0x
-            row = [
-                prices_norm[idx][0] * 1.2,
-                areas_norm[idx][0] * 1.0,
-                bedrooms_norm[idx][0] * 1.0,
+        # --- Numeric features: normalize all in one vectorized pass ---
+        numeric = np.column_stack(
+            [
+                [listing.price for listing in listings],
+                [listing.area or 0.0 for listing in listings],
+                [listing.bedrooms or 0 for listing in listings],
             ]
+        ).astype(float)
+        # MinMax per column in one shot
+        col_min = numeric.min(axis=0)
+        col_max = numeric.max(axis=0)
+        col_range = col_max - col_min
+        col_range[col_range == 0] = 1.0  # avoid div-by-zero
+        numeric_norm = (numeric - col_min) / col_range
+        # Apply feature weights: Price 1.2x, Area 1.0x, Bedrooms 1.0x
+        numeric_norm *= np.array([1.2, 1.0, 1.0])
 
-            # Add one-hot product type (Weight: 1.5x)
-            row.extend(
-                [1.5 if listing.product_type == pt else 0.0 for pt in product_types]
-            )
-            # Add one-hot listing type (Weight 1.0)
-            row.extend(
-                [1.0 if listing.listing_type == lt else 0.0 for lt in listing_types]
-            )
+        # --- One-hot: product_type (weight 1.5x) ---
+        product_types = ["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"]
+        prod_arr = np.array([listing.product_type for listing in listings])
+        product_oh = (prod_arr[:, None] == np.array(product_types)).astype(float) * 1.5
 
-            # Location features (one-hot or direct match)
-            # We use a simple approach: if we have 100+ provinces, one-hot might be too wide.
-            # But here we focus on the target vs candidates.
-            # Let's add province match as a high-weight feature implicitly by the matrix
-            # or we can handle it in the distance calculation.
-            # For now, let's add them to the matrix to allow cosine similarity to see them.
-            row.extend(
-                [1.0 if province_codes[idx] == p else 0.0 for p in unique_provinces]
-            )
+        # --- One-hot: listing_type (weight 1.0x) ---
+        listing_types = ["RENT", "SALE", "SHARE"]
+        lt_arr = np.array([listing.listing_type for listing in listings])
+        listing_oh = (lt_arr[:, None] == np.array(listing_types)).astype(float)
 
-            matrix.append(row)
+        # --- One-hot: province_code (weight 1.0x) ---
+        province_arr = np.array(
+            [listing.province_code or "UNKNOWN" for listing in listings]
+        )
+        unique_provinces = np.unique(province_arr)
+        province_oh = (province_arr[:, None] == unique_provinces).astype(float)
 
-        return np.array(matrix), id_to_index
+        # --- Stack all features into final matrix (fully vectorized) ---
+        matrix = np.hstack([numeric_norm, product_oh, listing_oh, province_oh])
+
+        id_to_index = {listing.listing_id: idx for idx, listing in enumerate(listings)}
+
+        return matrix, id_to_index
 
     def _compute_cf_scores(
         self,
