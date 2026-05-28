@@ -160,9 +160,9 @@ class RecommendationService:
         target_lat = req.target.latitude
         target_lon = req.target.longitude
 
-        has_gps = []
-        c_lats = []
-        c_lons = []
+        has_gps_list = []
+        c_lats_list = []
+        c_lons_list = []
         for candidate in req.candidates:
             if (
                 target_lat is not None
@@ -170,17 +170,17 @@ class RecommendationService:
                 and candidate.latitude is not None
                 and candidate.longitude is not None
             ):
-                has_gps.append(True)
-                c_lats.append(candidate.latitude)
-                c_lons.append(candidate.longitude)
+                has_gps_list.append(True)
+                c_lats_list.append(candidate.latitude)
+                c_lons_list.append(candidate.longitude)
             else:
-                has_gps.append(False)
-                c_lats.append(0.0)
-                c_lons.append(0.0)
+                has_gps_list.append(False)
+                c_lats_list.append(0.0)
+                c_lons_list.append(0.0)
 
-        has_gps = np.array(has_gps)
-        c_lats = np.array(c_lats)
-        c_lons = np.array(c_lons)
+        has_gps = np.array(has_gps_list)
+        c_lats = np.array(c_lats_list)
+        c_lons = np.array(c_lons_list)
 
         if target_lat is not None and target_lon is not None and np.any(has_gps):
             gps_distances = self._calculate_haversine_vectorized(
@@ -280,7 +280,7 @@ class RecommendationService:
             cbf_scores_raw = np.zeros(len(req.candidates))
 
         # --- Calculate Base Hybrid Scores for candidates ---
-        base_scores = []
+        base_scores_list = []
         for idx, candidate in enumerate(req.candidates):
             cf_val = cf_scores.get(candidate.listing_id, 0.0)
             cbf_val = float(cbf_scores_raw[idx])
@@ -288,8 +288,8 @@ class RecommendationService:
                 bs = (0.4 * cf_val) + (0.6 * cbf_val)
             else:
                 bs = cbf_val * 0.9
-            base_scores.append(bs)
-        base_scores = np.array(base_scores)
+            base_scores_list.append(bs)
+        base_scores = np.array(base_scores_list)
 
         # MinMax Normalization with safety guard clause
         base_scores_norm = self._normalize_scores_minmax(base_scores)
@@ -307,9 +307,9 @@ class RecommendationService:
                     break
 
         distances = []
-        has_gps = []
-        c_lats = []
-        c_lons = []
+        has_gps_list = []
+        c_lats_list = []
+        c_lons_list = []
         for candidate in req.candidates:
             if (
                 target_lat is not None
@@ -317,17 +317,17 @@ class RecommendationService:
                 and candidate.latitude is not None
                 and candidate.longitude is not None
             ):
-                has_gps.append(True)
-                c_lats.append(candidate.latitude)
-                c_lons.append(candidate.longitude)
+                has_gps_list.append(True)
+                c_lats_list.append(candidate.latitude)
+                c_lons_list.append(candidate.longitude)
             else:
-                has_gps.append(False)
-                c_lats.append(0.0)
-                c_lons.append(0.0)
+                has_gps_list.append(False)
+                c_lats_list.append(0.0)
+                c_lons_list.append(0.0)
 
-        has_gps = np.array(has_gps)
-        c_lats = np.array(c_lats)
-        c_lons = np.array(c_lons)
+        has_gps = np.array(has_gps_list)
+        c_lats = np.array(c_lats_list)
+        c_lons = np.array(c_lons_list)
 
         if target_lat is not None and target_lon is not None and np.any(has_gps):
             gps_distances = self._calculate_haversine_vectorized(
