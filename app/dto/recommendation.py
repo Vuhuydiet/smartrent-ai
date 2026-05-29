@@ -47,6 +47,7 @@ class PersonalizedFeedRequest(BaseModel):
     candidates: List[ListingFeature]
     top_n: int = 20
     interaction_features: Optional[List[ListingFeature]] = None
+    meets_shift_condition: Optional[bool] = False
 
 
 class RecommendationItem(BaseModel):

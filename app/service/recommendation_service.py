@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -20,7 +20,6 @@ class RecommendationService:
             "GOLD": 1.10,
             "DIAMOND": 1.15,
         }
-        self.VIP_RANKS = {"DIAMOND": 4, "GOLD": 3, "SILVER": 2, "NORMAL": 1}
         # Geospatial decay in exp(-k * dist_km). k = ln(2)/10 → score halves
         # every 10 km, so cross-district listings stay competitive.
         self.DECAY_COEFFICIENT = float(np.log(2.0) / 10.0)
@@ -293,49 +292,18 @@ class RecommendationService:
         # MinMax Normalization with safety guard clause
         base_scores_norm = self._normalize_scores_minmax(base_scores)
 
-        # --- Compute Physical or Virtual Distances ---
-        target_lat = None
-        target_lon = None
-        ref_listing = None
-        if req.interaction_features:
-            for feat in req.interaction_features:
-                if feat.latitude is not None and feat.longitude is not None:
-                    target_lat = feat.latitude
-                    target_lon = feat.longitude
-                    ref_listing = feat
-                    break
+        # --- Compute Physical or Virtual Distances (blended anchors) ---
+        # Geo-decay is anchored on up to TWO reference points:
+        #   • the PREFERRED zone (where the user mostly looks), and
+        #   • when meets_shift_condition, the DISCOVERY zone (the new place the
+        #     user is exploring — the most-recent different-place interaction).
+        # Each candidate's distance is the MIN of its distance to either anchor,
+        # so a listing near EITHER zone keeps a high decay factor. This blend stops
+        # a far discovery zone (e.g. another province ~1000 km away) from zeroing
+        # every preferred-area candidate — which previously flipped the WHOLE feed
+        # to the new place instead of staying preferred-dominant with the new area
+        # surfaced only in the few slots the backend pins (8/9/10).
 
-        distances = []
-        has_gps_list = []
-        c_lats_list = []
-        c_lons_list = []
-        for candidate in req.candidates:
-            if (
-                target_lat is not None
-                and target_lon is not None
-                and candidate.latitude is not None
-                and candidate.longitude is not None
-            ):
-                has_gps_list.append(True)
-                c_lats_list.append(candidate.latitude)
-                c_lons_list.append(candidate.longitude)
-            else:
-                has_gps_list.append(False)
-                c_lats_list.append(0.0)
-                c_lons_list.append(0.0)
-
-        has_gps = np.array(has_gps_list)
-        c_lats = np.array(c_lats_list)
-        c_lons = np.array(c_lons_list)
-
-        if target_lat is not None and target_lon is not None and np.any(has_gps):
-            gps_distances = self._calculate_haversine_vectorized(
-                target_lat, target_lon, c_lats, c_lons
-            )
-        else:
-            gps_distances = np.zeros(len(req.candidates))
-
-        # Fallback VirtualTarget class for unified administrative matching
         class VirtualTarget:
             def __init__(self, province_code, district_id, ward_id, ward_code):
                 self.province_code = province_code
@@ -343,21 +311,95 @@ class RecommendationService:
                 self.ward_id = ward_id
                 self.ward_code = ward_code
 
-        fallback_target: Any = ref_listing
-        if fallback_target is None:
-            fallback_target = VirtualTarget(
-                pref_prov, pref_dist, pref_ward_id, pref_ward_code
+        def _pick_ref(want_different):
+            # First GPS interaction matching the wanted relation to the preferred
+            # location (interaction_features arrive recency-first). want_different:
+            # True  → a NEW place (mirrors the backend's isDifferentFromPreferred);
+            # False → best preferred-location match (ward > district > province).
+            feats = req.interaction_features or []
+            if want_different:
+                for feat in feats:
+                    if feat.latitude is None or feat.longitude is None:
+                        continue
+                    if (
+                        (pref_prov and feat.province_code != pref_prov)
+                        or (pref_dist and feat.district_id != pref_dist)
+                        or (pref_ward_code and feat.ward_code != pref_ward_code)
+                        or (pref_ward_id and feat.ward_id != pref_ward_id)
+                    ):
+                        return feat
+                return None
+            best, best_score = None, -1
+            for feat in feats:
+                if feat.latitude is None or feat.longitude is None:
+                    continue
+                score = 0
+                if pref_ward_code and feat.ward_code == pref_ward_code:
+                    score = 3
+                elif pref_ward_id and feat.ward_id == pref_ward_id:
+                    score = 3
+                elif pref_dist and feat.district_id == pref_dist:
+                    score = 2
+                elif pref_prov and feat.province_code == pref_prov:
+                    score = 1
+                if score > best_score:
+                    best, best_score = feat, score
+            return best
+
+        # Preferred anchor (always). The admin VirtualTarget covers GPS-less candidates.
+        pref_ref = _pick_ref(False)
+        pref_virtual = VirtualTarget(pref_prov, pref_dist, pref_ward_id, pref_ward_code)
+        # Each anchor: (lat, lon, admin_target). lat/lon None → admin-only anchor.
+        anchors = [
+            (
+                pref_ref.latitude if pref_ref else None,
+                pref_ref.longitude if pref_ref else None,
+                pref_ref if pref_ref else pref_virtual,
             )
+        ]
 
-        for idx, candidate in enumerate(req.candidates):
-            if has_gps[idx]:
-                distances.append(float(gps_distances[idx]))
-            else:
-                distances.append(
-                    self._compute_virtual_distance(fallback_target, candidate)
+        # Discovery anchor (only when the shift condition is met).
+        if req.meets_shift_condition:
+            disc_ref = _pick_ref(True)
+            if disc_ref is None:
+                # No different-place GPS interaction → most-recent GPS interaction.
+                for feat in req.interaction_features or []:
+                    if feat.latitude is not None and feat.longitude is not None:
+                        disc_ref = feat
+                        break
+            if disc_ref is not None:
+                anchors.append((disc_ref.latitude, disc_ref.longitude, disc_ref))
+
+        cand_has_gps = [
+            c.latitude is not None and c.longitude is not None for c in req.candidates
+        ]
+        c_lats = np.array(
+            [c.latitude if c.latitude is not None else 0.0 for c in req.candidates]
+        )
+        c_lons = np.array(
+            [c.longitude if c.longitude is not None else 0.0 for c in req.candidates]
+        )
+
+        # Distance to each anchor; candidate distance = MIN across anchors.
+        per_anchor = []
+        for a_lat, a_lon, a_target in anchors:
+            if a_lat is not None and a_lon is not None and any(cand_has_gps):
+                gps_d = self._calculate_haversine_vectorized(
+                    a_lat, a_lon, c_lats, c_lons
                 )
+            else:
+                gps_d = None
+            d = np.empty(len(req.candidates))
+            for idx, cand in enumerate(req.candidates):
+                if gps_d is not None and cand_has_gps[idx]:
+                    d[idx] = float(gps_d[idx])
+                else:
+                    d[idx] = self._compute_virtual_distance(a_target, cand)
+            per_anchor.append(d)
 
-        dist_array = np.array(distances)
+        dist_array = (
+            per_anchor[0] if len(per_anchor) == 1 else np.minimum.reduce(per_anchor)
+        )
         decay_factors = np.exp(-self.DECAY_COEFFICIENT * dist_array)
         geospatial_scores = base_scores_norm * decay_factors
 
