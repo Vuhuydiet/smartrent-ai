@@ -831,3 +831,99 @@ def test_personalized_p10_full_pool():
     assert len(ids) == len(set(ids))
     assert all(scores[i] >= scores[i + 1] for i in range(len(scores) - 1))
     assert 5 not in ids[:5] and 14 not in ids[:5]  # far listings not in top-5
+
+
+def test_personalized_p11_meets_shift_condition_false_preserves_preferred_location():
+    # User preferred location is Hanoi (province "01", district 1) since they have more history there.
+    # But they just viewed one listing in HCMC (province "79", district 100).
+    user = "user-p11"
+
+    # Kịch bản 1: meets_shift_condition = False
+    # Tâm tham chiếu địa lý phải là Hà Nội (Listing 9001). Tin Hà Nội (id=1) phải thắng tin HCMC (id=5).
+    data_no_shift = post_personalized(
+        {
+            "user_id": user,
+            "user_interactions": [
+                interaction(user, 9001, 3.0),  # Hanoi
+                interaction(user, 9003, 1.0),  # Hanoi
+                interaction(user, 9002, 1.0),  # HCMC (most recent)
+            ],
+            "all_interactions": [],
+            "candidates": [POOL[0], POOL[4]],  # id=1 (Hanoi), id=5 (HCMC)
+            "top_n": 2,
+            "interaction_features": [
+                make_listing(
+                    9002,
+                    lat=HCMC[0],
+                    lon=HCMC[1],
+                    province="79",
+                    district=100,
+                    ward_id=100,
+                    ward_code="99999",
+                ),  # HCMC (most recent)
+                make_listing(
+                    9001, lat=HANOI[0], lon=HANOI[1], province="01", district=1
+                ),  # Hanoi (preferred)
+                make_listing(
+                    9003,
+                    lat=HANOI[0] + 0.001,
+                    lon=HANOI[1] + 0.001,
+                    province="01",
+                    district=1,
+                ),  # Hanoi
+            ],
+            "meets_shift_condition": False,
+        }
+    )
+    assert data_no_shift[0]["listing_id"] == 1  # Hanoi listing wins!
+
+    # Kịch bản 2: meets_shift_condition = True (BLEND geo-anchor)
+    # Geo-decay được neo vào CẢ HAI: preferred (Hà Nội) + discovery (HCMC), lấy
+    # khoảng cách nhỏ hơn. Nhờ vậy tin HCMC (id=5) KHÔNG còn bị triệt tiêu như khi
+    # no-shift; nhưng tin preferred (Hà Nội id=1) cũng không bị triệt tiêu và vẫn
+    # dẫn đầu xếp hạng relevance của Python (profile nghiêng Hà Nội). Việc surface
+    # tin discovery lên slot 8/9/10 do backend PIN, không phải Python lật cả feed.
+    data_shift = post_personalized(
+        {
+            "user_id": user,
+            "user_interactions": [
+                interaction(user, 9001, 3.0),  # Hanoi
+                interaction(user, 9003, 1.0),  # Hanoi
+                interaction(user, 9002, 1.0),  # HCMC (most recent)
+            ],
+            "all_interactions": [],
+            "candidates": [POOL[0], POOL[4]],  # id=1 (Hanoi), id=5 (HCMC)
+            "top_n": 2,
+            "interaction_features": [
+                make_listing(
+                    9002,
+                    lat=HCMC[0],
+                    lon=HCMC[1],
+                    province="79",
+                    district=100,
+                    ward_id=100,
+                    ward_code="99999",
+                ),  # HCMC (most recent)
+                make_listing(
+                    9001, lat=HANOI[0], lon=HANOI[1], province="01", district=1
+                ),  # Hanoi (preferred)
+                make_listing(
+                    9003,
+                    lat=HANOI[0] + 0.001,
+                    lon=HANOI[1] + 0.001,
+                    province="01",
+                    district=1,
+                ),  # Hanoi
+            ],
+            "meets_shift_condition": True,
+        }
+    )
+
+    def _score(data, lid):
+        return next(r["score"] for r in data if r["listing_id"] == lid)
+
+    # Blend "giải cứu" tin discovery: điểm id=5 khi shift cao hơn hẳn khi no-shift
+    # (no-shift nó bị decay ~1000km về gần 0).
+    assert _score(data_shift, 5) > _score(data_no_shift, 5)
+    # Preferred vẫn dẫn đầu — feed KHÔNG bị lật toàn bộ sang nơi mới.
+    assert data_shift[0]["listing_id"] == 1
