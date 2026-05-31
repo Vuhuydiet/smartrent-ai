@@ -189,7 +189,7 @@ jobs:
             docker images "$REPO" --format '{{.Tag}} {{.CreatedAt}}' \
               | grep -Ev '^(dev|prd|prod|main|latest) ' \
               | grep -v '^<none>' \
-              | sort -k2,2 -r \
+              | sort -k2,3 -r \
               | tail -n +$((KEEP + 1)) \
               | awk '{print $1}' \
               | while read -r tag; do
