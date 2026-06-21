@@ -28,6 +28,7 @@ from agents.exceptions import MaxTurnsExceeded  # type: ignore[import]
 from openai.types.responses import ResponseTextDeltaEvent  # type: ignore[import]
 
 from app.agent.rag.retriever import RAGRetriever
+from app.agent.suggestions import build_suggestions
 from app.agent.tool_context import ToolContext
 from app.agent.tools import get_chat_tools
 from app.ai.llm.agent_factory import default_model_settings, make_model
@@ -679,6 +680,7 @@ class AgentOrchestrator:
             {"event": "status",   "data": {"phase": "thinking"|"tool_call"|"tool_result", ...}}
             {"event": "text",     "data": {"delta": str}}
             {"event": "listings", "data": {...}}
+            {"event": "suggestions", "data": {"items": [{"label": str, "query": str}]}}
             {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
             {"event": "error",    "data": {"message": str}}
         """
@@ -825,6 +827,17 @@ class AgentOrchestrator:
             listings_payload = self._build_listings_payload(tool_ctx.collected_listings)
             if listings_payload:
                 yield {"event": "listings", "data": listings_payload}
+
+            try:
+                suggestions = build_suggestions(
+                    tools_used,
+                    tool_ctx.collected_listings,
+                    bool(auth_token),
+                )
+            except Exception:  # noqa: BLE001 — never let suggestions break the stream
+                suggestions = []
+            if suggestions:
+                yield {"event": "suggestions", "data": {"items": suggestions}}
 
             metadata = {
                 "model": settings.LLM_CHAT_MODEL,
