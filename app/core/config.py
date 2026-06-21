@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     LLM_VISION_MODEL: str = "gemini-2.5-flash"  # Listing verification (text+image)
     LLM_PRICE_MODEL: str = "gemini-2.5-flash"  # Price prediction
 
+    # Google Maps — for get_nearby_places (POI search / distance). When unset,
+    # the tool falls back to haversine distance between two given coordinates.
+    GOOGLE_MAPS_API_KEY: str = ""
+
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
     SMARTRENT_AI_URL: str = "http://localhost:8000"

@@ -11,6 +11,7 @@ from app.agent.tools.address_translator import address_translator
 from app.agent.tools.bulk_save_listings import bulk_save_listings
 from app.agent.tools.compare_listings import compare_listings
 from app.agent.tools.get_listing_detail import get_listing_detail
+from app.agent.tools.get_nearby_places import get_nearby_places
 from app.agent.tools.get_price_estimate import get_price_estimate
 from app.agent.tools.get_price_history import get_price_history
 from app.agent.tools.get_recommendations import get_recommendations
@@ -29,6 +30,7 @@ def get_chat_tools() -> List[Any]:
         # Existing
         search_listings,
         get_listing_detail,
+        get_nearby_places,
         get_price_estimate,
         get_price_history,
         get_recommendations,
@@ -50,6 +52,7 @@ __all__ = [
     "get_chat_tools",
     "search_listings",
     "get_listing_detail",
+    "get_nearby_places",
     "get_price_estimate",
     "get_price_history",
     "get_recommendations",
