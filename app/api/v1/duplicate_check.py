@@ -1,8 +1,9 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
+
+from fastapi import APIRouter, HTTPException, status
 
 from app.service.duplicate_detection_service import DuplicateDetectionService
 

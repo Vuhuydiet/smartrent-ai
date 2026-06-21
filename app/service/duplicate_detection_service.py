@@ -18,10 +18,7 @@ from agents import Agent, Runner  # type: ignore[import]
 
 from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
-from app.ai.text_similarity import (
-    batch_tfidf_similarity,
-    compute_listing_similarity,
-)
+from app.ai.text_similarity import batch_tfidf_similarity, compute_listing_similarity
 from app.core import backend_client
 from app.core.config import settings
 
@@ -291,9 +288,7 @@ class DuplicateDetectionService:
         confirmed.sort(key=lambda x: x["score"], reverse=True)
         return confirmed
 
-    async def _run_llm_oneshot(
-        self, prompt: str, trace: Any, *, span_name: str
-    ) -> str:
+    async def _run_llm_oneshot(self, prompt: str, trace: Any, *, span_name: str) -> str:
         """One-shot LLM call via the Agents SDK (no tools), returns raw text.
 
         Mirrors the pattern in GeminiListingVerificationHelper so the duplicate
