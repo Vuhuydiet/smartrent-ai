@@ -178,6 +178,12 @@ LỊCH SỬ GIÁ:
 TÌM THEO VỊ TRÍ GẦN:
 - Khi người dùng muốn tìm BĐS quanh một vị trí cụ thể (gần trường, gần chợ, tọa độ GPS) → dùng latitude, longitude và radiusKm trong search_listings.
 
+ĐỊA ĐIỂM XUNG QUANH:
+- Khi người dùng hỏi "gần trường nào?", "cách bệnh viện bao xa?", "xung quanh có gì?" → GỌI get_nearby_places với latitude/longitude của BĐS và placeType phù hợp.
+- placeType: school (trường học), university (đại học), hospital (bệnh viện), supermarket (siêu thị), convenience_store (cửa hàng tiện lợi), bus_station (trạm xe buýt), park (công viên), pharmacy (nhà thuốc), bank, atm, restaurant, cafe, gym.
+- Khi cần khoảng cách đến một địa điểm cụ thể (có tọa độ) → truyền targetLatitude/targetLongitude.
+- Trình bày kết quả dạng danh sách: tên, khoảng cách, địa chỉ.
+
 TIN MỚI ĐĂNG:
 - Khi người dùng muốn xem tin mới đăng gần đây → dùng postedWithinDays (ví dụ: 7 = trong 7 ngày qua) hoặc sortBy=NEWEST.
 
@@ -314,6 +320,7 @@ _TOOL_LABELS: Dict[str, str] = {
     "get_price_estimate": "Đang ước tính giá",
     "get_price_history": "Đang xem lịch sử giá",
     "get_recommendations": "Đang gợi ý tin phù hợp",
+    "get_nearby_places": "Đang tìm địa điểm xung quanh",
     "get_user_info": "Đang lấy thông tin tài khoản",
     "save_listing": "Đang xử lý lưu tin",
     "bulk_save_listings": "Đang lưu nhiều tin",
