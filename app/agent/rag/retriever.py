@@ -16,7 +16,7 @@ Context string format
 The returned string is designed to be appended to the system prompt verbatim, e.g.:
 
     [LOCATION CODES — use these when calling search_listings]
-    Cầu Giấy (Hà Nội): provinceCode="01" districtId=5
+    Cầu Giấy (Hà Nội): provinceCode="01" districtCode="005"
 
     [AMENITIES — use amenityIds when user mentions these]
     WiFi → id=1 | Điều hòa → id=2
@@ -74,7 +74,11 @@ def _normalise(text: str) -> str:
     Lowercase, strip whitespace, and remove diacritics so that
     "dat coc" matches "đặt cọc" and "wifi" matches "WiFi".
     """
-    nfkd = unicodedata.normalize("NFKD", text.lower().strip())
+    # Fold đ/Đ to "d" first: they are base letters (U+0111/U+0110), not
+    # combining accents, so the NFKD strip below would otherwise leave them —
+    # making no-diacritic queries ("dat coc") miss KB entries spelled "đặt cọc".
+    lowered = text.lower().strip().replace("đ", "d")
+    nfkd = unicodedata.normalize("NFKD", lowered)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
@@ -254,8 +258,8 @@ class RAGRetriever:
         lines.append("      • LUÔN gửi provinceCode (hoạt động cho cả 2 cấu trúc).")
         lines.append(
             "      • Khi user nói tên quận/huyện cũ (vd 'Bình Thạnh', 'Quận 1', "
-            "'Cầu Giấy') → gửi districtId (LEGACY 3-digit). Backend reverse-map "
-            "sang phường mới. Đây là cách user VN vẫn quen nói."
+            "'Cầu Giấy') → gửi districtCode (mã GSO, kiểu string). Backend "
+            "reverse-map sang phường mới. Đây là cách user VN vẫn quen nói."
         )
         lines.append(
             "      • Chỉ gửi newWardCode khi user nói rõ tên phường mới VÀ bạn "
@@ -276,15 +280,15 @@ class RAGRetriever:
 
         lines.append("")
         lines.append(
-            "MÃ QUẬN/HUYỆN (dùng cho tham số districtId — kiểu INTEGER, LEGACY "
-            "pre-2025-07; backend tự reverse-map sang phường mới):"
+            "MÃ QUẬN/HUYỆN (dùng cho tham số districtCode — kiểu STRING, mã GSO "
+            "LEGACY pre-2025-07; backend tự reverse-map sang phường mới):"
         )
         for prov_code, districts in self._districts.items():
             prov_name = next(
                 (p["name"] for p in self._provinces if p["code"] == prov_code),
                 prov_code,
             )
-            district_strs = [f'{d["name"]}={int(d["code"])}' for d in districts]
+            district_strs = [f'{d["name"]}="{d["code"]}"' for d in districts]
             lines.append(f"  {prov_name}: {', '.join(district_strs)}")
 
         lines.append("")
@@ -344,7 +348,7 @@ class RAGRetriever:
         for prov_name, dist_name, prov_code, dist_code in matched:
             if dist_name:
                 lines.append(
-                    f'  {dist_name} ({prov_name}): provinceCode="{prov_code}" districtId={int(dist_code)}'
+                    f'  {dist_name} ({prov_name}): provinceCode="{prov_code}" districtCode="{dist_code}"'
                 )
             elif prov_name not in seen_provinces:
                 lines.append(f'  {prov_name}: provinceCode="{prov_code}"')

@@ -126,7 +126,7 @@ QUY TẮC BẮT BUỘC:
 - Khi có THÔNG TIN THAM KHẢO hoặc HƯỚNG DẪN SỬ DỤNG được cung cấp bên dưới, bạn PHẢI sử dụng thông tin đó để trả lời. KHÔNG ĐƯỢC nói "tôi không có thông tin" nếu thông tin đã được cung cấp.
 
 SỬ DỤNG CÔNG CỤ:
-- Khi người dùng muốn tìm BĐS → GỌI search_listings với tiêu chí phù hợp. Luôn truyền provinceCode khi user đề cập tỉnh/thành. Dùng districtId (số nguyên) cho quận/huyện.
+- Khi người dùng muốn tìm BĐS → GỌI search_listings với tiêu chí phù hợp. Luôn truyền provinceCode khi user đề cập tỉnh/thành. Dùng districtCode (mã hành chính GSO, kiểu string — lấy từ MÃ ĐỊA ĐIỂM trong prompt) cho quận/huyện, KHÔNG dùng districtId.
 - LOẠI BĐS (productType vs productTypes) — quy tắc QUAN TRỌNG:
   * Từ CHÍNH XÁC, không mơ hồ → dùng `productType` đơn:
     - "căn hộ", "chung cư" → productType="APARTMENT"
@@ -374,8 +374,8 @@ def _friendly_tool_summary(name: str, args: Dict[str, Any]) -> str:
 
     if name == "search_listings":
         bits: List[str] = []
-        if args.get("districtId"):
-            bits.append(f"quận {args['districtId']}")
+        if args.get("districtCode"):
+            bits.append(f"quận {args['districtCode']}")
         elif args.get("provinceCode"):
             bits.append(f"tỉnh {args['provinceCode']}")
         types = args.get("productTypes") or (
@@ -477,7 +477,7 @@ class AgentOrchestrator:
             name="SmartRent Chat Agent",
             instructions=instructions,
             model=make_model(settings.LLM_CHAT_MODEL),
-            model_settings=default_model_settings(temperature=0.7),
+            model_settings=default_model_settings(temperature=settings.LLM_CHAT_TEMPERATURE),
             tools=self._tools,
         )
 
