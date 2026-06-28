@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     LLM_CHAT_MODEL: str = "gemini-2.5-flash"  # Chat / agent loop
     LLM_VISION_MODEL: str = "gemini-2.5-flash"  # Listing verification (text+image)
     LLM_PRICE_MODEL: str = "gemini-2.5-flash"  # Price prediction
+    # Low temperature for the chat/agent loop → deterministic tool-calling and
+    # fewer hallucinated params. Configurable so it can be tuned without a deploy.
+    LLM_CHAT_TEMPERATURE: float = 0.2
 
     # Google Maps — for get_nearby_places (POI search / distance). When unset,
     # the tool falls back to haversine distance between two given coordinates.

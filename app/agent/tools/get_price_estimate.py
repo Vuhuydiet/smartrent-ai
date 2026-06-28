@@ -13,7 +13,7 @@ To train and save the model run (one-time):
 import logging
 import os
 from datetime import datetime
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
@@ -173,7 +173,7 @@ async def get_price_estimate(
         Field(description="District name (e.g. 'Cầu Giấy', 'Quận 1')."),
     ],
     propertyType: Annotated[
-        str,
+        Literal["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"],
         Field(description="ROOM, APARTMENT, HOUSE, STUDIO, or OFFICE."),
     ],
     area: Annotated[float, Field(description="Property area in m².")],

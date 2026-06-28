@@ -13,7 +13,7 @@ backend change.
 
 import asyncio
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
@@ -86,11 +86,20 @@ async def _do_search(
         }
 
     except httpx.HTTPStatusError as e:
-        logger.error("Backend HTTP %s for search_listings", e.response.status_code)
-        return {
-            "status": "error",
-            "error": f"Backend returned HTTP {e.response.status_code}",
-        }
+        # Surface the backend's own message (e.g. an invalid-param 400) so the
+        # model can self-correct, instead of an opaque "HTTP 400".
+        status = e.response.status_code
+        backend_msg = None
+        try:
+            body = e.response.json()
+            backend_msg = body.get("message") or body.get("error")
+        except Exception:
+            backend_msg = (e.response.text or "").strip()[:300] or None
+        logger.error("Backend HTTP %s for search_listings: %s", status, backend_msg)
+        error = f"Backend returned HTTP {status}"
+        if backend_msg:
+            error += f": {backend_msg}"
+        return {"status": "error", "error": error}
     except Exception as e:
         logger.error("search_listings failed: %s", e, exc_info=True)
         return {"status": "error", "error": str(e)}
@@ -213,16 +222,17 @@ async def search_listings(
             )
         ),
     ] = None,
-    districtId: Annotated[
-        Optional[int],
+    districtCode: Annotated[
+        Optional[str],
         Field(
             description=(
-                "LEGACY district ID (pre-2025-07 3-tier structure). Use when "
-                "the user names a district like 'Bình Thạnh', 'Quận 1', 'Cầu "
-                "Giấy' — districts no longer exist in the new 2-tier structure, "
-                "but the backend reverse-maps districtId to new ward codes via "
-                "address_mapping. Examples: 760=Quận 1, 765=Bình Thạnh, "
-                "1=Ba Đình."
+                "District GSO administrative code (string) — use when the user "
+                "names a district like 'Bình Thạnh', 'Quận 1', 'Cầu Giấy'. The "
+                "backend resolves it to its internal district id and reverse-maps "
+                "to new ward codes via address_mapping. Take the value from the "
+                "MÃ ĐỊA ĐIỂM reference in the prompt. Examples: 760=Quận 1, "
+                "765=Bình Thạnh, 005=Cầu Giấy. Do NOT pass a guessed integer "
+                "districtId — only the GSO code is valid."
             )
         ),
     ] = None,
@@ -248,7 +258,7 @@ async def search_listings(
         ),
     ] = None,
     productType: Annotated[
-        Optional[str],
+        Optional[Literal["ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"]],
         Field(
             description=(
                 "Single property type — use ONLY for unambiguous Vietnamese "
@@ -280,7 +290,7 @@ async def search_listings(
         ),
     ] = None,
     listingType: Annotated[
-        Optional[str],
+        Optional[Literal["RENT", "SALE", "SHARE"]],
         Field(
             description="RENT for rental, SALE for sale, SHARE for shared. Default context is RENT."
         ),
@@ -311,7 +321,7 @@ async def search_listings(
         Optional[int], Field(description="Exact number of bathrooms.")
     ] = None,
     furnishing: Annotated[
-        Optional[str],
+        Optional[Literal["FULLY_FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"]],
         Field(
             description=(
                 "FULLY_FURNISHED (đầy đủ nội thất), SEMI_FURNISHED (nội thất "
@@ -320,7 +330,12 @@ async def search_listings(
         ),
     ] = None,
     direction: Annotated[
-        Optional[str],
+        Optional[
+            Literal[
+                "NORTH", "SOUTH", "EAST", "WEST",
+                "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+            ]
+        ],
         Field(
             description=(
                 "Facing direction: NORTH, SOUTH, EAST, WEST, NORTHEAST, "
@@ -353,7 +368,7 @@ async def search_listings(
         ),
     ] = None,
     sortBy: Annotated[
-        Optional[str],
+        Optional[Literal["DEFAULT", "PRICE_ASC", "PRICE_DESC", "NEWEST", "OLDEST"]],
         Field(
             description="Sort order: DEFAULT, PRICE_ASC, PRICE_DESC, NEWEST, OLDEST."
         ),
@@ -370,7 +385,7 @@ async def search_listings(
         "keyword": keyword,
         "provinceCode": provinceCode,
         "provinceId": provinceId,
-        "districtId": districtId,
+        "districtCode": districtCode,
         "newWardCode": newWardCode,
         "wardId": wardId,
         "productType": productType,
