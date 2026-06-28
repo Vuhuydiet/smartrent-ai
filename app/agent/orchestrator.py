@@ -563,6 +563,9 @@ class AgentOrchestrator:
         auth_token: Optional[str],
         last_listings: Optional[List[LastListingRef]],
     ) -> AgentResult:
+        # Keep the non-streaming path within the same token budget as run_stream
+        # (run_stream trims at its own entry; _run_pipeline is the non-stream core).
+        messages = _trim_history(messages)
         trace = self._gateway.create_trace(
             name="chat-request",
             session_id=session_id,
