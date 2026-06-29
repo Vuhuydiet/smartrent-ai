@@ -54,3 +54,35 @@ def test_do_search_surfaces_backend_error_body():
         )
     assert result["status"] == "error"
     assert "Unknown district code" in result["error"]
+
+
+def test_schema_hides_province_id():
+    # provinceId (the legacy id) duplicates provinceCode and only invites the
+    # model to fill it wrongly. It must not be model-facing; the tool syncs it
+    # from provinceCode internally.
+    props = search_listings.params_json_schema["properties"]
+    assert "provinceCode" in props
+    assert "provinceId" not in props
+
+
+def test_rejects_search_without_location_or_keyword():
+    # A search with neither a location nor a keyword is too broad to run — the
+    # tool must reject it locally so the model asks the user for a location
+    # instead of dumping the entire dataset.
+    result = asyncio.run(_do_search(MagicMock(), {"size": 5}))
+    assert result["status"] == "error"
+    assert "keyword" in result["error"]
+
+
+def test_zero_results_includes_structured_hint():
+    # A genuine 0-result search must carry a hint so the model reports "not
+    # found" and offers to relax filters, instead of silently re-searching
+    # elsewhere.
+    with patch(
+        "app.core.backend_client.search_listings",
+        AsyncMock(return_value={"listings": [], "totalCount": 0}),
+    ):
+        result = asyncio.run(_do_search(MagicMock(), {"size": 5, "provinceCode": "79"}))
+    assert result["status"] == "success"
+    assert result["count"] == 0
+    assert "hint" in result

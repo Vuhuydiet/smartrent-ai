@@ -320,13 +320,10 @@ class RAGRetriever:
                 _normalise(n) in query_norm for n in province_names
             )
 
+            district_hit = False
             for district in self._districts.get(province["code"], []):
                 district_names = [district["name"]] + district.get("aliases", [])
-                district_mentioned = any(
-                    _normalise(n) in query_norm for n in district_names
-                )
-
-                if district_mentioned:
+                if any(_normalise(n) in query_norm for n in district_names):
                     matched.append(
                         (
                             province["name"],
@@ -335,9 +332,14 @@ class RAGRetriever:
                             district["code"],
                         )
                     )
-                elif province_mentioned and not matched:
-                    # Province mentioned but no specific district — only emit city code
-                    matched.append((province["name"], "", province["code"], ""))
+                    district_hit = True
+
+            # Province mentioned but no district of it matched → emit the city
+            # code alone. Computed per-province (not gated on a global "nothing
+            # matched yet") so provinces with no districts in the KB — and a
+            # second province in the same query — still get a code.
+            if province_mentioned and not district_hit:
+                matched.append((province["name"], "", province["code"], ""))
 
         if not matched:
             return ""

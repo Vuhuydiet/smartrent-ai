@@ -20,3 +20,11 @@ def test_location_context_emits_district_code_string():
     ctx = RAGRetriever()._location_context(_normalise("tìm trọ quận 1"))
     assert 'districtCode="760"' in ctx
     assert "districtId=" not in ctx
+
+
+def test_location_context_emits_province_without_kb_districts():
+    # A province with no districts in the KB (e.g. Cần Thơ = 92) must still emit
+    # its provinceCode. The old province-only branch lived inside the district
+    # loop, so province-less provinces emitted nothing at all.
+    ctx = RAGRetriever()._location_context(_normalise("tìm phòng ở Cần Thơ"))
+    assert 'provinceCode="92"' in ctx

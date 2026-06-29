@@ -290,7 +290,9 @@ async def test_search_listings_success(tool_ctx):
         "app.agent.tools.search_listings.backend_client.search_listings",
         new=AsyncMock(return_value={"listings": fake_listings, "total": 2}),
     ):
-        result = await _do_search(tool_ctx, {"listingType": "RENT", "size": 5})
+        result = await _do_search(
+            tool_ctx, {"provinceCode": "79", "listingType": "RENT", "size": 5}
+        )
 
     assert result["status"] == "success"
     assert result["count"] == 2
@@ -305,7 +307,9 @@ async def test_search_listings_backend_error(tool_ctx):
         "app.agent.tools.search_listings.backend_client.search_listings",
         new=AsyncMock(side_effect=Exception("connection error")),
     ):
-        result = await _do_search(tool_ctx, {"listingType": "RENT", "size": 5})
+        result = await _do_search(
+            tool_ctx, {"provinceCode": "79", "listingType": "RENT", "size": 5}
+        )
 
     assert result["status"] == "error"
     assert "error" in result

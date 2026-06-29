@@ -28,6 +28,33 @@ _MAX_SIZE = 50  # hard cap — prevents overloading the backend
 _MAX_PRODUCT_TYPES = 5
 _VALID_PRODUCT_TYPES = frozenset({"ROOM", "APARTMENT", "HOUSE", "STUDIO", "OFFICE"})
 
+# A search must be scoped by at least one of these (or a keyword); otherwise it
+# would scan the whole dataset. Guards against the model calling search with no
+# criteria instead of asking the user where they want to look.
+_LOCATION_KEYS = (
+    "provinceCode",
+    "provinceId",
+    "districtCode",
+    "newWardCode",
+    "wardId",
+    "latitude",
+)
+_NO_CRITERIA_ERROR = (
+    "Cần ít nhất một tiêu chí vị trí (provinceCode/districtCode/newWardCode/...) "
+    "hoặc keyword để tìm kiếm. Hãy hỏi người dùng khu vực họ muốn tìm trước khi gọi lại."
+)
+_ZERO_RESULT_HINT = (
+    "0 kết quả với bộ lọc hiện tại. KHÔNG tự đổi sang khu vực khác. Báo người dùng "
+    "không tìm thấy, rồi hỏi xem họ có muốn nới lỏng bộ lọc (giá, loại BĐS, khu vực "
+    "lân cận) không."
+)
+
+
+def _has_search_criteria(params: Dict[str, Any]) -> bool:
+    """True when the call is scoped by a location or a keyword."""
+    has_location = any(params.get(k) for k in _LOCATION_KEYS)
+    return has_location or bool(params.get("keyword"))
+
 
 def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
     """Extract only the fields the LLM needs, handling nested address."""
@@ -54,6 +81,8 @@ async def _do_search(
     ctx: RunContextWrapper[ToolContext], params: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Core search logic — separated so it can be called directly in tests."""
+    if not _has_search_criteria(params):
+        return {"status": "error", "error": _NO_CRITERIA_ERROR}
     try:
         logger.info("search_listings request params: %s", params)
         data = await backend_client.search_listings(params)
@@ -76,7 +105,7 @@ async def _do_search(
         listings: list = data.get("listings", [])
         ctx.context.collected_listings.extend(listings)
 
-        return {
+        result: Dict[str, Any] = {
             "status": "success",
             "count": len(listings),
             "totalCount": data.get("totalCount", len(listings)),
@@ -84,6 +113,9 @@ async def _do_search(
             "pageSize": params["size"],
             "listings": [_compact_search_item(item) for item in listings],
         }
+        if not listings:
+            result["hint"] = _ZERO_RESULT_HINT
+        return result
 
     except httpx.HTTPStatusError as e:
         # Surface the backend's own message (e.g. an invalid-param 400) so the
@@ -119,6 +151,9 @@ async def _do_multi_type_search(
     a listing somehow appears in multiple — rare since the backend's
     productType is a strict single-enum match).
     """
+    if not _has_search_criteria(params):
+        return {"status": "error", "error": _NO_CRITERIA_ERROR}
+
     size = params.get("size", 5)
     logger.info(
         "search_listings multi-type fan-out: types=%s size=%d",
@@ -159,7 +194,7 @@ async def _do_multi_type_search(
     merged_raw = merged_raw[:size]
     ctx.context.collected_listings.extend(merged_raw)
 
-    return {
+    result: Dict[str, Any] = {
         "status": "success",
         "count": len(merged_raw),
         "totalCount": total_count,
@@ -169,6 +204,9 @@ async def _do_multi_type_search(
         "perTypeCount": per_type_counts,
         "listings": [_compact_search_item(item) for item in merged_raw],
     }
+    if not merged_raw:
+        result["hint"] = _ZERO_RESULT_HINT
+    return result
 
 
 def _normalise_product_types(raw: Optional[List[str]]) -> List[str]:
@@ -209,16 +247,6 @@ async def search_listings(
                 "bidirectionally. PREFERRED location parameter. Values: "
                 "01=Hà Nội, 79=TP. Hồ Chí Minh, 48=Đà Nẵng, 92=Cần Thơ, "
                 "31=Hải Phòng. Always set when the user mentions a province."
-            )
-        ),
-    ] = None,
-    provinceId: Annotated[
-        Optional[str],
-        Field(
-            description=(
-                "LEGACY province ID (pre-reform). Same numeric value as "
-                "provinceCode for major cities. Set alongside provinceCode "
-                "for backward compatibility with old-structure listings."
             )
         ),
     ] = None,
@@ -390,7 +418,6 @@ async def search_listings(
     raw: Dict[str, Any] = {
         "keyword": keyword,
         "provinceCode": provinceCode,
-        "provinceId": provinceId,
         "districtCode": districtCode,
         "newWardCode": newWardCode,
         "wardId": wardId,
@@ -420,11 +447,12 @@ async def search_listings(
     if params["size"] > _MAX_SIZE:
         params["size"] = _MAX_SIZE
 
-    # Backend checks both old and new address fields — keep them in sync.
+    # Backend checks both old and new address fields — mirror provinceCode into
+    # the legacy provinceId so old-structure listings are matched too. provinceId
+    # is no longer model-facing (it only duplicated provinceCode and invited the
+    # model to fill it wrongly).
     if "provinceCode" in params:
         params.setdefault("provinceId", params["provinceCode"])
-    elif "provinceId" in params:
-        params.setdefault("provinceCode", params["provinceId"])
 
     # productTypes (array) wins over productType (single). When 2+ types are
     # passed, fan out and merge. A 1-element array collapses to a single call.
