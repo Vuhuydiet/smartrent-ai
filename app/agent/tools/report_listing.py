@@ -8,8 +8,10 @@ Two-step flow:
     reasons; the LLM reads it back to the user, who picks one or more.
   2nd call (confirm=true with reasonIds) → tool submits.
 
-Anonymous reports are allowed by the backend; we forward auth_token when
-present so the report is attributed.
+The backend requires reporter contact info (reporterEmail + reporterPhone) +
+category, so the submit step needs a logged-in user: we auto-fill those from
+the user's profile (no need to ask them to type it). Not logged in → we return
+a clear "please log in" message rather than letting the backend 400.
 """
 
 import logging
@@ -107,18 +109,66 @@ async def _do_report(
             ),
         }
 
-    body: Dict[str, Any] = {"reasonIds": reason_ids}
+    # Backend requires reporterEmail + reporterPhone + category even for
+    # "anonymous" (no-auth) reports. Auto-fill contact from the logged-in
+    # user's profile so the user doesn't have to type it; if they aren't
+    # logged in (or the account lacks contact info), say so clearly instead of
+    # letting the backend 400 surface as a vague "system error".
+    if not token:
+        return {
+            "status": "error",
+            "error": (
+                "Bạn cần đăng nhập để gửi báo cáo — hệ thống cần email và số "
+                "điện thoại của người báo cáo."
+            ),
+        }
+    profile = await backend_client.get_user_profile(token)
+    if not isinstance(profile, dict) or "error" in profile:
+        return {
+            "status": "error",
+            "error": "Không lấy được thông tin tài khoản để báo cáo. Vui lòng đăng nhập lại.",
+        }
+    reporter_email = (profile.get("email") or "").strip()
+    reporter_phone = (
+        profile.get("contactPhoneNumber") or profile.get("phoneNumber") or ""
+    ).strip()
+    if not reporter_email or not reporter_phone:
+        return {
+            "status": "error",
+            "error": (
+                "Tài khoản của bạn chưa có email hoặc số điện thoại — vui lòng "
+                "cập nhật hồ sơ trước khi gửi báo cáo."
+            ),
+        }
+
+    body: Dict[str, Any] = {
+        "reasonIds": reason_ids,
+        # Backend cross-checks nothing between category and reasons; LISTING is
+        # the right default for the chat report flow (valid enum: LISTING|MAP).
+        "category": "LISTING",
+        "reporterEmail": reporter_email,
+        "reporterPhone": reporter_phone,
+    }
     if other_feedback:
         body["otherFeedback"] = other_feedback
 
     try:
         data = await backend_client.submit_listing_report(listing_id, body, token=token)
     except httpx.HTTPStatusError as e:
-        logger.error("submit_listing_report HTTP %s", e.response.status_code)
-        return {
-            "status": "error",
-            "error": f"Backend HTTP {e.response.status_code}",
-        }
+        # Surface the backend's own message (e.g. "Listing not found",
+        # "Report reasons not found") so the model can react correctly instead
+        # of telling the user it's a transient system error.
+        status = e.response.status_code
+        backend_msg = None
+        try:
+            backend_msg = e.response.json().get("message")
+        except Exception:
+            backend_msg = (e.response.text or "").strip()[:200] or None
+        logger.error("submit_listing_report HTTP %s: %s", status, backend_msg)
+        error = f"Báo cáo thất bại (HTTP {status})"
+        if backend_msg:
+            error += f": {backend_msg}"
+        return {"status": "error", "error": error}
     except Exception as e:  # noqa: BLE001
         logger.error("submit_listing_report failed: %s", e, exc_info=True)
         return {"status": "error", "error": str(e)}
