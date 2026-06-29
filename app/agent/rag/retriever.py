@@ -120,9 +120,19 @@ def _keyword_score(query_norm: str, keywords: List[str]) -> int:
     Also checks synonym groups: if a keyword belongs to a synonym group and
     any synonym from that group appears in the query, it counts as a match.
     """
+    tokens = set(query_norm.split())
     score = 0
     for kw in keywords:
         kw_norm = _normalise(kw)
+        if not kw_norm:
+            continue
+        # Short keywords (<=3 chars, e.g. "an", "phi", "vip") only count as a
+        # standalone word. Substring-matching them lit up unrelated entries
+        # ("an" inside "ngan hang") and produced off-topic suggestions.
+        if len(kw_norm) <= 3:
+            if kw_norm in tokens:
+                score += 1
+            continue
         if kw_norm in query_norm:
             score += 1
             continue

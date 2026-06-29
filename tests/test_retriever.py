@@ -1,6 +1,6 @@
 """Tests for the RAG retriever's text normalisation and location codes."""
 
-from app.agent.rag.retriever import RAGRetriever, _normalise
+from app.agent.rag.retriever import RAGRetriever, _keyword_score, _normalise
 
 
 def test_normalise_folds_d_stroke_to_plain_d():
@@ -20,3 +20,13 @@ def test_location_context_emits_district_code_string():
     ctx = RAGRetriever()._location_context(_normalise("tìm trọ quận 1"))
     assert 'districtCode="760"' in ctx
     assert "districtId=" not in ctx
+
+
+def test_keyword_score_short_keyword_requires_whole_word():
+    # Short keywords (<=3 chars) matched as raw substrings produced noisy
+    # off-topic FAQ/guide suggestions (e.g. "an" inside "ngan hang"). They must
+    # only count as a standalone word now.
+    assert _keyword_score("ngan hang", ["an"]) == 0
+    # …but still match as a real word, and long keywords keep substring behaviour.
+    assert _keyword_score("goi vip cua toi", ["vip"]) == 1
+    assert _keyword_score("tien dat coc", ["dat coc"]) == 1
