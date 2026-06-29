@@ -332,8 +332,14 @@ async def search_listings(
     direction: Annotated[
         Optional[
             Literal[
-                "NORTH", "SOUTH", "EAST", "WEST",
-                "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+                "NORTH",
+                "SOUTH",
+                "EAST",
+                "WEST",
+                "NORTHEAST",
+                "NORTHWEST",
+                "SOUTHEAST",
+                "SOUTHWEST",
             ]
         ],
         Field(
