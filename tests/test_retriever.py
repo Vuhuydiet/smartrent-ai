@@ -30,3 +30,11 @@ def test_keyword_score_short_keyword_requires_whole_word():
     # …but still match as a real word, and long keywords keep substring behaviour.
     assert _keyword_score("goi vip cua toi", ["vip"]) == 1
     assert _keyword_score("tien dat coc", ["dat coc"]) == 1
+
+
+def test_location_context_emits_province_without_kb_districts():
+    # A province with no districts in the KB (e.g. Cần Thơ = 92) must still emit
+    # its provinceCode. The old province-only branch lived inside the district
+    # loop, so province-less provinces emitted nothing at all.
+    ctx = RAGRetriever()._location_context(_normalise("tìm phòng ở Cần Thơ"))
+    assert 'provinceCode="92"' in ctx
