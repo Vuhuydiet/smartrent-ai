@@ -48,9 +48,9 @@ class PropertyMetadata(BaseModel):
 class ListingVerificationRequest(BaseModel):
     """Request model for listing verification"""
 
-    title: str = Field(..., min_length=1, max_length=200, description="Property title")
+    title: str = Field(..., min_length=1, max_length=500, description="Property title")
     description: str = Field(
-        ..., min_length=10, max_length=5000, description="Property description"
+        ..., min_length=10, max_length=50000, description="Property description"
     )
     price: float = Field(..., gt=0, description="Monthly rent price")
     area: Optional[float] = Field(
