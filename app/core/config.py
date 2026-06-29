@@ -57,9 +57,9 @@ class Settings(BaseSettings):
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
     SMARTRENT_AI_URL: str = "http://localhost:8000"
-    INTERNAL_AI_API_KEY: str = (
-        "your_secret_internal_key_here"  # Override in production via env var
-    )
+    # Shared secret the Spring backend sends as X-Internal-Api-Key when proxying
+    # chat. Empty = open (local dev); set in deployed envs to reject public callers.
+    INTERNAL_AI_API_KEY: str = ""
 
     # Chat Configuration
     MAX_LISTINGS_RETURN: int = 5  # Maximum number of listings to return to user

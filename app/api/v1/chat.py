@@ -6,6 +6,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from app.core.security import require_internal_key
 from app.dto.chat import ChatRequest, ChatResponse
 from app.service.chat_service import ChatService
 
@@ -34,7 +35,12 @@ def get_chat_service() -> ChatService:
         )
 
 
-@router.post("/chat", response_model=ChatResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_internal_key)],
+)
 async def chat(
     chat_request: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
@@ -83,7 +89,11 @@ async def chat(
         )
 
 
-@router.post("/chat/stream", status_code=status.HTTP_200_OK)
+@router.post(
+    "/chat/stream",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_internal_key)],
+)
 async def chat_stream(
     chat_request: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
