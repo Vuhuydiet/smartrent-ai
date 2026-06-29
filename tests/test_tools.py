@@ -22,8 +22,15 @@ def test_schema_constrains_enums():
     # Enum params are Literals → JSON-schema enum, so the model can't invent
     # values the backend rejects (e.g. "CONDO", "cheapest").
     blob = json.dumps(search_listings.params_json_schema)
-    for value in ["ROOM", "APARTMENT", "RENT", "SHARE",
-                  "PRICE_ASC", "FULLY_FURNISHED", "NORTHEAST"]:
+    for value in [
+        "ROOM",
+        "APARTMENT",
+        "RENT",
+        "SHARE",
+        "PRICE_ASC",
+        "FULLY_FURNISHED",
+        "NORTHEAST",
+    ]:
         assert value in blob
 
 
@@ -34,12 +41,16 @@ def test_do_search_surfaces_backend_error_body():
     request = httpx.Request("POST", "http://backend/v1/listings/search")
     response = httpx.Response(
         400,
-        json={"code": "2011",
-              "message": "Unknown district code '999'. Provide a valid GSO district code."},
+        json={
+            "code": "2011",
+            "message": "Unknown district code '999'. Provide a valid GSO district code.",
+        },
         request=request,
     )
     err = httpx.HTTPStatusError("400 Bad Request", request=request, response=response)
     with patch("app.core.backend_client.search_listings", AsyncMock(side_effect=err)):
-        result = asyncio.run(_do_search(MagicMock(), {"size": 5, "districtCode": "999"}))
+        result = asyncio.run(
+            _do_search(MagicMock(), {"size": 5, "districtCode": "999"})
+        )
     assert result["status"] == "error"
     assert "Unknown district code" in result["error"]
