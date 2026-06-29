@@ -477,7 +477,9 @@ class AgentOrchestrator:
             name="SmartRent Chat Agent",
             instructions=instructions,
             model=make_model(settings.LLM_CHAT_MODEL),
-            model_settings=default_model_settings(temperature=settings.LLM_CHAT_TEMPERATURE),
+            model_settings=default_model_settings(
+                temperature=settings.LLM_CHAT_TEMPERATURE
+            ),
             tools=self._tools,
         )
 
