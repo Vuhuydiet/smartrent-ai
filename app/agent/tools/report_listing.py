@@ -51,6 +51,39 @@ def _coerce_reason_ids(raw: Any) -> List[int]:
     return out
 
 
+def _extract_reasons(reasons_data: Any) -> List[Dict[str, Any]]:
+    """Normalise the report-reasons payload to a flat list of reason dicts."""
+    if isinstance(reasons_data, list):
+        return reasons_data
+    if isinstance(reasons_data, dict):
+        return (
+            reasons_data.get("reasons")
+            or reasons_data.get("content")
+            or reasons_data.get("data")
+            or []
+        )
+    return []
+
+
+async def _reason_catalog() -> Dict[int, str]:
+    """Return {reasonId: reasonText}. Empty on any failure (validation is
+    best-effort — never block a report because the catalog re-fetch hiccuped)."""
+    try:
+        items = _extract_reasons(await backend_client.get_report_reasons())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("report reason catalog re-fetch failed: %s", e)
+        return {}
+    catalog: Dict[int, str] = {}
+    for it in items:
+        rid = it.get("reasonId")
+        if rid is not None:
+            try:
+                catalog[int(rid)] = it.get("reasonText", "")
+            except (TypeError, ValueError):
+                continue
+    return catalog
+
+
 async def _do_report(
     listing_id: str,
     confirm: bool,
@@ -71,25 +104,18 @@ async def _do_report(
         if isinstance(reasons_data, dict) and "error" in reasons_data:
             return {"status": "error", "error": reasons_data["error"]}
 
-        if isinstance(reasons_data, list):
-            reasons = reasons_data
-        elif isinstance(reasons_data, dict):
-            reasons = (
-                reasons_data.get("reasons")
-                or reasons_data.get("content")
-                or reasons_data.get("data")
-                or []
-            )
-        else:
-            reasons = []
+        reasons = _extract_reasons(reasons_data)
 
         return {
             "status": "needs_confirmation",
             "listingId": listing_id,
             "reasons": reasons,
             "message": (
-                "Hãy hỏi user chọn 1 hoặc nhiều lý do từ danh sách trên, "
-                "rồi gọi lại tool với confirm=true và reasonIds tương ứng."
+                "Trình bày các lý do (theo reasonText) cho user chọn. QUAN "
+                "TRỌNG: khi gọi lại confirm=true, reasonIds PHẢI là các giá trị "
+                "ở trường 'reasonId' của lý do user chọn — TUYỆT ĐỐI KHÔNG dùng "
+                "số thứ tự trong danh sách (reasonId KHÔNG liền mạch với thứ tự "
+                "hiển thị; vd lý do hiển thị thứ 2 có thể là reasonId=8)."
             ),
         }
 
@@ -108,6 +134,25 @@ async def _do_report(
                 "dung phản hồi."
             ),
         }
+
+    # Validate the submitted reasonIds against the live catalog. The catalog's
+    # reasonId is NOT the display position (LISTING ids 1-7, MAP ids 8-11, but
+    # both categories restart display_order at 1 → the list is interleaved), so
+    # a model that sends a list position instead of the reasonId silently
+    # reports the WRONG reason to admin. Reject unknown ids; the resolved text
+    # is echoed on success so the reported reason is auditable.
+    reason_catalog = await _reason_catalog()
+    if reason_catalog:
+        unknown = [i for i in reason_ids if i not in reason_catalog]
+        if unknown:
+            valid = "; ".join(f"{k}={v}" for k, v in sorted(reason_catalog.items()))
+            return {
+                "status": "error",
+                "error": (
+                    f"reasonId không hợp lệ: {unknown}. Hãy dùng đúng reasonId "
+                    f"(trường 'reasonId', không phải số thứ tự) từ danh sách: {valid}"
+                ),
+            }
 
     # Backend requires reporterEmail + reporterPhone + category even for
     # "anonymous" (no-auth) reports. Auto-fill contact from the logged-in
@@ -176,12 +221,19 @@ async def _do_report(
     if "error" in data:
         return {"status": "error", "error": data["error"]}
 
+    reported_reasons = [
+        reason_catalog.get(i, str(i)) if reason_catalog else str(i) for i in reason_ids
+    ]
     return {
         "status": "success",
         "listingId": listing_id,
         "reasonIds": reason_ids,
+        # Echo the resolved reason text so the bot confirms to the user exactly
+        # what was reported — any id↔reason mismatch is caught immediately.
+        "reportedReasons": reported_reasons,
         "message": (
-            f"Đã ghi nhận báo cáo về tin {listing_id}. "
+            f"Đã ghi nhận báo cáo tin {listing_id} với lý do: "
+            f"{', '.join(str(r) for r in reported_reasons)}. "
             "Cảm ơn bạn đã giúp cộng đồng SmartRent an toàn hơn."
         ),
     }
@@ -194,8 +246,10 @@ async def _do_report(
         "wrong price, inappropriate content). Two-step flow: first call "
         "with confirm=false to fetch the reason catalog and ask the user "
         "which reason applies; then call again with confirm=true and the "
-        "chosen reasonIds. Resolve listingId from prior conversation "
-        "context — never ask the user."
+        "chosen reasonIds. reasonIds are the catalog's 'reasonId' values, "
+        "NOT the display position (ids are not sequential with the shown "
+        "order). Resolve listingId from prior conversation context — never "
+        "ask the user."
     ),
 )
 async def report_listing(
