@@ -290,16 +290,10 @@ class RAGRetriever:
 
         lines.append("")
         lines.append(
-            "MÃ QUẬN/HUYỆN (dùng cho tham số districtCode — kiểu STRING, mã GSO "
-            "LEGACY pre-2025-07; backend tự reverse-map sang phường mới):"
+            "MÃ QUẬN/HUYỆN: khi user nhắc tên quận/huyện, mã districtCode tương "
+            "ứng sẽ được cung cấp riêng trong khối [MÃ ĐỊA ĐIỂM] của từng truy "
+            "vấn — dùng đúng giá trị đó (KHÔNG tự đoán mã)."
         )
-        for prov_code, districts in self._districts.items():
-            prov_name = next(
-                (p["name"] for p in self._provinces if p["code"] == prov_code),
-                prov_code,
-            )
-            district_strs = [f'{d["name"]}="{d["code"]}"' for d in districts]
-            lines.append(f"  {prov_name}: {', '.join(district_strs)}")
 
         lines.append("")
         lines.append("MÃ TIỆN NGHI PHỔ BIẾN (dùng cho amenityIds):")
