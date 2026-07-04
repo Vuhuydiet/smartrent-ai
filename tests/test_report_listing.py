@@ -87,3 +87,59 @@ def test_confirm_echoes_reported_reason_text_for_the_id():
         result = asyncio.run(_do_report("561388", True, [8], "", "tok"))
     assert result["status"] == "success"
     assert result["reportedReasons"] == ["Vị trí bất động sản chưa chính xác"]
+
+
+def _patch_profile():
+    return patch(
+        "app.core.backend_client.get_user_profile",
+        AsyncMock(
+            return_value={"email": "a@b.com", "contactPhoneNumber": "0900000000"}
+        ),
+    )
+
+
+def test_confirm_maps_reason_text_to_id():
+    # id 8 = "the 2nd shown reason"; passing its text must map to id 8, not the
+    # position 2 (= "Ảnh"). This is the deterministic fix for the wrong-reason bug.
+    submit = AsyncMock(return_value={"submitted": True})
+    with _patch_reasons(), _patch_profile(), patch(
+        "app.core.backend_client.submit_listing_report", submit
+    ):
+        result = asyncio.run(
+            _do_report(
+                "561388",
+                True,
+                [],
+                "",
+                "tok",
+                reason_texts=["Vị trí bất động sản chưa chính xác"],
+            )
+        )
+    assert result["status"] == "success"
+    assert submit.call_args.args[1]["reasonIds"] == [8]
+    assert result["reportedReasons"] == ["Vị trí bất động sản chưa chính xác"]
+
+
+def test_confirm_reason_text_match_is_case_and_space_insensitive():
+    submit = AsyncMock(return_value={"submitted": True})
+    with _patch_reasons(), _patch_profile(), patch(
+        "app.core.backend_client.submit_listing_report", submit
+    ):
+        result = asyncio.run(
+            _do_report("561388", True, [], "", "tok", reason_texts=["  ẢNH  "])
+        )
+    assert result["status"] == "success"
+    assert submit.call_args.args[1]["reasonIds"] == [2]
+
+
+def test_confirm_unmatched_reason_text_errors_without_submitting():
+    submit = AsyncMock(return_value={"submitted": True})
+    with _patch_reasons(), patch(
+        "app.core.backend_client.submit_listing_report", submit
+    ):
+        result = asyncio.run(
+            _do_report("561388", True, [], "", "tok", reason_texts=["Lý do bịa đặt"])
+        )
+    assert result["status"] == "error"
+    assert "không khớp" in result["error"].lower()
+    submit.assert_not_called()

@@ -84,12 +84,18 @@ async def _reason_catalog() -> Dict[int, str]:
     return catalog
 
 
+def _norm_reason(text: str) -> str:
+    """Normalise a reasonText for exact matching (lowercase, collapse spaces)."""
+    return " ".join(str(text).lower().split())
+
+
 async def _do_report(
     listing_id: str,
     confirm: bool,
     reason_ids: List[int],
     other_feedback: str,
     token: Optional[str],
+    reason_texts: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Core logic — separated so it can be called directly in tests."""
     if not confirm:
@@ -111,18 +117,12 @@ async def _do_report(
             "listingId": listing_id,
             "reasons": reasons,
             "message": (
-                "Trình bày các lý do (theo reasonText) cho user chọn. QUAN "
-                "TRỌNG: khi gọi lại confirm=true, reasonIds PHẢI là các giá trị "
-                "ở trường 'reasonId' của lý do user chọn — TUYỆT ĐỐI KHÔNG dùng "
-                "số thứ tự trong danh sách (reasonId KHÔNG liền mạch với thứ tự "
-                "hiển thị; vd lý do hiển thị thứ 2 có thể là reasonId=8)."
+                "Trình bày các lý do (theo reasonText) cho user chọn. Khi gọi "
+                "lại confirm=true, hãy truyền `reasonTexts` = COPY NGUYÊN VĂN "
+                "reasonText của (các) lý do user chọn — tool sẽ tự map sang id. "
+                "Cách này an toàn nhất; đừng tự đoán reasonId (id không liền "
+                "mạch với thứ tự hiển thị)."
             ),
-        }
-
-    if not reason_ids:
-        return {
-            "status": "error",
-            "error": "Cần ít nhất 1 reasonId khi confirm=true.",
         }
 
     if len(other_feedback) > _MAX_OTHER_FEEDBACK_CHARS:
@@ -135,13 +135,44 @@ async def _do_report(
             ),
         }
 
-    # Validate the submitted reasonIds against the live catalog. The catalog's
-    # reasonId is NOT the display position (LISTING ids 1-7, MAP ids 8-11, but
-    # both categories restart display_order at 1 → the list is interleaved), so
-    # a model that sends a list position instead of the reasonId silently
-    # reports the WRONG reason to admin. Reject unknown ids; the resolved text
-    # is echoed on success so the reported reason is auditable.
+    # Fetch the catalog once (best-effort): used to map reasonTexts→ids,
+    # validate ids, and echo the reported reason on success.
     reason_catalog = await _reason_catalog()
+
+    # Deterministically resolve reasonTexts → reasonIds. The model copies the
+    # reasonText verbatim and the tool maps it here, so it never has to pick the
+    # non-sequential reasonId (LISTING ids 1-7, MAP ids 8-11, but both restart
+    # display_order at 1 → the shown list is interleaved, which is what made the
+    # model send the wrong id). Any explicit reasonIds are merged in.
+    resolved_ids: List[int] = list(reason_ids)
+    if reason_texts and reason_catalog:
+        text_to_id = {_norm_reason(t): rid for rid, t in reason_catalog.items()}
+        unmatched: List[str] = []
+        for t in reason_texts:
+            rid = text_to_id.get(_norm_reason(t))
+            if rid is None:
+                unmatched.append(t)
+            elif rid not in resolved_ids:
+                resolved_ids.append(rid)
+        if unmatched:
+            valid = "; ".join(sorted(reason_catalog.values()))
+            return {
+                "status": "error",
+                "error": (
+                    f"Không khớp lý do: {unmatched}. Copy đúng reasonText từ "
+                    f"danh sách: {valid}"
+                ),
+            }
+    reason_ids = resolved_ids
+
+    if not reason_ids:
+        return {
+            "status": "error",
+            "error": "Cần ít nhất 1 lý do (reasonTexts hoặc reasonIds) khi confirm=true.",
+        }
+
+    # Reject any reasonId not in the catalog (a mis-mapped/hallucinated id) so a
+    # wrong reason is never submitted to admin.
     if reason_catalog:
         unknown = [i for i in reason_ids if i not in reason_catalog]
         if unknown:
@@ -150,7 +181,7 @@ async def _do_report(
                 "status": "error",
                 "error": (
                     f"reasonId không hợp lệ: {unknown}. Hãy dùng đúng reasonId "
-                    f"(trường 'reasonId', không phải số thứ tự) từ danh sách: {valid}"
+                    f"(hoặc truyền reasonTexts) từ danh sách: {valid}"
                 ),
             }
 
@@ -245,11 +276,11 @@ async def _do_report(
         "Report a listing for a violation (scam, fake info, duplicate, "
         "wrong price, inappropriate content). Two-step flow: first call "
         "with confirm=false to fetch the reason catalog and ask the user "
-        "which reason applies; then call again with confirm=true and the "
-        "chosen reasonIds. reasonIds are the catalog's 'reasonId' values, "
-        "NOT the display position (ids are not sequential with the shown "
-        "order). Resolve listingId from prior conversation context — never "
-        "ask the user."
+        "which reason applies; then call again with confirm=true. PREFER "
+        "passing `reasonTexts` (copy the chosen reasonText verbatim) — the "
+        "tool maps text→id safely. `reasonIds` is a fallback but the ids are "
+        "NOT sequential with the shown order, so don't guess them. Resolve "
+        "listingId from prior conversation context — never ask the user."
     ),
 )
 async def report_listing(
@@ -262,14 +293,26 @@ async def report_listing(
         Field(
             description=(
                 "false (default) → return reason catalog. true → submit "
-                "with `reasonIds`."
+                "with `reasonTexts` (preferred) or `reasonIds`."
+            )
+        ),
+    ] = None,
+    reasonTexts: Annotated[
+        Optional[List[str]],
+        Field(
+            description=(
+                "PREFERRED. The reasonText(s) the user picked, copied verbatim "
+                "from the catalog. The tool maps each to its reasonId."
             )
         ),
     ] = None,
     reasonIds: Annotated[
         Optional[List[int]],
         Field(
-            description=("Reason IDs the user selected. Required when confirm=true.")
+            description=(
+                "Fallback: reasonId values from the catalog. Prefer reasonTexts "
+                "— do not guess ids (they aren't in display order)."
+            )
         ),
     ] = None,
     otherFeedback: Annotated[
@@ -284,10 +327,12 @@ async def report_listing(
     listing_id = _coerce_id(listingId)
     if not listing_id or listing_id == "None":
         return {"status": "error", "error": "Thiếu listingId."}
+    texts = [str(t) for t in reasonTexts if str(t).strip()] if reasonTexts else None
     return await _do_report(
         listing_id=listing_id,
         confirm=bool(confirm),
         reason_ids=_coerce_reason_ids(reasonIds),
         other_feedback=(otherFeedback or "").strip(),
         token=ctx.context.auth_token,
+        reason_texts=texts,
     )
