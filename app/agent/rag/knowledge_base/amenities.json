@@ -4,92 +4,223 @@
     {
       "id": 1,
       "name": "WiFi",
-      "aliases": ["wifi", "internet", "mạng", "mang", "wi-fi", "băng thông rộng"]
+      "aliases": [
+        "wifi",
+        "internet",
+        "mạng",
+        "mang",
+        "wi-fi",
+        "băng thông rộng"
+      ]
     },
     {
       "id": 2,
       "name": "Điều hòa",
-      "aliases": ["điều hòa", "dieu hoa", "máy lạnh", "may lanh", "air conditioning", "ac"]
+      "aliases": [
+        "điều hòa",
+        "dieu hoa",
+        "máy lạnh",
+        "may lanh",
+        "air conditioning",
+        "ac",
+        "máy điều hòa",
+        "điều hoà"
+      ]
     },
     {
       "id": 3,
       "name": "Máy giặt",
-      "aliases": ["máy giặt", "may giat", "washing machine", "giặt"]
+      "aliases": [
+        "máy giặt",
+        "may giat",
+        "washing machine",
+        "giặt",
+        "giặt sấy",
+        "máy giặt sấy"
+      ]
     },
     {
       "id": 4,
       "name": "Bãi đỗ xe",
-      "aliases": ["bãi đỗ xe", "bai do xe", "đỗ xe", "do xe", "chỗ đậu xe", "parking", "garage"]
+      "aliases": [
+        "bãi đỗ xe",
+        "bai do xe",
+        "đỗ xe",
+        "do xe",
+        "chỗ đậu xe",
+        "parking",
+        "garage",
+        "chỗ để xe",
+        "để xe",
+        "gửi xe",
+        "nhà để xe",
+        "chỗ để xe máy",
+        "hầm xe"
+      ]
     },
     {
       "id": 5,
       "name": "Bảo vệ",
-      "aliases": ["bảo vệ", "bao ve", "an ninh", "security", "bảo vệ 24/7"]
+      "aliases": [
+        "bảo vệ",
+        "bao ve",
+        "an ninh",
+        "security",
+        "bảo vệ 24/7",
+        "an ninh 24/24",
+        "trực bảo vệ",
+        "gác cổng"
+      ]
     },
     {
       "id": 6,
       "name": "Thang máy",
-      "aliases": ["thang máy", "thang may", "elevator", "lift"]
+      "aliases": [
+        "thang máy",
+        "thang may",
+        "elevator",
+        "lift"
+      ]
     },
     {
       "id": 7,
       "name": "Bếp",
-      "aliases": ["bếp", "bep", "kitchen", "nhà bếp", "nha bep", "phòng bếp"]
+      "aliases": [
+        "bếp",
+        "bep",
+        "kitchen",
+        "nhà bếp",
+        "nha bep",
+        "phòng bếp",
+        "khu bếp",
+        "bếp nấu ăn"
+      ]
     },
     {
       "id": 8,
       "name": "Ban công",
-      "aliases": ["ban công", "ban cong", "balcony", "sân thượng", "san thuong", "terrace"]
+      "aliases": [
+        "ban công",
+        "ban cong",
+        "balcony",
+        "sân thượng",
+        "san thuong",
+        "terrace"
+      ]
     },
     {
       "id": 9,
       "name": "Hồ bơi",
-      "aliases": ["hồ bơi", "ho boi", "bể bơi", "swimming pool", "pool"]
+      "aliases": [
+        "hồ bơi",
+        "ho boi",
+        "bể bơi",
+        "swimming pool",
+        "pool"
+      ]
     },
     {
       "id": 10,
       "name": "Phòng gym",
-      "aliases": ["phòng gym", "phong gym", "gym", "fitness", "tập gym", "phòng tập"]
+      "aliases": [
+        "phòng gym",
+        "phong gym",
+        "gym",
+        "fitness",
+        "tập gym",
+        "phòng tập"
+      ]
     },
     {
       "id": 11,
       "name": "Tủ lạnh",
-      "aliases": ["tủ lạnh", "tu lanh", "refrigerator", "fridge"]
+      "aliases": [
+        "tủ lạnh",
+        "tu lanh",
+        "refrigerator",
+        "fridge"
+      ]
     },
     {
       "id": 12,
       "name": "Máy nóng lạnh",
-      "aliases": ["máy nóng lạnh", "may nong lanh", "nước nóng", "water heater", "heater"]
+      "aliases": [
+        "máy nóng lạnh",
+        "may nong lanh",
+        "nước nóng",
+        "water heater",
+        "heater"
+      ]
     },
     {
       "id": 13,
       "name": "Giường",
-      "aliases": ["giường", "giuong", "bed", "giường ngủ"]
+      "aliases": [
+        "giường",
+        "giuong",
+        "bed",
+        "giường ngủ"
+      ]
     },
     {
       "id": 14,
       "name": "Tivi",
-      "aliases": ["tivi", "tv", "television", "màn hình"]
+      "aliases": [
+        "tivi",
+        "tv",
+        "television",
+        "màn hình"
+      ]
     },
     {
       "id": 15,
       "name": "Phòng khép kín",
-      "aliases": ["phòng khép kín", "phong khep kin", "toilet riêng", "wc riêng", "private bathroom", "en-suite"]
+      "aliases": [
+        "phòng khép kín",
+        "phong khep kin",
+        "toilet riêng",
+        "wc riêng",
+        "private bathroom",
+        "en-suite",
+        "khép kín",
+        "wc khép kín",
+        "vệ sinh riêng",
+        "nhà vệ sinh riêng",
+        "nvs riêng"
+      ]
     },
     {
       "id": 16,
       "name": "Sân vườn",
-      "aliases": ["sân vườn", "san vuon", "garden", "vườn", "yard"]
+      "aliases": [
+        "sân vườn",
+        "san vuon",
+        "garden",
+        "vườn",
+        "yard"
+      ]
     },
     {
       "id": 17,
       "name": "Camera an ninh",
-      "aliases": ["camera", "cctv", "camera an ninh", "camera giám sát"]
+      "aliases": [
+        "camera",
+        "cctv",
+        "camera an ninh",
+        "camera giám sát",
+        "giám sát",
+        "camera 24/7"
+      ]
     },
     {
       "id": 18,
       "name": "Bình nước nóng",
-      "aliases": ["bình nước nóng", "binh nuoc nong", "water heater", "bình nóng lạnh"]
+      "aliases": [
+        "bình nước nóng",
+        "binh nuoc nong",
+        "water heater",
+        "bình nóng lạnh"
+      ]
     }
   ]
 }

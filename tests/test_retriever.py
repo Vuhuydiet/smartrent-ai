@@ -38,3 +38,13 @@ def test_location_context_emits_province_without_kb_districts():
     # loop, so province-less provinces emitted nothing at all.
     ctx = RAGRetriever()._location_context(_normalise("tìm phòng ở Cần Thơ"))
     assert 'provinceCode="92"' in ctx
+
+
+def test_amenity_context_matches_common_phrasings():
+    # Common Vietnamese phrasings that weren't in the aliases → the model never
+    # got the amenityId → search couldn't filter by that amenity.
+    r = RAGRetriever()
+    assert "amenityId=4" in r._amenity_context(_normalise("tìm phòng có chỗ để xe"))
+    assert "amenityId=15" in r._amenity_context(_normalise("phòng khép kín"))
+    assert "amenityId=3" in r._amenity_context(_normalise("có máy giặt sấy không"))
+    assert "amenityId=5" in r._amenity_context(_normalise("chung cư có gác cổng"))
