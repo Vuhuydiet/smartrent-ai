@@ -1,98 +1,6071 @@
 {
-  "_note": "Province codes follow Vietnam's official administrative division (ĐVHC). District codes should be verified against the SmartRent backend GET /v1/locations/districts API.",
+  "_note": "Full VN coverage (63 provinces, all legacy districts) sourced from backend GET /v1/addresses/provinces and /provinces/{id}/districts. district code = GSO district_code (what search_listings districtCode expects). Curated aliases for HCM/HN/DN preserved; others auto-generated from name/shortName. Regenerate by re-running the address-endpoint export when admin data changes.",
   "_structure_note": "Vietnam reorganised its admin units on 2025-07-01: the old 3-tier structure (63 provinces → district → ward) was replaced by a new 2-tier one (34 provinces → ward, no districts). This file mixes both: 'provinces' use post-reform 2-digit codes (still 79 for HCMC, 01 for Hà Nội etc.), while 'districts' are LEGACY pre-reform 3-digit codes (e.g. 765=Bình Thạnh) that no longer exist as admin units. Listings in the DB can be stored under either structure (Address.address_type = OLD | NEW); the backend reverse-maps districtId to new ward codes via the address_mapping table on every search. AI agents should keep sending provinceCode + districtId because Vietnamese users still refer to old district names in conversation; the backend handles the bidirectional mapping. New ward codes (5-digit) are NOT in this file yet.",
   "provinces": [
     {
       "code": "01",
       "name": "Hà Nội",
-      "aliases": ["hanoi", "hà nội", "ha noi", "hn"]
+      "aliases": [
+        "hanoi",
+        "hà nội",
+        "ha noi",
+        "hn"
+      ]
     },
     {
       "code": "79",
       "name": "TP. Hồ Chí Minh",
-      "aliases": ["hcm", "ho chi minh", "hồ chí minh", "saigon", "sài gòn", "tphcm", "tp hcm"]
+      "aliases": [
+        "hcm",
+        "ho chi minh",
+        "hồ chí minh",
+        "saigon",
+        "sài gòn",
+        "tphcm",
+        "tp hcm"
+      ]
     },
     {
       "code": "48",
       "name": "Đà Nẵng",
-      "aliases": ["da nang", "đà nẵng", "dn"]
+      "aliases": [
+        "da nang",
+        "đà nẵng",
+        "dn"
+      ]
     },
     {
       "code": "31",
       "name": "Hải Phòng",
-      "aliases": ["hai phong", "hải phòng", "hp"]
+      "aliases": [
+        "hai phong",
+        "hải phòng",
+        "hp"
+      ]
     },
     {
       "code": "92",
       "name": "Cần Thơ",
-      "aliases": ["can tho", "cần thơ", "ct"]
+      "aliases": [
+        "can tho",
+        "cần thơ",
+        "ct"
+      ]
     },
     {
       "code": "74",
       "name": "Bình Dương",
-      "aliases": ["binh duong", "bình dương", "bd"]
+      "aliases": [
+        "binh duong",
+        "bình dương",
+        "bd"
+      ]
     },
     {
       "code": "75",
       "name": "Đồng Nai",
-      "aliases": ["dong nai", "đồng nai"]
+      "aliases": [
+        "dong nai",
+        "đồng nai"
+      ]
     },
     {
       "code": "77",
       "name": "Bà Rịa - Vũng Tàu",
-      "aliases": ["vung tau", "vũng tàu", "ba ria", "bà rịa"]
+      "aliases": [
+        "vung tau",
+        "vũng tàu",
+        "ba ria",
+        "bà rịa"
+      ]
+    },
+    {
+      "code": "02",
+      "name": "Hà Giang",
+      "aliases": [
+        "ha giang",
+        "tinh ha giang"
+      ]
+    },
+    {
+      "code": "04",
+      "name": "Cao Bằng",
+      "aliases": [
+        "cao bang",
+        "tinh cao bang"
+      ]
+    },
+    {
+      "code": "06",
+      "name": "Bắc Kạn",
+      "aliases": [
+        "bac kan",
+        "tinh bac kan"
+      ]
+    },
+    {
+      "code": "08",
+      "name": "Tuyên Quang",
+      "aliases": [
+        "tinh tuyen quang",
+        "tuyen quang"
+      ]
+    },
+    {
+      "code": "10",
+      "name": "Lào Cai",
+      "aliases": [
+        "lao cai",
+        "tinh lao cai"
+      ]
+    },
+    {
+      "code": "11",
+      "name": "Điện Biên",
+      "aliases": [
+        "dien bien",
+        "tinh dien bien"
+      ]
+    },
+    {
+      "code": "12",
+      "name": "Lai Châu",
+      "aliases": [
+        "lai chau",
+        "tinh lai chau"
+      ]
+    },
+    {
+      "code": "14",
+      "name": "Sơn La",
+      "aliases": [
+        "son la",
+        "tinh son la"
+      ]
+    },
+    {
+      "code": "15",
+      "name": "Yên Bái",
+      "aliases": [
+        "tinh yen bai",
+        "yen bai"
+      ]
+    },
+    {
+      "code": "17",
+      "name": "Hòa Bình",
+      "aliases": [
+        "hoa binh",
+        "tinh hoa binh"
+      ]
+    },
+    {
+      "code": "19",
+      "name": "Thái Nguyên",
+      "aliases": [
+        "thai nguyen",
+        "tinh thai nguyen"
+      ]
+    },
+    {
+      "code": "20",
+      "name": "Lạng Sơn",
+      "aliases": [
+        "lang son",
+        "tinh lang son"
+      ]
+    },
+    {
+      "code": "22",
+      "name": "Quảng Ninh",
+      "aliases": [
+        "quang ninh",
+        "tinh quang ninh"
+      ]
+    },
+    {
+      "code": "24",
+      "name": "Bắc Giang",
+      "aliases": [
+        "bac giang",
+        "tinh bac giang"
+      ]
+    },
+    {
+      "code": "25",
+      "name": "Phú Thọ",
+      "aliases": [
+        "phu tho",
+        "tinh phu tho"
+      ]
+    },
+    {
+      "code": "26",
+      "name": "Vĩnh Phúc",
+      "aliases": [
+        "tinh vinh phuc",
+        "vinh phuc"
+      ]
+    },
+    {
+      "code": "27",
+      "name": "Bắc Ninh",
+      "aliases": [
+        "bac ninh",
+        "tinh bac ninh"
+      ]
+    },
+    {
+      "code": "30",
+      "name": "Hải Dương",
+      "aliases": [
+        "hai duong",
+        "tinh hai duong"
+      ]
+    },
+    {
+      "code": "33",
+      "name": "Hưng Yên",
+      "aliases": [
+        "hung yen",
+        "tinh hung yen"
+      ]
+    },
+    {
+      "code": "34",
+      "name": "Thái Bình",
+      "aliases": [
+        "thai binh",
+        "tinh thai binh"
+      ]
+    },
+    {
+      "code": "35",
+      "name": "Hà Nam",
+      "aliases": [
+        "ha nam",
+        "tinh ha nam"
+      ]
+    },
+    {
+      "code": "36",
+      "name": "Nam Định",
+      "aliases": [
+        "nam dinh",
+        "tinh nam dinh"
+      ]
+    },
+    {
+      "code": "37",
+      "name": "Ninh Bình",
+      "aliases": [
+        "ninh binh",
+        "tinh ninh binh"
+      ]
+    },
+    {
+      "code": "38",
+      "name": "Thanh Hóa",
+      "aliases": [
+        "thanh hoa",
+        "tinh thanh hoa"
+      ]
+    },
+    {
+      "code": "40",
+      "name": "Nghệ An",
+      "aliases": [
+        "nghe an",
+        "tinh nghe an"
+      ]
+    },
+    {
+      "code": "42",
+      "name": "Hà Tĩnh",
+      "aliases": [
+        "ha tinh",
+        "tinh ha tinh"
+      ]
+    },
+    {
+      "code": "44",
+      "name": "Quảng Bình",
+      "aliases": [
+        "quang binh",
+        "tinh quang binh"
+      ]
+    },
+    {
+      "code": "45",
+      "name": "Quảng Trị",
+      "aliases": [
+        "quang tri",
+        "tinh quang tri"
+      ]
+    },
+    {
+      "code": "46",
+      "name": "Huế",
+      "aliases": [
+        "hue",
+        "thanh pho hue"
+      ]
+    },
+    {
+      "code": "49",
+      "name": "Quảng Nam",
+      "aliases": [
+        "quang nam",
+        "tinh quang nam"
+      ]
+    },
+    {
+      "code": "51",
+      "name": "Quảng Ngãi",
+      "aliases": [
+        "quang ngai",
+        "tinh quang ngai"
+      ]
+    },
+    {
+      "code": "52",
+      "name": "Bình Định",
+      "aliases": [
+        "binh dinh",
+        "tinh binh dinh"
+      ]
+    },
+    {
+      "code": "54",
+      "name": "Phú Yên",
+      "aliases": [
+        "phu yen",
+        "tinh phu yen"
+      ]
+    },
+    {
+      "code": "56",
+      "name": "Khánh Hòa",
+      "aliases": [
+        "khanh hoa",
+        "tinh khanh hoa"
+      ]
+    },
+    {
+      "code": "58",
+      "name": "Ninh Thuận",
+      "aliases": [
+        "ninh thuan",
+        "tinh ninh thuan"
+      ]
+    },
+    {
+      "code": "60",
+      "name": "Bình Thuận",
+      "aliases": [
+        "binh thuan",
+        "tinh binh thuan"
+      ]
+    },
+    {
+      "code": "62",
+      "name": "Kon Tum",
+      "aliases": [
+        "kon tum",
+        "tinh kon tum"
+      ]
+    },
+    {
+      "code": "64",
+      "name": "Gia Lai",
+      "aliases": [
+        "gia lai",
+        "tinh gia lai"
+      ]
+    },
+    {
+      "code": "66",
+      "name": "Đắk Lắk",
+      "aliases": [
+        "dak lak",
+        "tinh dak lak"
+      ]
+    },
+    {
+      "code": "67",
+      "name": "Đắk Nông",
+      "aliases": [
+        "dak nong",
+        "tinh dak nong"
+      ]
+    },
+    {
+      "code": "68",
+      "name": "Lâm Đồng",
+      "aliases": [
+        "lam dong",
+        "tinh lam dong"
+      ]
+    },
+    {
+      "code": "70",
+      "name": "Bình Phước",
+      "aliases": [
+        "binh phuoc",
+        "tinh binh phuoc"
+      ]
+    },
+    {
+      "code": "72",
+      "name": "Tây Ninh",
+      "aliases": [
+        "tay ninh",
+        "tinh tay ninh"
+      ]
+    },
+    {
+      "code": "80",
+      "name": "Long An",
+      "aliases": [
+        "long an",
+        "tinh long an"
+      ]
+    },
+    {
+      "code": "82",
+      "name": "Tiền Giang",
+      "aliases": [
+        "tien giang",
+        "tinh tien giang"
+      ]
+    },
+    {
+      "code": "83",
+      "name": "Bến Tre",
+      "aliases": [
+        "ben tre",
+        "tinh ben tre"
+      ]
+    },
+    {
+      "code": "84",
+      "name": "Trà Vinh",
+      "aliases": [
+        "tinh tra vinh",
+        "tra vinh"
+      ]
+    },
+    {
+      "code": "86",
+      "name": "Vĩnh Long",
+      "aliases": [
+        "tinh vinh long",
+        "vinh long"
+      ]
+    },
+    {
+      "code": "87",
+      "name": "Đồng Tháp",
+      "aliases": [
+        "dong thap",
+        "tinh dong thap"
+      ]
+    },
+    {
+      "code": "89",
+      "name": "An Giang",
+      "aliases": [
+        "an giang",
+        "tinh an giang"
+      ]
+    },
+    {
+      "code": "91",
+      "name": "Kiên Giang",
+      "aliases": [
+        "kien giang",
+        "tinh kien giang"
+      ]
+    },
+    {
+      "code": "93",
+      "name": "Hậu Giang",
+      "aliases": [
+        "hau giang",
+        "tinh hau giang"
+      ]
+    },
+    {
+      "code": "94",
+      "name": "Sóc Trăng",
+      "aliases": [
+        "soc trang",
+        "tinh soc trang"
+      ]
+    },
+    {
+      "code": "95",
+      "name": "Bạc Liêu",
+      "aliases": [
+        "bac lieu",
+        "tinh bac lieu"
+      ]
+    },
+    {
+      "code": "96",
+      "name": "Cà Mau",
+      "aliases": [
+        "ca mau",
+        "tinh ca mau"
+      ]
     }
   ],
   "districts": {
     "01": [
-      { "code": "001", "name": "Ba Đình",         "aliases": ["ba dinh"] },
-      { "code": "002", "name": "Hoàn Kiếm",       "aliases": ["hoan kiem"] },
-      { "code": "003", "name": "Tây Hồ",          "aliases": ["tay ho"] },
-      { "code": "004", "name": "Long Biên",        "aliases": ["long bien"] },
-      { "code": "005", "name": "Cầu Giấy",        "aliases": ["cau giay"] },
-      { "code": "006", "name": "Đống Đa",         "aliases": ["dong da"] },
-      { "code": "007", "name": "Hai Bà Trưng",    "aliases": ["hai ba trung"] },
-      { "code": "008", "name": "Hoàng Mai",       "aliases": ["hoang mai"] },
-      { "code": "009", "name": "Thanh Xuân",      "aliases": ["thanh xuan"] },
-      { "code": "016", "name": "Sóc Sơn",         "aliases": ["soc son"] },
-      { "code": "017", "name": "Đông Anh",        "aliases": ["dong anh"] },
-      { "code": "018", "name": "Gia Lâm",         "aliases": ["gia lam"] },
-      { "code": "019", "name": "Nam Từ Liêm",     "aliases": ["nam tu liem"] },
-      { "code": "020", "name": "Mê Linh",         "aliases": ["me linh"] },
-      { "code": "268", "name": "Hà Đông",         "aliases": ["ha dong"] },
-      { "code": "277", "name": "Bắc Từ Liêm",     "aliases": ["bac tu liem"] }
+      {
+        "code": "001",
+        "name": "Ba Đình",
+        "aliases": [
+          "ba dinh"
+        ]
+      },
+      {
+        "code": "002",
+        "name": "Hoàn Kiếm",
+        "aliases": [
+          "hoan kiem"
+        ]
+      },
+      {
+        "code": "003",
+        "name": "Tây Hồ",
+        "aliases": [
+          "tay ho"
+        ]
+      },
+      {
+        "code": "004",
+        "name": "Long Biên",
+        "aliases": [
+          "long bien"
+        ]
+      },
+      {
+        "code": "005",
+        "name": "Cầu Giấy",
+        "aliases": [
+          "cau giay"
+        ]
+      },
+      {
+        "code": "006",
+        "name": "Đống Đa",
+        "aliases": [
+          "dong da"
+        ]
+      },
+      {
+        "code": "007",
+        "name": "Hai Bà Trưng",
+        "aliases": [
+          "hai ba trung"
+        ]
+      },
+      {
+        "code": "008",
+        "name": "Hoàng Mai",
+        "aliases": [
+          "hoang mai"
+        ]
+      },
+      {
+        "code": "009",
+        "name": "Thanh Xuân",
+        "aliases": [
+          "thanh xuan"
+        ]
+      },
+      {
+        "code": "016",
+        "name": "Sóc Sơn",
+        "aliases": [
+          "soc son"
+        ]
+      },
+      {
+        "code": "017",
+        "name": "Đông Anh",
+        "aliases": [
+          "dong anh"
+        ]
+      },
+      {
+        "code": "018",
+        "name": "Gia Lâm",
+        "aliases": [
+          "gia lam"
+        ]
+      },
+      {
+        "code": "019",
+        "name": "Nam Từ Liêm",
+        "aliases": [
+          "nam tu liem"
+        ]
+      },
+      {
+        "code": "020",
+        "name": "Mê Linh",
+        "aliases": [
+          "me linh"
+        ]
+      },
+      {
+        "code": "268",
+        "name": "Hà Đông",
+        "aliases": [
+          "ha dong"
+        ]
+      },
+      {
+        "code": "277",
+        "name": "Bắc Từ Liêm",
+        "aliases": [
+          "bac tu liem"
+        ]
+      }
     ],
     "79": [
-      { "code": "760", "name": "Quận 1",          "aliases": ["quan 1", "district 1", "q1"] },
-      { "code": "761", "name": "Quận 12",         "aliases": ["quan 12", "district 12", "q12"] },
-      { "code": "764", "name": "Gò Vấp",          "aliases": ["go vap"] },
-      { "code": "765", "name": "Bình Thạnh",      "aliases": ["binh thanh"] },
-      { "code": "766", "name": "Tân Bình",        "aliases": ["tan binh"] },
-      { "code": "767", "name": "Tân Phú",         "aliases": ["tan phu"] },
-      { "code": "768", "name": "Phú Nhuận",       "aliases": ["phu nhuan"] },
-      { "code": "769", "name": "TP. Thủ Đức",     "aliases": ["thu duc", "thủ đức"] },
-      { "code": "770", "name": "Quận 3",          "aliases": ["quan 3", "district 3", "q3"] },
-      { "code": "771", "name": "Quận 10",         "aliases": ["quan 10", "district 10", "q10"] },
-      { "code": "772", "name": "Quận 11",         "aliases": ["quan 11", "district 11", "q11"] },
-      { "code": "773", "name": "Quận 4",          "aliases": ["quan 4", "district 4", "q4"] },
-      { "code": "774", "name": "Quận 5",          "aliases": ["quan 5", "district 5", "q5"] },
-      { "code": "775", "name": "Quận 6",          "aliases": ["quan 6", "district 6", "q6"] },
-      { "code": "776", "name": "Quận 8",          "aliases": ["quan 8", "district 8", "q8"] },
-      { "code": "777", "name": "Bình Tân",        "aliases": ["binh tan"] },
-      { "code": "778", "name": "Quận 7",          "aliases": ["quan 7", "district 7", "q7", "phu my hung", "phú mỹ hưng"] },
-      { "code": "783", "name": "Củ Chi",          "aliases": ["cu chi"] },
-      { "code": "784", "name": "Hóc Môn",         "aliases": ["hoc mon"] },
-      { "code": "785", "name": "Bình Chánh",      "aliases": ["binh chanh"] },
-      { "code": "786", "name": "Nhà Bè",          "aliases": ["nha be"] },
-      { "code": "787", "name": "Cần Giờ",         "aliases": ["can gio"] }
+      {
+        "code": "760",
+        "name": "Quận 1",
+        "aliases": [
+          "quan 1",
+          "district 1",
+          "q1"
+        ]
+      },
+      {
+        "code": "761",
+        "name": "Quận 12",
+        "aliases": [
+          "quan 12",
+          "district 12",
+          "q12"
+        ]
+      },
+      {
+        "code": "764",
+        "name": "Gò Vấp",
+        "aliases": [
+          "go vap"
+        ]
+      },
+      {
+        "code": "765",
+        "name": "Bình Thạnh",
+        "aliases": [
+          "binh thanh"
+        ]
+      },
+      {
+        "code": "766",
+        "name": "Tân Bình",
+        "aliases": [
+          "tan binh"
+        ]
+      },
+      {
+        "code": "767",
+        "name": "Tân Phú",
+        "aliases": [
+          "tan phu"
+        ]
+      },
+      {
+        "code": "768",
+        "name": "Phú Nhuận",
+        "aliases": [
+          "phu nhuan"
+        ]
+      },
+      {
+        "code": "769",
+        "name": "TP. Thủ Đức",
+        "aliases": [
+          "thu duc",
+          "thủ đức"
+        ]
+      },
+      {
+        "code": "770",
+        "name": "Quận 3",
+        "aliases": [
+          "quan 3",
+          "district 3",
+          "q3"
+        ]
+      },
+      {
+        "code": "771",
+        "name": "Quận 10",
+        "aliases": [
+          "quan 10",
+          "district 10",
+          "q10"
+        ]
+      },
+      {
+        "code": "772",
+        "name": "Quận 11",
+        "aliases": [
+          "quan 11",
+          "district 11",
+          "q11"
+        ]
+      },
+      {
+        "code": "773",
+        "name": "Quận 4",
+        "aliases": [
+          "quan 4",
+          "district 4",
+          "q4"
+        ]
+      },
+      {
+        "code": "774",
+        "name": "Quận 5",
+        "aliases": [
+          "quan 5",
+          "district 5",
+          "q5"
+        ]
+      },
+      {
+        "code": "775",
+        "name": "Quận 6",
+        "aliases": [
+          "quan 6",
+          "district 6",
+          "q6"
+        ]
+      },
+      {
+        "code": "776",
+        "name": "Quận 8",
+        "aliases": [
+          "quan 8",
+          "district 8",
+          "q8"
+        ]
+      },
+      {
+        "code": "777",
+        "name": "Bình Tân",
+        "aliases": [
+          "binh tan"
+        ]
+      },
+      {
+        "code": "778",
+        "name": "Quận 7",
+        "aliases": [
+          "quan 7",
+          "district 7",
+          "q7",
+          "phu my hung",
+          "phú mỹ hưng"
+        ]
+      },
+      {
+        "code": "783",
+        "name": "Củ Chi",
+        "aliases": [
+          "cu chi"
+        ]
+      },
+      {
+        "code": "784",
+        "name": "Hóc Môn",
+        "aliases": [
+          "hoc mon"
+        ]
+      },
+      {
+        "code": "785",
+        "name": "Bình Chánh",
+        "aliases": [
+          "binh chanh"
+        ]
+      },
+      {
+        "code": "786",
+        "name": "Nhà Bè",
+        "aliases": [
+          "nha be"
+        ]
+      },
+      {
+        "code": "787",
+        "name": "Cần Giờ",
+        "aliases": [
+          "can gio"
+        ]
+      }
     ],
     "48": [
-      { "code": "490", "name": "Hải Châu",        "aliases": ["hai chau"] },
-      { "code": "491", "name": "Thanh Khê",       "aliases": ["thanh khe"] },
-      { "code": "492", "name": "Sơn Trà",         "aliases": ["son tra"] },
-      { "code": "493", "name": "Ngũ Hành Sơn",   "aliases": ["ngu hanh son", "marble mountains"] },
-      { "code": "494", "name": "Liên Chiểu",      "aliases": ["lien chieu"] },
-      { "code": "495", "name": "Cẩm Lệ",         "aliases": ["cam le"] }
+      {
+        "code": "490",
+        "name": "Hải Châu",
+        "aliases": [
+          "hai chau"
+        ]
+      },
+      {
+        "code": "491",
+        "name": "Thanh Khê",
+        "aliases": [
+          "thanh khe"
+        ]
+      },
+      {
+        "code": "492",
+        "name": "Sơn Trà",
+        "aliases": [
+          "son tra"
+        ]
+      },
+      {
+        "code": "493",
+        "name": "Ngũ Hành Sơn",
+        "aliases": [
+          "ngu hanh son",
+          "marble mountains"
+        ]
+      },
+      {
+        "code": "494",
+        "name": "Liên Chiểu",
+        "aliases": [
+          "lien chieu"
+        ]
+      },
+      {
+        "code": "495",
+        "name": "Cẩm Lệ",
+        "aliases": [
+          "cam le"
+        ]
+      }
+    ],
+    "02": [
+      {
+        "code": "24",
+        "name": "Thành phố Hà Giang",
+        "aliases": [
+          "ha giang",
+          "thanh pho ha giang"
+        ]
+      },
+      {
+        "code": "26",
+        "name": "Huyện Đồng Văn",
+        "aliases": [
+          "dong van",
+          "huyen dong van"
+        ]
+      },
+      {
+        "code": "27",
+        "name": "Huyện Mèo Vạc",
+        "aliases": [
+          "huyen meo vac",
+          "meo vac"
+        ]
+      },
+      {
+        "code": "28",
+        "name": "Huyện Yên Minh",
+        "aliases": [
+          "huyen yen minh",
+          "yen minh"
+        ]
+      },
+      {
+        "code": "29",
+        "name": "Huyện Quản Bạ",
+        "aliases": [
+          "huyen quan ba",
+          "quan ba"
+        ]
+      },
+      {
+        "code": "30",
+        "name": "Huyện Vị Xuyên",
+        "aliases": [
+          "huyen vi xuyen",
+          "vi xuyen"
+        ]
+      },
+      {
+        "code": "31",
+        "name": "Huyện Bắc Mê",
+        "aliases": [
+          "bac me",
+          "huyen bac me"
+        ]
+      },
+      {
+        "code": "32",
+        "name": "Huyện Hoàng Su Phì",
+        "aliases": [
+          "hoang su phi",
+          "huyen hoang su phi"
+        ]
+      },
+      {
+        "code": "33",
+        "name": "Huyện Xín Mần",
+        "aliases": [
+          "huyen xin man",
+          "xin man"
+        ]
+      },
+      {
+        "code": "34",
+        "name": "Huyện Bắc Quang",
+        "aliases": [
+          "bac quang",
+          "huyen bac quang"
+        ]
+      },
+      {
+        "code": "35",
+        "name": "Huyện Quang Bình",
+        "aliases": [
+          "huyen quang binh",
+          "quang binh"
+        ]
+      }
+    ],
+    "04": [
+      {
+        "code": "40",
+        "name": "Thành phố Cao Bằng",
+        "aliases": [
+          "cao bang",
+          "thanh pho cao bang"
+        ]
+      },
+      {
+        "code": "42",
+        "name": "Huyện Bảo Lâm",
+        "aliases": [
+          "bao lam",
+          "huyen bao lam"
+        ]
+      },
+      {
+        "code": "43",
+        "name": "Huyện Bảo Lạc",
+        "aliases": [
+          "bao lac",
+          "huyen bao lac"
+        ]
+      },
+      {
+        "code": "45",
+        "name": "Huyện Hà Quảng",
+        "aliases": [
+          "ha quang",
+          "huyen ha quang"
+        ]
+      },
+      {
+        "code": "47",
+        "name": "Huyện Trùng Khánh",
+        "aliases": [
+          "huyen trung khanh",
+          "trung khanh"
+        ]
+      },
+      {
+        "code": "48",
+        "name": "Huyện Hạ Lang",
+        "aliases": [
+          "ha lang",
+          "huyen ha lang"
+        ]
+      },
+      {
+        "code": "49",
+        "name": "Huyện Quảng Hòa",
+        "aliases": [
+          "huyen quang hoa",
+          "quang hoa"
+        ]
+      },
+      {
+        "code": "51",
+        "name": "Huyện Hòa An",
+        "aliases": [
+          "hoa an",
+          "huyen hoa an"
+        ]
+      },
+      {
+        "code": "52",
+        "name": "Huyện Nguyên Bình",
+        "aliases": [
+          "huyen nguyen binh",
+          "nguyen binh"
+        ]
+      },
+      {
+        "code": "53",
+        "name": "Huyện Thạch An",
+        "aliases": [
+          "huyen thach an",
+          "thach an"
+        ]
+      }
+    ],
+    "06": [
+      {
+        "code": "58",
+        "name": "Thành Phố Bắc Kạn",
+        "aliases": [
+          "bac kan",
+          "thanh pho bac kan"
+        ]
+      },
+      {
+        "code": "60",
+        "name": "Huyện Pác Nặm",
+        "aliases": [
+          "huyen pac nam",
+          "pac nam"
+        ]
+      },
+      {
+        "code": "61",
+        "name": "Huyện Ba Bể",
+        "aliases": [
+          "ba be",
+          "huyen ba be"
+        ]
+      },
+      {
+        "code": "62",
+        "name": "Huyện Ngân Sơn",
+        "aliases": [
+          "huyen ngan son",
+          "ngan son"
+        ]
+      },
+      {
+        "code": "63",
+        "name": "Huyện Bạch Thông",
+        "aliases": [
+          "bach thong",
+          "huyen bach thong"
+        ]
+      },
+      {
+        "code": "64",
+        "name": "Huyện Chợ Đồn",
+        "aliases": [
+          "cho don",
+          "huyen cho don"
+        ]
+      },
+      {
+        "code": "65",
+        "name": "Huyện Chợ Mới",
+        "aliases": [
+          "cho moi",
+          "huyen cho moi"
+        ]
+      },
+      {
+        "code": "66",
+        "name": "Huyện Na Rì",
+        "aliases": [
+          "huyen na ri",
+          "na ri"
+        ]
+      }
+    ],
+    "08": [
+      {
+        "code": "70",
+        "name": "Thành phố Tuyên Quang",
+        "aliases": [
+          "thanh pho tuyen quang",
+          "tuyen quang"
+        ]
+      },
+      {
+        "code": "71",
+        "name": "Huyện Lâm Bình",
+        "aliases": [
+          "huyen lam binh",
+          "lam binh"
+        ]
+      },
+      {
+        "code": "72",
+        "name": "Huyện Na Hang",
+        "aliases": [
+          "huyen na hang",
+          "na hang"
+        ]
+      },
+      {
+        "code": "73",
+        "name": "Huyện Chiêm Hóa",
+        "aliases": [
+          "chiem hoa",
+          "huyen chiem hoa"
+        ]
+      },
+      {
+        "code": "74",
+        "name": "Huyện Hàm Yên",
+        "aliases": [
+          "ham yen",
+          "huyen ham yen"
+        ]
+      },
+      {
+        "code": "75",
+        "name": "Huyện Yên Sơn",
+        "aliases": [
+          "huyen yen son",
+          "yen son"
+        ]
+      },
+      {
+        "code": "76",
+        "name": "Huyện Sơn Dương",
+        "aliases": [
+          "huyen son duong",
+          "son duong"
+        ]
+      }
+    ],
+    "10": [
+      {
+        "code": "80",
+        "name": "Thành phố Lào Cai",
+        "aliases": [
+          "lao cai",
+          "thanh pho lao cai"
+        ]
+      },
+      {
+        "code": "82",
+        "name": "Huyện Bát Xát",
+        "aliases": [
+          "bat xat",
+          "huyen bat xat"
+        ]
+      },
+      {
+        "code": "83",
+        "name": "Huyện Mường Khương",
+        "aliases": [
+          "huyen muong khuong",
+          "muong khuong"
+        ]
+      },
+      {
+        "code": "84",
+        "name": "Huyện Si Ma Cai",
+        "aliases": [
+          "huyen si ma cai",
+          "si ma cai"
+        ]
+      },
+      {
+        "code": "85",
+        "name": "Huyện Bắc Hà",
+        "aliases": [
+          "bac ha",
+          "huyen bac ha"
+        ]
+      },
+      {
+        "code": "86",
+        "name": "Huyện Bảo Thắng",
+        "aliases": [
+          "bao thang",
+          "huyen bao thang"
+        ]
+      },
+      {
+        "code": "87",
+        "name": "Huyện Bảo Yên",
+        "aliases": [
+          "bao yen",
+          "huyen bao yen"
+        ]
+      },
+      {
+        "code": "88",
+        "name": "Thị xã Sa Pa",
+        "aliases": [
+          "sa pa",
+          "thi xa sa pa"
+        ]
+      },
+      {
+        "code": "89",
+        "name": "Huyện Văn Bàn",
+        "aliases": [
+          "huyen van ban",
+          "van ban"
+        ]
+      }
+    ],
+    "11": [
+      {
+        "code": "94",
+        "name": "Thành phố Điện Biên Phủ",
+        "aliases": [
+          "dien bien phu",
+          "thanh pho dien bien phu"
+        ]
+      },
+      {
+        "code": "95",
+        "name": "Thị Xã Mường Lay",
+        "aliases": [
+          "muong lay",
+          "thi xa muong lay"
+        ]
+      },
+      {
+        "code": "96",
+        "name": "Huyện Mường Nhé",
+        "aliases": [
+          "huyen muong nhe",
+          "muong nhe"
+        ]
+      },
+      {
+        "code": "97",
+        "name": "Huyện Mường Chà",
+        "aliases": [
+          "huyen muong cha",
+          "muong cha"
+        ]
+      },
+      {
+        "code": "98",
+        "name": "Huyện Tủa Chùa",
+        "aliases": [
+          "huyen tua chua",
+          "tua chua"
+        ]
+      },
+      {
+        "code": "99",
+        "name": "Huyện Tuần Giáo",
+        "aliases": [
+          "huyen tuan giao",
+          "tuan giao"
+        ]
+      },
+      {
+        "code": "100",
+        "name": "Huyện Điện Biên",
+        "aliases": [
+          "dien bien",
+          "huyen dien bien"
+        ]
+      },
+      {
+        "code": "101",
+        "name": "Huyện Điện Biên Đông",
+        "aliases": [
+          "dien bien dong",
+          "huyen dien bien dong"
+        ]
+      },
+      {
+        "code": "102",
+        "name": "Huyện Mường Ảng",
+        "aliases": [
+          "huyen muong ang",
+          "muong ang"
+        ]
+      },
+      {
+        "code": "103",
+        "name": "Huyện Nậm Pồ",
+        "aliases": [
+          "huyen nam po",
+          "nam po"
+        ]
+      }
+    ],
+    "12": [
+      {
+        "code": "105",
+        "name": "Thành phố Lai Châu",
+        "aliases": [
+          "lai chau",
+          "thanh pho lai chau"
+        ]
+      },
+      {
+        "code": "106",
+        "name": "Huyện Tam Đường",
+        "aliases": [
+          "huyen tam duong",
+          "tam duong"
+        ]
+      },
+      {
+        "code": "107",
+        "name": "Huyện Mường Tè",
+        "aliases": [
+          "huyen muong te",
+          "muong te"
+        ]
+      },
+      {
+        "code": "108",
+        "name": "Huyện Sìn Hồ",
+        "aliases": [
+          "huyen sin ho",
+          "sin ho"
+        ]
+      },
+      {
+        "code": "109",
+        "name": "Huyện Phong Thổ",
+        "aliases": [
+          "huyen phong tho",
+          "phong tho"
+        ]
+      },
+      {
+        "code": "110",
+        "name": "Huyện Than Uyên",
+        "aliases": [
+          "huyen than uyen",
+          "than uyen"
+        ]
+      },
+      {
+        "code": "111",
+        "name": "Huyện Tân Uyên",
+        "aliases": [
+          "huyen tan uyen",
+          "tan uyen"
+        ]
+      },
+      {
+        "code": "112",
+        "name": "Huyện Nậm Nhùn",
+        "aliases": [
+          "huyen nam nhun",
+          "nam nhun"
+        ]
+      }
+    ],
+    "14": [
+      {
+        "code": "116",
+        "name": "Thành phố Sơn La",
+        "aliases": [
+          "son la",
+          "thanh pho son la"
+        ]
+      },
+      {
+        "code": "118",
+        "name": "Huyện Quỳnh Nhai",
+        "aliases": [
+          "huyen quynh nhai",
+          "quynh nhai"
+        ]
+      },
+      {
+        "code": "119",
+        "name": "Huyện Thuận Châu",
+        "aliases": [
+          "huyen thuan chau",
+          "thuan chau"
+        ]
+      },
+      {
+        "code": "120",
+        "name": "Huyện Mường La",
+        "aliases": [
+          "huyen muong la",
+          "muong la"
+        ]
+      },
+      {
+        "code": "121",
+        "name": "Huyện Bắc Yên",
+        "aliases": [
+          "bac yen",
+          "huyen bac yen"
+        ]
+      },
+      {
+        "code": "122",
+        "name": "Huyện Phù Yên",
+        "aliases": [
+          "huyen phu yen",
+          "phu yen"
+        ]
+      },
+      {
+        "code": "123",
+        "name": "Thị xã Mộc Châu",
+        "aliases": [
+          "moc chau",
+          "thi xa moc chau"
+        ]
+      },
+      {
+        "code": "124",
+        "name": "Huyện Yên Châu",
+        "aliases": [
+          "huyen yen chau",
+          "yen chau"
+        ]
+      },
+      {
+        "code": "125",
+        "name": "Huyện Mai Sơn",
+        "aliases": [
+          "huyen mai son",
+          "mai son"
+        ]
+      },
+      {
+        "code": "126",
+        "name": "Huyện Sông Mã",
+        "aliases": [
+          "huyen song ma",
+          "song ma"
+        ]
+      },
+      {
+        "code": "127",
+        "name": "Huyện Sốp Cộp",
+        "aliases": [
+          "huyen sop cop",
+          "sop cop"
+        ]
+      },
+      {
+        "code": "128",
+        "name": "Huyện Vân Hồ",
+        "aliases": [
+          "huyen van ho",
+          "van ho"
+        ]
+      }
+    ],
+    "15": [
+      {
+        "code": "132",
+        "name": "Thành phố Yên Bái",
+        "aliases": [
+          "thanh pho yen bai",
+          "yen bai"
+        ]
+      },
+      {
+        "code": "133",
+        "name": "Thị xã Nghĩa Lộ",
+        "aliases": [
+          "nghia lo",
+          "thi xa nghia lo"
+        ]
+      },
+      {
+        "code": "135",
+        "name": "Huyện Lục Yên",
+        "aliases": [
+          "huyen luc yen",
+          "luc yen"
+        ]
+      },
+      {
+        "code": "136",
+        "name": "Huyện Văn Yên",
+        "aliases": [
+          "huyen van yen",
+          "van yen"
+        ]
+      },
+      {
+        "code": "137",
+        "name": "Huyện Mù Căng Chải",
+        "aliases": [
+          "huyen mu cang chai",
+          "mu cang chai"
+        ]
+      },
+      {
+        "code": "138",
+        "name": "Huyện Trấn Yên",
+        "aliases": [
+          "huyen tran yen",
+          "tran yen"
+        ]
+      },
+      {
+        "code": "139",
+        "name": "Huyện Trạm Tấu",
+        "aliases": [
+          "huyen tram tau",
+          "tram tau"
+        ]
+      },
+      {
+        "code": "140",
+        "name": "Huyện Văn Chấn",
+        "aliases": [
+          "huyen van chan",
+          "van chan"
+        ]
+      },
+      {
+        "code": "141",
+        "name": "Huyện Yên Bình",
+        "aliases": [
+          "huyen yen binh",
+          "yen binh"
+        ]
+      }
+    ],
+    "17": [
+      {
+        "code": "148",
+        "name": "Thành phố Hòa Bình",
+        "aliases": [
+          "hoa binh",
+          "thanh pho hoa binh"
+        ]
+      },
+      {
+        "code": "150",
+        "name": "Huyện Đà Bắc",
+        "aliases": [
+          "da bac",
+          "huyen da bac"
+        ]
+      },
+      {
+        "code": "152",
+        "name": "Huyện Lương Sơn",
+        "aliases": [
+          "huyen luong son",
+          "luong son"
+        ]
+      },
+      {
+        "code": "153",
+        "name": "Huyện Kim Bôi",
+        "aliases": [
+          "huyen kim boi",
+          "kim boi"
+        ]
+      },
+      {
+        "code": "154",
+        "name": "Huyện Cao Phong",
+        "aliases": [
+          "cao phong",
+          "huyen cao phong"
+        ]
+      },
+      {
+        "code": "155",
+        "name": "Huyện Tân Lạc",
+        "aliases": [
+          "huyen tan lac",
+          "tan lac"
+        ]
+      },
+      {
+        "code": "156",
+        "name": "Huyện Mai Châu",
+        "aliases": [
+          "huyen mai chau",
+          "mai chau"
+        ]
+      },
+      {
+        "code": "157",
+        "name": "Huyện Lạc Sơn",
+        "aliases": [
+          "huyen lac son",
+          "lac son"
+        ]
+      },
+      {
+        "code": "158",
+        "name": "Huyện Yên Thủy",
+        "aliases": [
+          "huyen yen thuy",
+          "yen thuy"
+        ]
+      },
+      {
+        "code": "159",
+        "name": "Huyện Lạc Thủy",
+        "aliases": [
+          "huyen lac thuy",
+          "lac thuy"
+        ]
+      }
+    ],
+    "19": [
+      {
+        "code": "164",
+        "name": "Thành phố Thái Nguyên",
+        "aliases": [
+          "thai nguyen",
+          "thanh pho thai nguyen"
+        ]
+      },
+      {
+        "code": "165",
+        "name": "Thành phố Sông Công",
+        "aliases": [
+          "song cong",
+          "thanh pho song cong"
+        ]
+      },
+      {
+        "code": "167",
+        "name": "Huyện Định Hóa",
+        "aliases": [
+          "dinh hoa",
+          "huyen dinh hoa"
+        ]
+      },
+      {
+        "code": "168",
+        "name": "Huyện Phú Lương",
+        "aliases": [
+          "huyen phu luong",
+          "phu luong"
+        ]
+      },
+      {
+        "code": "169",
+        "name": "Huyện Đồng Hỷ",
+        "aliases": [
+          "dong hy",
+          "huyen dong hy"
+        ]
+      },
+      {
+        "code": "170",
+        "name": "Huyện Võ Nhai",
+        "aliases": [
+          "huyen vo nhai",
+          "vo nhai"
+        ]
+      },
+      {
+        "code": "171",
+        "name": "Huyện Đại Từ",
+        "aliases": [
+          "dai tu",
+          "huyen dai tu"
+        ]
+      },
+      {
+        "code": "172",
+        "name": "Thành phố Phổ Yên",
+        "aliases": [
+          "pho yen",
+          "thanh pho pho yen"
+        ]
+      },
+      {
+        "code": "173",
+        "name": "Huyện Phú Bình",
+        "aliases": [
+          "huyen phu binh",
+          "phu binh"
+        ]
+      }
+    ],
+    "20": [
+      {
+        "code": "178",
+        "name": "Thành phố Lạng Sơn",
+        "aliases": [
+          "lang son",
+          "thanh pho lang son"
+        ]
+      },
+      {
+        "code": "180",
+        "name": "Huyện Tràng Định",
+        "aliases": [
+          "huyen trang dinh",
+          "trang dinh"
+        ]
+      },
+      {
+        "code": "181",
+        "name": "Huyện Bình Gia",
+        "aliases": [
+          "binh gia",
+          "huyen binh gia"
+        ]
+      },
+      {
+        "code": "182",
+        "name": "Huyện Văn Lãng",
+        "aliases": [
+          "huyen van lang",
+          "van lang"
+        ]
+      },
+      {
+        "code": "183",
+        "name": "Huyện Cao Lộc",
+        "aliases": [
+          "cao loc",
+          "huyen cao loc"
+        ]
+      },
+      {
+        "code": "184",
+        "name": "Huyện Văn Quan",
+        "aliases": [
+          "huyen van quan",
+          "van quan"
+        ]
+      },
+      {
+        "code": "185",
+        "name": "Huyện Bắc Sơn",
+        "aliases": [
+          "bac son",
+          "huyen bac son"
+        ]
+      },
+      {
+        "code": "186",
+        "name": "Huyện Hữu Lũng",
+        "aliases": [
+          "huu lung",
+          "huyen huu lung"
+        ]
+      },
+      {
+        "code": "187",
+        "name": "Huyện Chi Lăng",
+        "aliases": [
+          "chi lang",
+          "huyen chi lang"
+        ]
+      },
+      {
+        "code": "188",
+        "name": "Huyện Lộc Bình",
+        "aliases": [
+          "huyen loc binh",
+          "loc binh"
+        ]
+      },
+      {
+        "code": "189",
+        "name": "Huyện Đình Lập",
+        "aliases": [
+          "dinh lap",
+          "huyen dinh lap"
+        ]
+      }
+    ],
+    "22": [
+      {
+        "code": "193",
+        "name": "Thành phố Hạ Long",
+        "aliases": [
+          "ha long",
+          "thanh pho ha long"
+        ]
+      },
+      {
+        "code": "194",
+        "name": "Thành phố Móng Cái",
+        "aliases": [
+          "mong cai",
+          "thanh pho mong cai"
+        ]
+      },
+      {
+        "code": "195",
+        "name": "Thành phố Cẩm Phả",
+        "aliases": [
+          "cam pha",
+          "thanh pho cam pha"
+        ]
+      },
+      {
+        "code": "196",
+        "name": "Thành phố Uông Bí",
+        "aliases": [
+          "thanh pho uong bi",
+          "uong bi"
+        ]
+      },
+      {
+        "code": "198",
+        "name": "Huyện Bình Liêu",
+        "aliases": [
+          "binh lieu",
+          "huyen binh lieu"
+        ]
+      },
+      {
+        "code": "199",
+        "name": "Huyện Tiên Yên",
+        "aliases": [
+          "huyen tien yen",
+          "tien yen"
+        ]
+      },
+      {
+        "code": "200",
+        "name": "Huyện Đầm Hà",
+        "aliases": [
+          "dam ha",
+          "huyen dam ha"
+        ]
+      },
+      {
+        "code": "201",
+        "name": "Huyện Hải Hà",
+        "aliases": [
+          "hai ha",
+          "huyen hai ha"
+        ]
+      },
+      {
+        "code": "202",
+        "name": "Huyện Ba Chẽ",
+        "aliases": [
+          "ba che",
+          "huyen ba che"
+        ]
+      },
+      {
+        "code": "203",
+        "name": "Huyện Vân Đồn",
+        "aliases": [
+          "huyen van don",
+          "van don"
+        ]
+      },
+      {
+        "code": "205",
+        "name": "Thành phố Đông Triều",
+        "aliases": [
+          "dong trieu",
+          "thanh pho dong trieu"
+        ]
+      },
+      {
+        "code": "206",
+        "name": "Thị xã Quảng Yên",
+        "aliases": [
+          "quang yen",
+          "thi xa quang yen"
+        ]
+      },
+      {
+        "code": "207",
+        "name": "Huyện Cô Tô",
+        "aliases": [
+          "co to",
+          "huyen co to"
+        ]
+      }
+    ],
+    "24": [
+      {
+        "code": "213",
+        "name": "Thành phố Bắc Giang",
+        "aliases": [
+          "bac giang",
+          "thanh pho bac giang"
+        ]
+      },
+      {
+        "code": "215",
+        "name": "Huyện Yên Thế",
+        "aliases": [
+          "huyen yen the",
+          "yen the"
+        ]
+      },
+      {
+        "code": "216",
+        "name": "Huyện Tân Yên",
+        "aliases": [
+          "huyen tan yen",
+          "tan yen"
+        ]
+      },
+      {
+        "code": "217",
+        "name": "Huyện Lạng Giang",
+        "aliases": [
+          "huyen lang giang",
+          "lang giang"
+        ]
+      },
+      {
+        "code": "218",
+        "name": "Huyện Lục Nam",
+        "aliases": [
+          "huyen luc nam",
+          "luc nam"
+        ]
+      },
+      {
+        "code": "219",
+        "name": "Huyện Lục Ngạn",
+        "aliases": [
+          "huyen luc ngan",
+          "luc ngan"
+        ]
+      },
+      {
+        "code": "220",
+        "name": "Huyện Sơn Động",
+        "aliases": [
+          "huyen son dong",
+          "son dong"
+        ]
+      },
+      {
+        "code": "222",
+        "name": "Thị Xã Việt Yên",
+        "aliases": [
+          "thi xa viet yen",
+          "viet yen"
+        ]
+      },
+      {
+        "code": "223",
+        "name": "Huyện Hiệp Hòa",
+        "aliases": [
+          "hiep hoa",
+          "huyen hiep hoa"
+        ]
+      },
+      {
+        "code": "224",
+        "name": "Thị xã Chũ",
+        "aliases": [
+          "chu",
+          "thi xa chu"
+        ]
+      }
+    ],
+    "25": [
+      {
+        "code": "227",
+        "name": "Thành phố Việt Trì",
+        "aliases": [
+          "thanh pho viet tri",
+          "viet tri"
+        ]
+      },
+      {
+        "code": "228",
+        "name": "Thị xã Phú Thọ",
+        "aliases": [
+          "phu tho",
+          "thi xa phu tho"
+        ]
+      },
+      {
+        "code": "230",
+        "name": "Huyện Đoan Hùng",
+        "aliases": [
+          "doan hung",
+          "huyen doan hung"
+        ]
+      },
+      {
+        "code": "231",
+        "name": "Huyện Hạ Hòa",
+        "aliases": [
+          "ha hoa",
+          "huyen ha hoa"
+        ]
+      },
+      {
+        "code": "232",
+        "name": "Huyện Thanh Ba",
+        "aliases": [
+          "huyen thanh ba",
+          "thanh ba"
+        ]
+      },
+      {
+        "code": "233",
+        "name": "Huyện Phù Ninh",
+        "aliases": [
+          "huyen phu ninh",
+          "phu ninh"
+        ]
+      },
+      {
+        "code": "234",
+        "name": "Huyện Yên Lập",
+        "aliases": [
+          "huyen yen lap",
+          "yen lap"
+        ]
+      },
+      {
+        "code": "235",
+        "name": "Huyện Cẩm Khê",
+        "aliases": [
+          "cam khe",
+          "huyen cam khe"
+        ]
+      },
+      {
+        "code": "236",
+        "name": "Huyện Tam Nông",
+        "aliases": [
+          "huyen tam nong",
+          "tam nong"
+        ]
+      },
+      {
+        "code": "237",
+        "name": "Huyện Lâm Thao",
+        "aliases": [
+          "huyen lam thao",
+          "lam thao"
+        ]
+      },
+      {
+        "code": "238",
+        "name": "Huyện Thanh Sơn",
+        "aliases": [
+          "huyen thanh son",
+          "thanh son"
+        ]
+      },
+      {
+        "code": "239",
+        "name": "Huyện Thanh Thủy",
+        "aliases": [
+          "huyen thanh thuy",
+          "thanh thuy"
+        ]
+      },
+      {
+        "code": "240",
+        "name": "Huyện Tân Sơn",
+        "aliases": [
+          "huyen tan son",
+          "tan son"
+        ]
+      }
+    ],
+    "26": [
+      {
+        "code": "243",
+        "name": "Thành phố Vĩnh Yên",
+        "aliases": [
+          "thanh pho vinh yen",
+          "vinh yen"
+        ]
+      },
+      {
+        "code": "244",
+        "name": "Thành phố Phúc Yên",
+        "aliases": [
+          "phuc yen",
+          "thanh pho phuc yen"
+        ]
+      },
+      {
+        "code": "246",
+        "name": "Huyện Lập Thạch",
+        "aliases": [
+          "huyen lap thach",
+          "lap thach"
+        ]
+      },
+      {
+        "code": "247",
+        "name": "Huyện Tam Dương",
+        "aliases": [
+          "huyen tam duong",
+          "tam duong"
+        ]
+      },
+      {
+        "code": "248",
+        "name": "Huyện Tam Đảo",
+        "aliases": [
+          "huyen tam dao",
+          "tam dao"
+        ]
+      },
+      {
+        "code": "249",
+        "name": "Huyện Bình Xuyên",
+        "aliases": [
+          "binh xuyen",
+          "huyen binh xuyen"
+        ]
+      },
+      {
+        "code": "251",
+        "name": "Huyện Yên Lạc",
+        "aliases": [
+          "huyen yen lac",
+          "yen lac"
+        ]
+      },
+      {
+        "code": "252",
+        "name": "Huyện Vĩnh Tường",
+        "aliases": [
+          "huyen vinh tuong",
+          "vinh tuong"
+        ]
+      },
+      {
+        "code": "253",
+        "name": "Huyện Sông Lô",
+        "aliases": [
+          "huyen song lo",
+          "song lo"
+        ]
+      }
+    ],
+    "27": [
+      {
+        "code": "256",
+        "name": "Thành phố Bắc Ninh",
+        "aliases": [
+          "bac ninh",
+          "thanh pho bac ninh"
+        ]
+      },
+      {
+        "code": "258",
+        "name": "Huyện Yên Phong",
+        "aliases": [
+          "huyen yen phong",
+          "yen phong"
+        ]
+      },
+      {
+        "code": "259",
+        "name": "Thị xã Quế Võ",
+        "aliases": [
+          "que vo",
+          "thi xa que vo"
+        ]
+      },
+      {
+        "code": "260",
+        "name": "Huyện Tiên Du",
+        "aliases": [
+          "huyen tien du",
+          "tien du"
+        ]
+      },
+      {
+        "code": "261",
+        "name": "Thành phố Từ Sơn",
+        "aliases": [
+          "thanh pho tu son",
+          "tu son"
+        ]
+      },
+      {
+        "code": "262",
+        "name": "Thị xã Thuận Thành",
+        "aliases": [
+          "thi xa thuan thanh",
+          "thuan thanh"
+        ]
+      },
+      {
+        "code": "263",
+        "name": "Huyện Gia Bình",
+        "aliases": [
+          "gia binh",
+          "huyen gia binh"
+        ]
+      },
+      {
+        "code": "264",
+        "name": "Huyện Lương Tài",
+        "aliases": [
+          "huyen luong tai",
+          "luong tai"
+        ]
+      }
+    ],
+    "30": [
+      {
+        "code": "288",
+        "name": "Thành phố Hải Dương",
+        "aliases": [
+          "hai duong",
+          "thanh pho hai duong"
+        ]
+      },
+      {
+        "code": "290",
+        "name": "Thành phố Chí Linh",
+        "aliases": [
+          "chi linh",
+          "thanh pho chi linh"
+        ]
+      },
+      {
+        "code": "291",
+        "name": "Huyện Nam Sách",
+        "aliases": [
+          "huyen nam sach",
+          "nam sach"
+        ]
+      },
+      {
+        "code": "292",
+        "name": "Thị xã Kinh Môn",
+        "aliases": [
+          "kinh mon",
+          "thi xa kinh mon"
+        ]
+      },
+      {
+        "code": "293",
+        "name": "Huyện Kim Thành",
+        "aliases": [
+          "huyen kim thanh",
+          "kim thanh"
+        ]
+      },
+      {
+        "code": "294",
+        "name": "Huyện Thanh Hà",
+        "aliases": [
+          "huyen thanh ha",
+          "thanh ha"
+        ]
+      },
+      {
+        "code": "295",
+        "name": "Huyện Cẩm Giàng",
+        "aliases": [
+          "cam giang",
+          "huyen cam giang"
+        ]
+      },
+      {
+        "code": "296",
+        "name": "Huyện Bình Giang",
+        "aliases": [
+          "binh giang",
+          "huyen binh giang"
+        ]
+      },
+      {
+        "code": "297",
+        "name": "Huyện Gia Lộc",
+        "aliases": [
+          "gia loc",
+          "huyen gia loc"
+        ]
+      },
+      {
+        "code": "298",
+        "name": "Huyện Tứ Kỳ",
+        "aliases": [
+          "huyen tu ky",
+          "tu ky"
+        ]
+      },
+      {
+        "code": "299",
+        "name": "Huyện Ninh Giang",
+        "aliases": [
+          "huyen ninh giang",
+          "ninh giang"
+        ]
+      },
+      {
+        "code": "300",
+        "name": "Huyện Thanh Miện",
+        "aliases": [
+          "huyen thanh mien",
+          "thanh mien"
+        ]
+      }
+    ],
+    "31": [
+      {
+        "code": "303",
+        "name": "Quận Hồng Bàng",
+        "aliases": [
+          "hong bang",
+          "quan hong bang"
+        ]
+      },
+      {
+        "code": "304",
+        "name": "Quận Ngô Quyền",
+        "aliases": [
+          "ngo quyen",
+          "quan ngo quyen"
+        ]
+      },
+      {
+        "code": "305",
+        "name": "Quận Lê Chân",
+        "aliases": [
+          "le chan",
+          "quan le chan"
+        ]
+      },
+      {
+        "code": "306",
+        "name": "Quận Hải An",
+        "aliases": [
+          "hai an",
+          "quan hai an"
+        ]
+      },
+      {
+        "code": "307",
+        "name": "Quận Kiến An",
+        "aliases": [
+          "kien an",
+          "quan kien an"
+        ]
+      },
+      {
+        "code": "308",
+        "name": "Quận Đồ Sơn",
+        "aliases": [
+          "do son",
+          "quan do son"
+        ]
+      },
+      {
+        "code": "309",
+        "name": "Quận Dương Kinh",
+        "aliases": [
+          "duong kinh",
+          "quan duong kinh"
+        ]
+      },
+      {
+        "code": "311",
+        "name": "Thành phố Thủy Nguyên",
+        "aliases": [
+          "thanh pho thuy nguyen",
+          "thuy nguyen"
+        ]
+      },
+      {
+        "code": "312",
+        "name": "Quận An Dương",
+        "aliases": [
+          "an duong",
+          "quan an duong"
+        ]
+      },
+      {
+        "code": "313",
+        "name": "Huyện An Lão",
+        "aliases": [
+          "an lao",
+          "huyen an lao"
+        ]
+      },
+      {
+        "code": "314",
+        "name": "Huyện Kiến Thụy",
+        "aliases": [
+          "huyen kien thuy",
+          "kien thuy"
+        ]
+      },
+      {
+        "code": "315",
+        "name": "Huyện Tiên Lãng",
+        "aliases": [
+          "huyen tien lang",
+          "tien lang"
+        ]
+      },
+      {
+        "code": "316",
+        "name": "Huyện Vĩnh Bảo",
+        "aliases": [
+          "huyen vinh bao",
+          "vinh bao"
+        ]
+      },
+      {
+        "code": "317",
+        "name": "Huyện Cát Hải",
+        "aliases": [
+          "cat hai",
+          "huyen cat hai"
+        ]
+      },
+      {
+        "code": "318",
+        "name": "Huyện Bạch Long Vĩ",
+        "aliases": [
+          "bach long vi",
+          "huyen bach long vi"
+        ]
+      }
+    ],
+    "33": [
+      {
+        "code": "323",
+        "name": "Thành phố Hưng Yên",
+        "aliases": [
+          "hung yen",
+          "thanh pho hung yen"
+        ]
+      },
+      {
+        "code": "325",
+        "name": "Huyện Văn Lâm",
+        "aliases": [
+          "huyen van lam",
+          "van lam"
+        ]
+      },
+      {
+        "code": "326",
+        "name": "Huyện Văn Giang",
+        "aliases": [
+          "huyen van giang",
+          "van giang"
+        ]
+      },
+      {
+        "code": "327",
+        "name": "Huyện Yên Mỹ",
+        "aliases": [
+          "huyen yen my",
+          "yen my"
+        ]
+      },
+      {
+        "code": "328",
+        "name": "Thị xã Mỹ Hào",
+        "aliases": [
+          "my hao",
+          "thi xa my hao"
+        ]
+      },
+      {
+        "code": "329",
+        "name": "Huyện Ân Thi",
+        "aliases": [
+          "an thi",
+          "huyen an thi"
+        ]
+      },
+      {
+        "code": "330",
+        "name": "Huyện Khoái Châu",
+        "aliases": [
+          "huyen khoai chau",
+          "khoai chau"
+        ]
+      },
+      {
+        "code": "331",
+        "name": "Huyện Kim Động",
+        "aliases": [
+          "huyen kim dong",
+          "kim dong"
+        ]
+      },
+      {
+        "code": "332",
+        "name": "Huyện Tiên Lữ",
+        "aliases": [
+          "huyen tien lu",
+          "tien lu"
+        ]
+      },
+      {
+        "code": "333",
+        "name": "Huyện Phù Cừ",
+        "aliases": [
+          "huyen phu cu",
+          "phu cu"
+        ]
+      }
+    ],
+    "34": [
+      {
+        "code": "336",
+        "name": "Thành phố Thái Bình",
+        "aliases": [
+          "thai binh",
+          "thanh pho thai binh"
+        ]
+      },
+      {
+        "code": "338",
+        "name": "Huyện Quỳnh Phụ",
+        "aliases": [
+          "huyen quynh phu",
+          "quynh phu"
+        ]
+      },
+      {
+        "code": "339",
+        "name": "Huyện Hưng Hà",
+        "aliases": [
+          "hung ha",
+          "huyen hung ha"
+        ]
+      },
+      {
+        "code": "340",
+        "name": "Huyện Đông Hưng",
+        "aliases": [
+          "dong hung",
+          "huyen dong hung"
+        ]
+      },
+      {
+        "code": "341",
+        "name": "Huyện Thái Thụy",
+        "aliases": [
+          "huyen thai thuy",
+          "thai thuy"
+        ]
+      },
+      {
+        "code": "342",
+        "name": "Huyện Tiền Hải",
+        "aliases": [
+          "huyen tien hai",
+          "tien hai"
+        ]
+      },
+      {
+        "code": "343",
+        "name": "Huyện Kiến Xương",
+        "aliases": [
+          "huyen kien xuong",
+          "kien xuong"
+        ]
+      },
+      {
+        "code": "344",
+        "name": "Huyện Vũ Thư",
+        "aliases": [
+          "huyen vu thu",
+          "vu thu"
+        ]
+      }
+    ],
+    "35": [
+      {
+        "code": "347",
+        "name": "Thành phố Phủ Lý",
+        "aliases": [
+          "phu ly",
+          "thanh pho phu ly"
+        ]
+      },
+      {
+        "code": "349",
+        "name": "Thị xã Duy Tiên",
+        "aliases": [
+          "duy tien",
+          "thi xa duy tien"
+        ]
+      },
+      {
+        "code": "350",
+        "name": "Thị xã Kim Bảng",
+        "aliases": [
+          "kim bang",
+          "thi xa kim bang"
+        ]
+      },
+      {
+        "code": "351",
+        "name": "Huyện Thanh Liêm",
+        "aliases": [
+          "huyen thanh liem",
+          "thanh liem"
+        ]
+      },
+      {
+        "code": "352",
+        "name": "Huyện Bình Lục",
+        "aliases": [
+          "binh luc",
+          "huyen binh luc"
+        ]
+      },
+      {
+        "code": "353",
+        "name": "Huyện Lý Nhân",
+        "aliases": [
+          "huyen ly nhan",
+          "ly nhan"
+        ]
+      }
+    ],
+    "36": [
+      {
+        "code": "356",
+        "name": "Thành phố Nam Định",
+        "aliases": [
+          "nam dinh",
+          "thanh pho nam dinh"
+        ]
+      },
+      {
+        "code": "359",
+        "name": "Huyện Vụ Bản",
+        "aliases": [
+          "huyen vu ban",
+          "vu ban"
+        ]
+      },
+      {
+        "code": "360",
+        "name": "Huyện Ý Yên",
+        "aliases": [
+          "huyen y yen",
+          "y yen"
+        ]
+      },
+      {
+        "code": "361",
+        "name": "Huyện Nghĩa Hưng",
+        "aliases": [
+          "huyen nghia hung",
+          "nghia hung"
+        ]
+      },
+      {
+        "code": "362",
+        "name": "Huyện Nam Trực",
+        "aliases": [
+          "huyen nam truc",
+          "nam truc"
+        ]
+      },
+      {
+        "code": "363",
+        "name": "Huyện Trực Ninh",
+        "aliases": [
+          "huyen truc ninh",
+          "truc ninh"
+        ]
+      },
+      {
+        "code": "364",
+        "name": "Huyện Xuân Trường",
+        "aliases": [
+          "huyen xuan truong",
+          "xuan truong"
+        ]
+      },
+      {
+        "code": "365",
+        "name": "Huyện Giao Thủy",
+        "aliases": [
+          "giao thuy",
+          "huyen giao thuy"
+        ]
+      },
+      {
+        "code": "366",
+        "name": "Huyện Hải Hậu",
+        "aliases": [
+          "hai hau",
+          "huyen hai hau"
+        ]
+      }
+    ],
+    "37": [
+      {
+        "code": "370",
+        "name": "Thành phố Tam Điệp",
+        "aliases": [
+          "tam diep",
+          "thanh pho tam diep"
+        ]
+      },
+      {
+        "code": "372",
+        "name": "Huyện Nho Quan",
+        "aliases": [
+          "huyen nho quan",
+          "nho quan"
+        ]
+      },
+      {
+        "code": "373",
+        "name": "Huyện Gia Viễn",
+        "aliases": [
+          "gia vien",
+          "huyen gia vien"
+        ]
+      },
+      {
+        "code": "374",
+        "name": "Thành phố Hoa Lư",
+        "aliases": [
+          "hoa lu",
+          "thanh pho hoa lu"
+        ]
+      },
+      {
+        "code": "375",
+        "name": "Huyện Yên Khánh",
+        "aliases": [
+          "huyen yen khanh",
+          "yen khanh"
+        ]
+      },
+      {
+        "code": "376",
+        "name": "Huyện Kim Sơn",
+        "aliases": [
+          "huyen kim son",
+          "kim son"
+        ]
+      },
+      {
+        "code": "377",
+        "name": "Huyện Yên Mô",
+        "aliases": [
+          "huyen yen mo",
+          "yen mo"
+        ]
+      }
+    ],
+    "38": [
+      {
+        "code": "380",
+        "name": "Thành phố Thanh Hóa",
+        "aliases": [
+          "thanh hoa",
+          "thanh pho thanh hoa"
+        ]
+      },
+      {
+        "code": "381",
+        "name": "Thị xã Bỉm Sơn",
+        "aliases": [
+          "bim son",
+          "thi xa bim son"
+        ]
+      },
+      {
+        "code": "382",
+        "name": "Thành phố Sầm Sơn",
+        "aliases": [
+          "sam son",
+          "thanh pho sam son"
+        ]
+      },
+      {
+        "code": "384",
+        "name": "Huyện Mường Lát",
+        "aliases": [
+          "huyen muong lat",
+          "muong lat"
+        ]
+      },
+      {
+        "code": "385",
+        "name": "Huyện Quan Hóa",
+        "aliases": [
+          "huyen quan hoa",
+          "quan hoa"
+        ]
+      },
+      {
+        "code": "386",
+        "name": "Huyện Bá Thước",
+        "aliases": [
+          "ba thuoc",
+          "huyen ba thuoc"
+        ]
+      },
+      {
+        "code": "387",
+        "name": "Huyện Quan Sơn",
+        "aliases": [
+          "huyen quan son",
+          "quan son"
+        ]
+      },
+      {
+        "code": "388",
+        "name": "Huyện Lang Chánh",
+        "aliases": [
+          "huyen lang chanh",
+          "lang chanh"
+        ]
+      },
+      {
+        "code": "389",
+        "name": "Huyện Ngọc Lặc",
+        "aliases": [
+          "huyen ngoc lac",
+          "ngoc lac"
+        ]
+      },
+      {
+        "code": "390",
+        "name": "Huyện Cẩm Thủy",
+        "aliases": [
+          "cam thuy",
+          "huyen cam thuy"
+        ]
+      },
+      {
+        "code": "391",
+        "name": "Huyện Thạch Thành",
+        "aliases": [
+          "huyen thach thanh",
+          "thach thanh"
+        ]
+      },
+      {
+        "code": "392",
+        "name": "Huyện Hà Trung",
+        "aliases": [
+          "ha trung",
+          "huyen ha trung"
+        ]
+      },
+      {
+        "code": "393",
+        "name": "Huyện Vĩnh Lộc",
+        "aliases": [
+          "huyen vinh loc",
+          "vinh loc"
+        ]
+      },
+      {
+        "code": "394",
+        "name": "Huyện Yên Định",
+        "aliases": [
+          "huyen yen dinh",
+          "yen dinh"
+        ]
+      },
+      {
+        "code": "395",
+        "name": "Huyện Thọ Xuân",
+        "aliases": [
+          "huyen tho xuan",
+          "tho xuan"
+        ]
+      },
+      {
+        "code": "396",
+        "name": "Huyện Thường Xuân",
+        "aliases": [
+          "huyen thuong xuan",
+          "thuong xuan"
+        ]
+      },
+      {
+        "code": "397",
+        "name": "Huyện Triệu Sơn",
+        "aliases": [
+          "huyen trieu son",
+          "trieu son"
+        ]
+      },
+      {
+        "code": "398",
+        "name": "Huyện Thiệu Hóa",
+        "aliases": [
+          "huyen thieu hoa",
+          "thieu hoa"
+        ]
+      },
+      {
+        "code": "399",
+        "name": "Huyện Hoằng Hóa",
+        "aliases": [
+          "hoang hoa",
+          "huyen hoang hoa"
+        ]
+      },
+      {
+        "code": "400",
+        "name": "Huyện Hậu Lộc",
+        "aliases": [
+          "hau loc",
+          "huyen hau loc"
+        ]
+      },
+      {
+        "code": "401",
+        "name": "Huyện Nga Sơn",
+        "aliases": [
+          "huyen nga son",
+          "nga son"
+        ]
+      },
+      {
+        "code": "402",
+        "name": "Huyện Như Xuân",
+        "aliases": [
+          "huyen nhu xuan",
+          "nhu xuan"
+        ]
+      },
+      {
+        "code": "403",
+        "name": "Huyện Như Thanh",
+        "aliases": [
+          "huyen nhu thanh",
+          "nhu thanh"
+        ]
+      },
+      {
+        "code": "404",
+        "name": "Huyện Nông Cống",
+        "aliases": [
+          "huyen nong cong",
+          "nong cong"
+        ]
+      },
+      {
+        "code": "406",
+        "name": "Huyện Quảng Xương",
+        "aliases": [
+          "huyen quang xuong",
+          "quang xuong"
+        ]
+      },
+      {
+        "code": "407",
+        "name": "Thị xã Nghi Sơn",
+        "aliases": [
+          "nghi son",
+          "thi xa nghi son"
+        ]
+      }
+    ],
+    "40": [
+      {
+        "code": "412",
+        "name": "Thành phố Vinh",
+        "aliases": [
+          "thanh pho vinh",
+          "vinh"
+        ]
+      },
+      {
+        "code": "414",
+        "name": "Thị xã Thái Hòa",
+        "aliases": [
+          "thai hoa",
+          "thi xa thai hoa"
+        ]
+      },
+      {
+        "code": "415",
+        "name": "Huyện Quế Phong",
+        "aliases": [
+          "huyen que phong",
+          "que phong"
+        ]
+      },
+      {
+        "code": "416",
+        "name": "Huyện Quỳ Châu",
+        "aliases": [
+          "huyen quy chau",
+          "quy chau"
+        ]
+      },
+      {
+        "code": "417",
+        "name": "Huyện Kỳ Sơn",
+        "aliases": [
+          "huyen ky son",
+          "ky son"
+        ]
+      },
+      {
+        "code": "418",
+        "name": "Huyện Tương Dương",
+        "aliases": [
+          "huyen tuong duong",
+          "tuong duong"
+        ]
+      },
+      {
+        "code": "419",
+        "name": "Huyện Nghĩa Đàn",
+        "aliases": [
+          "huyen nghia dan",
+          "nghia dan"
+        ]
+      },
+      {
+        "code": "420",
+        "name": "Huyện Quỳ Hợp",
+        "aliases": [
+          "huyen quy hop",
+          "quy hop"
+        ]
+      },
+      {
+        "code": "421",
+        "name": "Huyện Quỳnh Lưu",
+        "aliases": [
+          "huyen quynh luu",
+          "quynh luu"
+        ]
+      },
+      {
+        "code": "422",
+        "name": "Huyện Con Cuông",
+        "aliases": [
+          "con cuong",
+          "huyen con cuong"
+        ]
+      },
+      {
+        "code": "423",
+        "name": "Huyện Tân Kỳ",
+        "aliases": [
+          "huyen tan ky",
+          "tan ky"
+        ]
+      },
+      {
+        "code": "424",
+        "name": "Huyện Anh Sơn",
+        "aliases": [
+          "anh son",
+          "huyen anh son"
+        ]
+      },
+      {
+        "code": "425",
+        "name": "Huyện Diễn Châu",
+        "aliases": [
+          "dien chau",
+          "huyen dien chau"
+        ]
+      },
+      {
+        "code": "426",
+        "name": "Huyện Yên Thành",
+        "aliases": [
+          "huyen yen thanh",
+          "yen thanh"
+        ]
+      },
+      {
+        "code": "427",
+        "name": "Huyện Đô Lương",
+        "aliases": [
+          "do luong",
+          "huyen do luong"
+        ]
+      },
+      {
+        "code": "428",
+        "name": "Huyện Thanh Chương",
+        "aliases": [
+          "huyen thanh chuong",
+          "thanh chuong"
+        ]
+      },
+      {
+        "code": "429",
+        "name": "Huyện Nghi Lộc",
+        "aliases": [
+          "huyen nghi loc",
+          "nghi loc"
+        ]
+      },
+      {
+        "code": "430",
+        "name": "Huyện Nam Đàn",
+        "aliases": [
+          "huyen nam dan",
+          "nam dan"
+        ]
+      },
+      {
+        "code": "431",
+        "name": "Huyện Hưng Nguyên",
+        "aliases": [
+          "hung nguyen",
+          "huyen hung nguyen"
+        ]
+      },
+      {
+        "code": "432",
+        "name": "Thị xã Hoàng Mai",
+        "aliases": [
+          "hoang mai",
+          "thi xa hoang mai"
+        ]
+      }
+    ],
+    "42": [
+      {
+        "code": "436",
+        "name": "Thành phố Hà Tĩnh",
+        "aliases": [
+          "ha tinh",
+          "thanh pho ha tinh"
+        ]
+      },
+      {
+        "code": "437",
+        "name": "Thị xã Hồng Lĩnh",
+        "aliases": [
+          "hong linh",
+          "thi xa hong linh"
+        ]
+      },
+      {
+        "code": "439",
+        "name": "Huyện Hương Sơn",
+        "aliases": [
+          "huong son",
+          "huyen huong son"
+        ]
+      },
+      {
+        "code": "440",
+        "name": "Huyện Đức Thọ",
+        "aliases": [
+          "duc tho",
+          "huyen duc tho"
+        ]
+      },
+      {
+        "code": "441",
+        "name": "Huyện Vũ Quang",
+        "aliases": [
+          "huyen vu quang",
+          "vu quang"
+        ]
+      },
+      {
+        "code": "442",
+        "name": "Huyện Nghi Xuân",
+        "aliases": [
+          "huyen nghi xuan",
+          "nghi xuan"
+        ]
+      },
+      {
+        "code": "443",
+        "name": "Huyện Can Lộc",
+        "aliases": [
+          "can loc",
+          "huyen can loc"
+        ]
+      },
+      {
+        "code": "444",
+        "name": "Huyện Hương Khê",
+        "aliases": [
+          "huong khe",
+          "huyen huong khe"
+        ]
+      },
+      {
+        "code": "445",
+        "name": "Huyện Thạch Hà",
+        "aliases": [
+          "huyen thach ha",
+          "thach ha"
+        ]
+      },
+      {
+        "code": "446",
+        "name": "Huyện Cẩm Xuyên",
+        "aliases": [
+          "cam xuyen",
+          "huyen cam xuyen"
+        ]
+      },
+      {
+        "code": "447",
+        "name": "Huyện Kỳ Anh",
+        "aliases": [
+          "huyen ky anh",
+          "ky anh (huyen)"
+        ]
+      },
+      {
+        "code": "449",
+        "name": "Thị xã Kỳ Anh",
+        "aliases": [
+          "ky anh (thi xa)",
+          "thi xa ky anh"
+        ]
+      }
+    ],
+    "44": [
+      {
+        "code": "450",
+        "name": "Thành Phố Đồng Hới",
+        "aliases": [
+          "dong hoi",
+          "thanh pho dong hoi"
+        ]
+      },
+      {
+        "code": "452",
+        "name": "Huyện Minh Hóa",
+        "aliases": [
+          "huyen minh hoa",
+          "minh hoa"
+        ]
+      },
+      {
+        "code": "453",
+        "name": "Huyện Tuyên Hóa",
+        "aliases": [
+          "huyen tuyen hoa",
+          "tuyen hoa"
+        ]
+      },
+      {
+        "code": "454",
+        "name": "Huyện Quảng Trạch",
+        "aliases": [
+          "huyen quang trach",
+          "quang trach"
+        ]
+      },
+      {
+        "code": "455",
+        "name": "Huyện Bố Trạch",
+        "aliases": [
+          "bo trach",
+          "huyen bo trach"
+        ]
+      },
+      {
+        "code": "456",
+        "name": "Huyện Quảng Ninh",
+        "aliases": [
+          "huyen quang ninh",
+          "quang ninh"
+        ]
+      },
+      {
+        "code": "457",
+        "name": "Huyện Lệ Thủy",
+        "aliases": [
+          "huyen le thuy",
+          "le thuy"
+        ]
+      },
+      {
+        "code": "458",
+        "name": "Thị xã Ba Đồn",
+        "aliases": [
+          "ba don",
+          "thi xa ba don"
+        ]
+      }
+    ],
+    "45": [
+      {
+        "code": "461",
+        "name": "Thành phố Đông Hà",
+        "aliases": [
+          "dong ha",
+          "thanh pho dong ha"
+        ]
+      },
+      {
+        "code": "462",
+        "name": "Thị xã Quảng Trị",
+        "aliases": [
+          "quang tri",
+          "thi xa quang tri"
+        ]
+      },
+      {
+        "code": "464",
+        "name": "Huyện Vĩnh Linh",
+        "aliases": [
+          "huyen vinh linh",
+          "vinh linh"
+        ]
+      },
+      {
+        "code": "465",
+        "name": "Huyện Hướng Hóa",
+        "aliases": [
+          "huong hoa",
+          "huyen huong hoa"
+        ]
+      },
+      {
+        "code": "466",
+        "name": "Huyện Gio Linh",
+        "aliases": [
+          "gio linh",
+          "huyen gio linh"
+        ]
+      },
+      {
+        "code": "467",
+        "name": "Huyện Đa Krông",
+        "aliases": [
+          "da krong",
+          "huyen da krong"
+        ]
+      },
+      {
+        "code": "468",
+        "name": "Huyện Cam Lộ",
+        "aliases": [
+          "cam lo",
+          "huyen cam lo"
+        ]
+      },
+      {
+        "code": "469",
+        "name": "Huyện Triệu Phong",
+        "aliases": [
+          "huyen trieu phong",
+          "trieu phong"
+        ]
+      },
+      {
+        "code": "470",
+        "name": "Huyện Hải Lăng",
+        "aliases": [
+          "hai lang",
+          "huyen hai lang"
+        ]
+      },
+      {
+        "code": "471",
+        "name": "Huyện Cồn Cỏ",
+        "aliases": [
+          "con co",
+          "huyen con co"
+        ]
+      }
+    ],
+    "46": [
+      {
+        "code": "474",
+        "name": "Quận Thuận Hóa",
+        "aliases": [
+          "quan thuan hoa",
+          "thuan hoa"
+        ]
+      },
+      {
+        "code": "475",
+        "name": "Quận Phú Xuân",
+        "aliases": [
+          "phu xuan",
+          "quan phu xuan"
+        ]
+      },
+      {
+        "code": "476",
+        "name": "Thị xã Phong Điền",
+        "aliases": [
+          "phong dien",
+          "thi xa phong dien"
+        ]
+      },
+      {
+        "code": "477",
+        "name": "Huyện Quảng Điền",
+        "aliases": [
+          "huyen quang dien",
+          "quang dien"
+        ]
+      },
+      {
+        "code": "478",
+        "name": "Huyện Phú Vang",
+        "aliases": [
+          "huyen phu vang",
+          "phu vang"
+        ]
+      },
+      {
+        "code": "479",
+        "name": "Thị xã Hương Thủy",
+        "aliases": [
+          "huong thuy",
+          "thi xa huong thuy"
+        ]
+      },
+      {
+        "code": "480",
+        "name": "Thị xã Hương Trà",
+        "aliases": [
+          "huong tra",
+          "thi xa huong tra"
+        ]
+      },
+      {
+        "code": "481",
+        "name": "Huyện A Lưới",
+        "aliases": [
+          "a luoi",
+          "huyen a luoi"
+        ]
+      },
+      {
+        "code": "482",
+        "name": "Huyện Phú Lộc",
+        "aliases": [
+          "huyen phu loc",
+          "phu loc"
+        ]
+      }
+    ],
+    "49": [
+      {
+        "code": "502",
+        "name": "Thành phố Tam Kỳ",
+        "aliases": [
+          "tam ky",
+          "thanh pho tam ky"
+        ]
+      },
+      {
+        "code": "503",
+        "name": "Thành phố Hội An",
+        "aliases": [
+          "hoi an",
+          "thanh pho hoi an"
+        ]
+      },
+      {
+        "code": "504",
+        "name": "Huyện Tây Giang",
+        "aliases": [
+          "huyen tay giang",
+          "tay giang"
+        ]
+      },
+      {
+        "code": "505",
+        "name": "Huyện Đông Giang",
+        "aliases": [
+          "dong giang",
+          "huyen dong giang"
+        ]
+      },
+      {
+        "code": "506",
+        "name": "Huyện Đại Lộc",
+        "aliases": [
+          "dai loc",
+          "huyen dai loc"
+        ]
+      },
+      {
+        "code": "507",
+        "name": "Thị xã Điện Bàn",
+        "aliases": [
+          "dien ban",
+          "thi xa dien ban"
+        ]
+      },
+      {
+        "code": "508",
+        "name": "Huyện Duy Xuyên",
+        "aliases": [
+          "duy xuyen",
+          "huyen duy xuyen"
+        ]
+      },
+      {
+        "code": "509",
+        "name": "Huyện Quế Sơn",
+        "aliases": [
+          "huyen que son",
+          "que son"
+        ]
+      },
+      {
+        "code": "510",
+        "name": "Huyện Nam Giang",
+        "aliases": [
+          "huyen nam giang",
+          "nam giang"
+        ]
+      },
+      {
+        "code": "511",
+        "name": "Huyện Phước Sơn",
+        "aliases": [
+          "huyen phuoc son",
+          "phuoc son"
+        ]
+      },
+      {
+        "code": "512",
+        "name": "Huyện Hiệp Đức",
+        "aliases": [
+          "hiep duc",
+          "huyen hiep duc"
+        ]
+      },
+      {
+        "code": "513",
+        "name": "Huyện Thăng Bình",
+        "aliases": [
+          "huyen thang binh",
+          "thang binh"
+        ]
+      },
+      {
+        "code": "514",
+        "name": "Huyện Tiên Phước",
+        "aliases": [
+          "huyen tien phuoc",
+          "tien phuoc"
+        ]
+      },
+      {
+        "code": "515",
+        "name": "Huyện Bắc Trà My",
+        "aliases": [
+          "bac tra my",
+          "huyen bac tra my"
+        ]
+      },
+      {
+        "code": "516",
+        "name": "Huyện Nam Trà My",
+        "aliases": [
+          "huyen nam tra my",
+          "nam tra my"
+        ]
+      },
+      {
+        "code": "517",
+        "name": "Huyện Núi Thành",
+        "aliases": [
+          "huyen nui thanh",
+          "nui thanh"
+        ]
+      },
+      {
+        "code": "518",
+        "name": "Huyện Phú Ninh",
+        "aliases": [
+          "huyen phu ninh",
+          "phu ninh"
+        ]
+      }
+    ],
+    "51": [
+      {
+        "code": "522",
+        "name": "Thành phố Quảng Ngãi",
+        "aliases": [
+          "quang ngai",
+          "thanh pho quang ngai"
+        ]
+      },
+      {
+        "code": "524",
+        "name": "Huyện Bình Sơn",
+        "aliases": [
+          "binh son",
+          "huyen binh son"
+        ]
+      },
+      {
+        "code": "525",
+        "name": "Huyện Trà Bồng",
+        "aliases": [
+          "huyen tra bong",
+          "tra bong"
+        ]
+      },
+      {
+        "code": "527",
+        "name": "Huyện Sơn Tịnh",
+        "aliases": [
+          "huyen son tinh",
+          "son tinh"
+        ]
+      },
+      {
+        "code": "528",
+        "name": "Huyện Tư Nghĩa",
+        "aliases": [
+          "huyen tu nghia",
+          "tu nghia"
+        ]
+      },
+      {
+        "code": "529",
+        "name": "Huyện Sơn Hà",
+        "aliases": [
+          "huyen son ha",
+          "son ha"
+        ]
+      },
+      {
+        "code": "530",
+        "name": "Huyện Sơn Tây",
+        "aliases": [
+          "huyen son tay",
+          "son tay"
+        ]
+      },
+      {
+        "code": "531",
+        "name": "Huyện Minh Long",
+        "aliases": [
+          "huyen minh long",
+          "minh long"
+        ]
+      },
+      {
+        "code": "532",
+        "name": "Huyện Nghĩa Hành",
+        "aliases": [
+          "huyen nghia hanh",
+          "nghia hanh"
+        ]
+      },
+      {
+        "code": "533",
+        "name": "Huyện Mộ Đức",
+        "aliases": [
+          "huyen mo duc",
+          "mo duc"
+        ]
+      },
+      {
+        "code": "534",
+        "name": "Thị xã Đức Phổ",
+        "aliases": [
+          "duc pho",
+          "thi xa duc pho"
+        ]
+      },
+      {
+        "code": "535",
+        "name": "Huyện Ba Tơ",
+        "aliases": [
+          "ba to",
+          "huyen ba to"
+        ]
+      },
+      {
+        "code": "536",
+        "name": "Huyện Lý Sơn",
+        "aliases": [
+          "huyen ly son",
+          "ly son"
+        ]
+      }
+    ],
+    "52": [
+      {
+        "code": "540",
+        "name": "Thành phố Quy Nhơn",
+        "aliases": [
+          "quy nhon",
+          "thanh pho quy nhon"
+        ]
+      },
+      {
+        "code": "542",
+        "name": "Huyện An Lão",
+        "aliases": [
+          "an lao",
+          "huyen an lao"
+        ]
+      },
+      {
+        "code": "543",
+        "name": "Thị xã Hoài Nhơn",
+        "aliases": [
+          "hoai nhon",
+          "thi xa hoai nhon"
+        ]
+      },
+      {
+        "code": "544",
+        "name": "Huyện Hoài Ân",
+        "aliases": [
+          "hoai an",
+          "huyen hoai an"
+        ]
+      },
+      {
+        "code": "545",
+        "name": "Huyện Phù Mỹ",
+        "aliases": [
+          "huyen phu my",
+          "phu my"
+        ]
+      },
+      {
+        "code": "546",
+        "name": "Huyện Vĩnh Thạnh",
+        "aliases": [
+          "huyen vinh thanh",
+          "vinh thanh"
+        ]
+      },
+      {
+        "code": "547",
+        "name": "Huyện Tây Sơn",
+        "aliases": [
+          "huyen tay son",
+          "tay son"
+        ]
+      },
+      {
+        "code": "548",
+        "name": "Huyện Phù Cát",
+        "aliases": [
+          "huyen phu cat",
+          "phu cat"
+        ]
+      },
+      {
+        "code": "549",
+        "name": "Thị xã An Nhơn",
+        "aliases": [
+          "an nhon",
+          "thi xa an nhon"
+        ]
+      },
+      {
+        "code": "550",
+        "name": "Huyện Tuy Phước",
+        "aliases": [
+          "huyen tuy phuoc",
+          "tuy phuoc"
+        ]
+      },
+      {
+        "code": "551",
+        "name": "Huyện Vân Canh",
+        "aliases": [
+          "huyen van canh",
+          "van canh"
+        ]
+      }
+    ],
+    "54": [
+      {
+        "code": "555",
+        "name": "Thành phố Tuy Hòa",
+        "aliases": [
+          "thanh pho tuy hoa",
+          "tuy hoa"
+        ]
+      },
+      {
+        "code": "557",
+        "name": "Thị xã Sông Cầu",
+        "aliases": [
+          "song cau",
+          "thi xa song cau"
+        ]
+      },
+      {
+        "code": "558",
+        "name": "Huyện Đồng Xuân",
+        "aliases": [
+          "dong xuan",
+          "huyen dong xuan"
+        ]
+      },
+      {
+        "code": "559",
+        "name": "Huyện Tuy An",
+        "aliases": [
+          "huyen tuy an",
+          "tuy an"
+        ]
+      },
+      {
+        "code": "560",
+        "name": "Huyện Sơn Hòa",
+        "aliases": [
+          "huyen son hoa",
+          "son hoa"
+        ]
+      },
+      {
+        "code": "561",
+        "name": "Huyện Sông Hinh",
+        "aliases": [
+          "huyen song hinh",
+          "song hinh"
+        ]
+      },
+      {
+        "code": "562",
+        "name": "Huyện Tây Hòa",
+        "aliases": [
+          "huyen tay hoa",
+          "tay hoa"
+        ]
+      },
+      {
+        "code": "563",
+        "name": "Huyện Phú Hòa",
+        "aliases": [
+          "huyen phu hoa",
+          "phu hoa"
+        ]
+      },
+      {
+        "code": "564",
+        "name": "Thị xã Đông Hòa",
+        "aliases": [
+          "dong hoa",
+          "thi xa dong hoa"
+        ]
+      }
+    ],
+    "56": [
+      {
+        "code": "568",
+        "name": "Thành phố Nha Trang",
+        "aliases": [
+          "nha trang",
+          "thanh pho nha trang"
+        ]
+      },
+      {
+        "code": "569",
+        "name": "Thành phố Cam Ranh",
+        "aliases": [
+          "cam ranh",
+          "thanh pho cam ranh"
+        ]
+      },
+      {
+        "code": "570",
+        "name": "Huyện Cam Lâm",
+        "aliases": [
+          "cam lam",
+          "huyen cam lam"
+        ]
+      },
+      {
+        "code": "571",
+        "name": "Huyện Vạn Ninh",
+        "aliases": [
+          "huyen van ninh",
+          "van ninh"
+        ]
+      },
+      {
+        "code": "572",
+        "name": "Thị xã Ninh Hòa",
+        "aliases": [
+          "ninh hoa",
+          "thi xa ninh hoa"
+        ]
+      },
+      {
+        "code": "573",
+        "name": "Huyện Khánh Vĩnh",
+        "aliases": [
+          "huyen khanh vinh",
+          "khanh vinh"
+        ]
+      },
+      {
+        "code": "574",
+        "name": "Huyện Diên Khánh",
+        "aliases": [
+          "dien khanh",
+          "huyen dien khanh"
+        ]
+      },
+      {
+        "code": "575",
+        "name": "Huyện Khánh Sơn",
+        "aliases": [
+          "huyen khanh son",
+          "khanh son"
+        ]
+      },
+      {
+        "code": "576",
+        "name": "Huyện Trường Sa",
+        "aliases": [
+          "huyen truong sa",
+          "truong sa"
+        ]
+      }
+    ],
+    "58": [
+      {
+        "code": "582",
+        "name": "Thành phố Phan Rang - Tháp Chàm",
+        "aliases": [
+          "phan rang - thap cham",
+          "thanh pho phan rang - thap cham"
+        ]
+      },
+      {
+        "code": "584",
+        "name": "Huyện Bác Ái",
+        "aliases": [
+          "bac ai",
+          "huyen bac ai"
+        ]
+      },
+      {
+        "code": "585",
+        "name": "Huyện Ninh Sơn",
+        "aliases": [
+          "huyen ninh son",
+          "ninh son"
+        ]
+      },
+      {
+        "code": "586",
+        "name": "Huyện Ninh Hải",
+        "aliases": [
+          "huyen ninh hai",
+          "ninh hai"
+        ]
+      },
+      {
+        "code": "587",
+        "name": "Huyện Ninh Phước",
+        "aliases": [
+          "huyen ninh phuoc",
+          "ninh phuoc"
+        ]
+      },
+      {
+        "code": "588",
+        "name": "Huyện Thuận Bắc",
+        "aliases": [
+          "huyen thuan bac",
+          "thuan bac"
+        ]
+      },
+      {
+        "code": "589",
+        "name": "Huyện Thuận Nam",
+        "aliases": [
+          "huyen thuan nam",
+          "thuan nam"
+        ]
+      }
+    ],
+    "60": [
+      {
+        "code": "593",
+        "name": "Thành phố Phan Thiết",
+        "aliases": [
+          "phan thiet",
+          "thanh pho phan thiet"
+        ]
+      },
+      {
+        "code": "594",
+        "name": "Thị xã La Gi",
+        "aliases": [
+          "la gi",
+          "thi xa la gi"
+        ]
+      },
+      {
+        "code": "595",
+        "name": "Huyện Tuy Phong",
+        "aliases": [
+          "huyen tuy phong",
+          "tuy phong"
+        ]
+      },
+      {
+        "code": "596",
+        "name": "Huyện Bắc Bình",
+        "aliases": [
+          "bac binh",
+          "huyen bac binh"
+        ]
+      },
+      {
+        "code": "597",
+        "name": "Huyện Hàm Thuận Bắc",
+        "aliases": [
+          "ham thuan bac",
+          "huyen ham thuan bac"
+        ]
+      },
+      {
+        "code": "598",
+        "name": "Huyện Hàm Thuận Nam",
+        "aliases": [
+          "ham thuan nam",
+          "huyen ham thuan nam"
+        ]
+      },
+      {
+        "code": "599",
+        "name": "Huyện Tánh Linh",
+        "aliases": [
+          "huyen tanh linh",
+          "tanh linh"
+        ]
+      },
+      {
+        "code": "600",
+        "name": "Huyện Đức Linh",
+        "aliases": [
+          "duc linh",
+          "huyen duc linh"
+        ]
+      },
+      {
+        "code": "601",
+        "name": "Huyện Hàm Tân",
+        "aliases": [
+          "ham tan",
+          "huyen ham tan"
+        ]
+      },
+      {
+        "code": "602",
+        "name": "Huyện Phú Quí",
+        "aliases": [
+          "huyen phu qui",
+          "phu qui"
+        ]
+      }
+    ],
+    "62": [
+      {
+        "code": "608",
+        "name": "Thành phố Kon Tum",
+        "aliases": [
+          "kon tum",
+          "thanh pho kon tum"
+        ]
+      },
+      {
+        "code": "610",
+        "name": "Huyện Đắk Glei",
+        "aliases": [
+          "dak glei",
+          "huyen dak glei"
+        ]
+      },
+      {
+        "code": "611",
+        "name": "Huyện Ngọc Hồi",
+        "aliases": [
+          "huyen ngoc hoi",
+          "ngoc hoi"
+        ]
+      },
+      {
+        "code": "612",
+        "name": "Huyện Đắk Tô",
+        "aliases": [
+          "dak to",
+          "huyen dak to"
+        ]
+      },
+      {
+        "code": "613",
+        "name": "Huyện Kon Plông",
+        "aliases": [
+          "huyen kon plong",
+          "kon plong"
+        ]
+      },
+      {
+        "code": "614",
+        "name": "Huyện Kon Rẫy",
+        "aliases": [
+          "huyen kon ray",
+          "kon ray"
+        ]
+      },
+      {
+        "code": "615",
+        "name": "Huyện Đăk Hà",
+        "aliases": [
+          "dak ha",
+          "huyen dak ha"
+        ]
+      },
+      {
+        "code": "616",
+        "name": "Huyện Sa Thầy",
+        "aliases": [
+          "huyen sa thay",
+          "sa thay"
+        ]
+      },
+      {
+        "code": "617",
+        "name": "Huyện Tu Mơ Rông",
+        "aliases": [
+          "huyen tu mo rong",
+          "tu mo rong"
+        ]
+      },
+      {
+        "code": "618",
+        "name": "Huyện Ia H'Drai",
+        "aliases": [
+          "huyen ia h'drai",
+          "ia h'drai"
+        ]
+      }
+    ],
+    "64": [
+      {
+        "code": "622",
+        "name": "Thành phố Pleiku",
+        "aliases": [
+          "pleiku",
+          "thanh pho pleiku"
+        ]
+      },
+      {
+        "code": "623",
+        "name": "Thị xã An Khê",
+        "aliases": [
+          "an khe",
+          "thi xa an khe"
+        ]
+      },
+      {
+        "code": "624",
+        "name": "Thị xã Ayun Pa",
+        "aliases": [
+          "ayun pa",
+          "thi xa ayun pa"
+        ]
+      },
+      {
+        "code": "625",
+        "name": "Huyện KBang",
+        "aliases": [
+          "huyen kbang",
+          "kbang"
+        ]
+      },
+      {
+        "code": "626",
+        "name": "Huyện Đak Đoa",
+        "aliases": [
+          "dak doa",
+          "huyen dak doa"
+        ]
+      },
+      {
+        "code": "627",
+        "name": "Huyện Chư Păh",
+        "aliases": [
+          "chu pah",
+          "huyen chu pah"
+        ]
+      },
+      {
+        "code": "628",
+        "name": "Huyện Ia Grai",
+        "aliases": [
+          "huyen ia grai",
+          "ia grai"
+        ]
+      },
+      {
+        "code": "629",
+        "name": "Huyện Mang Yang",
+        "aliases": [
+          "huyen mang yang",
+          "mang yang"
+        ]
+      },
+      {
+        "code": "630",
+        "name": "Huyện Kông Chro",
+        "aliases": [
+          "huyen kong chro",
+          "kong chro"
+        ]
+      },
+      {
+        "code": "631",
+        "name": "Huyện Đức Cơ",
+        "aliases": [
+          "duc co",
+          "huyen duc co"
+        ]
+      },
+      {
+        "code": "632",
+        "name": "Huyện Chư Prông",
+        "aliases": [
+          "chu prong",
+          "huyen chu prong"
+        ]
+      },
+      {
+        "code": "633",
+        "name": "Huyện Chư Sê",
+        "aliases": [
+          "chu se",
+          "huyen chu se"
+        ]
+      },
+      {
+        "code": "634",
+        "name": "Huyện Đăk Pơ",
+        "aliases": [
+          "dak po",
+          "huyen dak po"
+        ]
+      },
+      {
+        "code": "635",
+        "name": "Huyện Ia Pa",
+        "aliases": [
+          "huyen ia pa",
+          "ia pa"
+        ]
+      },
+      {
+        "code": "637",
+        "name": "Huyện Krông Pa",
+        "aliases": [
+          "huyen krong pa",
+          "krong pa"
+        ]
+      },
+      {
+        "code": "638",
+        "name": "Huyện Phú Thiện",
+        "aliases": [
+          "huyen phu thien",
+          "phu thien"
+        ]
+      },
+      {
+        "code": "639",
+        "name": "Huyện Chư Pưh",
+        "aliases": [
+          "chu puh",
+          "huyen chu puh"
+        ]
+      }
+    ],
+    "66": [
+      {
+        "code": "643",
+        "name": "Thành phố Buôn Ma Thuột",
+        "aliases": [
+          "buon ma thuot",
+          "thanh pho buon ma thuot"
+        ]
+      },
+      {
+        "code": "644",
+        "name": "Thị Xã Buôn Hồ",
+        "aliases": [
+          "buon ho",
+          "thi xa buon ho"
+        ]
+      },
+      {
+        "code": "645",
+        "name": "Huyện Ea H'leo",
+        "aliases": [
+          "ea h'leo",
+          "huyen ea h'leo"
+        ]
+      },
+      {
+        "code": "646",
+        "name": "Huyện Ea Súp",
+        "aliases": [
+          "ea sup",
+          "huyen ea sup"
+        ]
+      },
+      {
+        "code": "647",
+        "name": "Huyện Buôn Đôn",
+        "aliases": [
+          "buon don",
+          "huyen buon don"
+        ]
+      },
+      {
+        "code": "648",
+        "name": "Huyện Cư M'gar",
+        "aliases": [
+          "cu m'gar",
+          "huyen cu m'gar"
+        ]
+      },
+      {
+        "code": "649",
+        "name": "Huyện Krông Búk",
+        "aliases": [
+          "huyen krong buk",
+          "krong buk"
+        ]
+      },
+      {
+        "code": "650",
+        "name": "Huyện Krông Năng",
+        "aliases": [
+          "huyen krong nang",
+          "krong nang"
+        ]
+      },
+      {
+        "code": "651",
+        "name": "Huyện Ea Kar",
+        "aliases": [
+          "ea kar",
+          "huyen ea kar"
+        ]
+      },
+      {
+        "code": "652",
+        "name": "Huyện M'Đrắk",
+        "aliases": [
+          "huyen m'drak",
+          "m'drak"
+        ]
+      },
+      {
+        "code": "653",
+        "name": "Huyện Krông Bông",
+        "aliases": [
+          "huyen krong bong",
+          "krong bong"
+        ]
+      },
+      {
+        "code": "654",
+        "name": "Huyện Krông Pắc",
+        "aliases": [
+          "huyen krong pac",
+          "krong pac"
+        ]
+      },
+      {
+        "code": "655",
+        "name": "Huyện Krông A Na",
+        "aliases": [
+          "huyen krong a na",
+          "krong a na"
+        ]
+      },
+      {
+        "code": "656",
+        "name": "Huyện Lắk",
+        "aliases": [
+          "huyen lak",
+          "lak"
+        ]
+      },
+      {
+        "code": "657",
+        "name": "Huyện Cư Kuin",
+        "aliases": [
+          "cu kuin",
+          "huyen cu kuin"
+        ]
+      }
+    ],
+    "67": [
+      {
+        "code": "660",
+        "name": "Thành phố Gia Nghĩa",
+        "aliases": [
+          "gia nghia",
+          "thanh pho gia nghia"
+        ]
+      },
+      {
+        "code": "661",
+        "name": "Huyện Đăk Glong",
+        "aliases": [
+          "dak glong",
+          "huyen dak glong"
+        ]
+      },
+      {
+        "code": "662",
+        "name": "Huyện Cư Jút",
+        "aliases": [
+          "cu jut",
+          "huyen cu jut"
+        ]
+      },
+      {
+        "code": "663",
+        "name": "Huyện Đắk Mil",
+        "aliases": [
+          "dak mil",
+          "huyen dak mil"
+        ]
+      },
+      {
+        "code": "664",
+        "name": "Huyện Krông Nô",
+        "aliases": [
+          "huyen krong no",
+          "krong no"
+        ]
+      },
+      {
+        "code": "665",
+        "name": "Huyện Đắk Song",
+        "aliases": [
+          "dak song",
+          "huyen dak song"
+        ]
+      },
+      {
+        "code": "666",
+        "name": "Huyện Đắk R'Lấp",
+        "aliases": [
+          "dak r'lap",
+          "huyen dak r'lap"
+        ]
+      },
+      {
+        "code": "667",
+        "name": "Huyện Tuy Đức",
+        "aliases": [
+          "huyen tuy duc",
+          "tuy duc"
+        ]
+      }
+    ],
+    "68": [
+      {
+        "code": "672",
+        "name": "Thành phố Đà Lạt",
+        "aliases": [
+          "da lat",
+          "thanh pho da lat"
+        ]
+      },
+      {
+        "code": "673",
+        "name": "Thành phố Bảo Lộc",
+        "aliases": [
+          "bao loc",
+          "thanh pho bao loc"
+        ]
+      },
+      {
+        "code": "674",
+        "name": "Huyện Đam Rông",
+        "aliases": [
+          "dam rong",
+          "huyen dam rong"
+        ]
+      },
+      {
+        "code": "675",
+        "name": "Huyện Lạc Dương",
+        "aliases": [
+          "huyen lac duong",
+          "lac duong"
+        ]
+      },
+      {
+        "code": "676",
+        "name": "Huyện Lâm Hà",
+        "aliases": [
+          "huyen lam ha",
+          "lam ha"
+        ]
+      },
+      {
+        "code": "677",
+        "name": "Huyện Đơn Dương",
+        "aliases": [
+          "don duong",
+          "huyen don duong"
+        ]
+      },
+      {
+        "code": "678",
+        "name": "Huyện Đức Trọng",
+        "aliases": [
+          "duc trong",
+          "huyen duc trong"
+        ]
+      },
+      {
+        "code": "679",
+        "name": "Huyện Di Linh",
+        "aliases": [
+          "di linh",
+          "huyen di linh"
+        ]
+      },
+      {
+        "code": "680",
+        "name": "Huyện Bảo Lâm",
+        "aliases": [
+          "bao lam",
+          "huyen bao lam"
+        ]
+      },
+      {
+        "code": "682",
+        "name": "Huyện Đạ Huoai",
+        "aliases": [
+          "da huoai",
+          "huyen da huoai"
+        ]
+      }
+    ],
+    "70": [
+      {
+        "code": "688",
+        "name": "Thị xã Phước Long",
+        "aliases": [
+          "phuoc long",
+          "thi xa phuoc long"
+        ]
+      },
+      {
+        "code": "689",
+        "name": "Thành phố Đồng Xoài",
+        "aliases": [
+          "dong xoai",
+          "thanh pho dong xoai"
+        ]
+      },
+      {
+        "code": "690",
+        "name": "Thị xã Bình Long",
+        "aliases": [
+          "binh long",
+          "thi xa binh long"
+        ]
+      },
+      {
+        "code": "691",
+        "name": "Huyện Bù Gia Mập",
+        "aliases": [
+          "bu gia map",
+          "huyen bu gia map"
+        ]
+      },
+      {
+        "code": "692",
+        "name": "Huyện Lộc Ninh",
+        "aliases": [
+          "huyen loc ninh",
+          "loc ninh"
+        ]
+      },
+      {
+        "code": "693",
+        "name": "Huyện Bù Đốp",
+        "aliases": [
+          "bu dop",
+          "huyen bu dop"
+        ]
+      },
+      {
+        "code": "694",
+        "name": "Huyện Hớn Quản",
+        "aliases": [
+          "hon quan",
+          "huyen hon quan"
+        ]
+      },
+      {
+        "code": "695",
+        "name": "Huyện Đồng Phú",
+        "aliases": [
+          "dong phu",
+          "huyen dong phu"
+        ]
+      },
+      {
+        "code": "696",
+        "name": "Huyện Bù Đăng",
+        "aliases": [
+          "bu dang",
+          "huyen bu dang"
+        ]
+      },
+      {
+        "code": "697",
+        "name": "Thị xã Chơn Thành",
+        "aliases": [
+          "chon thanh",
+          "thi xa chon thanh"
+        ]
+      },
+      {
+        "code": "698",
+        "name": "Huyện Phú Riềng",
+        "aliases": [
+          "huyen phu rieng",
+          "phu rieng"
+        ]
+      }
+    ],
+    "72": [
+      {
+        "code": "703",
+        "name": "Thành phố Tây Ninh",
+        "aliases": [
+          "tay ninh",
+          "thanh pho tay ninh"
+        ]
+      },
+      {
+        "code": "705",
+        "name": "Huyện Tân Biên",
+        "aliases": [
+          "huyen tan bien",
+          "tan bien"
+        ]
+      },
+      {
+        "code": "706",
+        "name": "Huyện Tân Châu",
+        "aliases": [
+          "huyen tan chau",
+          "tan chau"
+        ]
+      },
+      {
+        "code": "707",
+        "name": "Huyện Dương Minh Châu",
+        "aliases": [
+          "duong minh chau",
+          "huyen duong minh chau"
+        ]
+      },
+      {
+        "code": "708",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "709",
+        "name": "Thị xã Hòa Thành",
+        "aliases": [
+          "hoa thanh",
+          "thi xa hoa thanh"
+        ]
+      },
+      {
+        "code": "710",
+        "name": "Huyện Gò Dầu",
+        "aliases": [
+          "go dau",
+          "huyen go dau"
+        ]
+      },
+      {
+        "code": "711",
+        "name": "Huyện Bến Cầu",
+        "aliases": [
+          "ben cau",
+          "huyen ben cau"
+        ]
+      },
+      {
+        "code": "712",
+        "name": "Thị xã Trảng Bàng",
+        "aliases": [
+          "thi xa trang bang",
+          "trang bang"
+        ]
+      }
+    ],
+    "74": [
+      {
+        "code": "718",
+        "name": "Thành phố Thủ Dầu Một",
+        "aliases": [
+          "thanh pho thu dau mot",
+          "thu dau mot"
+        ]
+      },
+      {
+        "code": "719",
+        "name": "Huyện Bàu Bàng",
+        "aliases": [
+          "bau bang",
+          "huyen bau bang"
+        ]
+      },
+      {
+        "code": "720",
+        "name": "Huyện Dầu Tiếng",
+        "aliases": [
+          "dau tieng",
+          "huyen dau tieng"
+        ]
+      },
+      {
+        "code": "721",
+        "name": "Thành phố Bến Cát",
+        "aliases": [
+          "ben cat",
+          "thanh pho ben cat"
+        ]
+      },
+      {
+        "code": "722",
+        "name": "Huyện Phú Giáo",
+        "aliases": [
+          "huyen phu giao",
+          "phu giao"
+        ]
+      },
+      {
+        "code": "723",
+        "name": "Thành phố Tân Uyên",
+        "aliases": [
+          "tan uyen",
+          "thanh pho tan uyen"
+        ]
+      },
+      {
+        "code": "724",
+        "name": "Thành phố Dĩ An",
+        "aliases": [
+          "di an",
+          "thanh pho di an"
+        ]
+      },
+      {
+        "code": "725",
+        "name": "Thành phố Thuận An",
+        "aliases": [
+          "thanh pho thuan an",
+          "thuan an"
+        ]
+      },
+      {
+        "code": "726",
+        "name": "Huyện Bắc Tân Uyên",
+        "aliases": [
+          "bac tan uyen",
+          "huyen bac tan uyen"
+        ]
+      }
+    ],
+    "75": [
+      {
+        "code": "731",
+        "name": "Thành phố Biên Hòa",
+        "aliases": [
+          "bien hoa",
+          "thanh pho bien hoa"
+        ]
+      },
+      {
+        "code": "732",
+        "name": "Thành phố Long Khánh",
+        "aliases": [
+          "long khanh",
+          "thanh pho long khanh"
+        ]
+      },
+      {
+        "code": "734",
+        "name": "Huyện Tân Phú",
+        "aliases": [
+          "huyen tan phu",
+          "tan phu"
+        ]
+      },
+      {
+        "code": "735",
+        "name": "Huyện Vĩnh Cửu",
+        "aliases": [
+          "huyen vinh cuu",
+          "vinh cuu"
+        ]
+      },
+      {
+        "code": "736",
+        "name": "Huyện Định Quán",
+        "aliases": [
+          "dinh quan",
+          "huyen dinh quan"
+        ]
+      },
+      {
+        "code": "737",
+        "name": "Huyện Trảng Bom",
+        "aliases": [
+          "huyen trang bom",
+          "trang bom"
+        ]
+      },
+      {
+        "code": "738",
+        "name": "Huyện Thống Nhất",
+        "aliases": [
+          "huyen thong nhat",
+          "thong nhat"
+        ]
+      },
+      {
+        "code": "739",
+        "name": "Huyện Cẩm Mỹ",
+        "aliases": [
+          "cam my",
+          "huyen cam my"
+        ]
+      },
+      {
+        "code": "740",
+        "name": "Huyện Long Thành",
+        "aliases": [
+          "huyen long thanh",
+          "long thanh"
+        ]
+      },
+      {
+        "code": "741",
+        "name": "Huyện Xuân Lộc",
+        "aliases": [
+          "huyen xuan loc",
+          "xuan loc"
+        ]
+      },
+      {
+        "code": "742",
+        "name": "Huyện Nhơn Trạch",
+        "aliases": [
+          "huyen nhon trach",
+          "nhon trach"
+        ]
+      }
+    ],
+    "77": [
+      {
+        "code": "747",
+        "name": "Thành phố Vũng Tàu",
+        "aliases": [
+          "thanh pho vung tau",
+          "vung tau"
+        ]
+      },
+      {
+        "code": "748",
+        "name": "Thành phố Bà Rịa",
+        "aliases": [
+          "ba ria",
+          "thanh pho ba ria"
+        ]
+      },
+      {
+        "code": "750",
+        "name": "Huyện Châu Đức",
+        "aliases": [
+          "chau duc",
+          "huyen chau duc"
+        ]
+      },
+      {
+        "code": "751",
+        "name": "Huyện Xuyên Mộc",
+        "aliases": [
+          "huyen xuyen moc",
+          "xuyen moc"
+        ]
+      },
+      {
+        "code": "753",
+        "name": "Huyện Long Đất",
+        "aliases": [
+          "huyen long dat",
+          "long dat"
+        ]
+      },
+      {
+        "code": "754",
+        "name": "Thành phố Phú Mỹ",
+        "aliases": [
+          "phu my",
+          "thanh pho phu my"
+        ]
+      },
+      {
+        "code": "755",
+        "name": "Huyện Côn Đảo",
+        "aliases": [
+          "con dao",
+          "huyen con dao"
+        ]
+      }
+    ],
+    "80": [
+      {
+        "code": "794",
+        "name": "Thành phố Tân An",
+        "aliases": [
+          "tan an",
+          "thanh pho tan an"
+        ]
+      },
+      {
+        "code": "795",
+        "name": "Thị xã Kiến Tường",
+        "aliases": [
+          "kien tuong",
+          "thi xa kien tuong"
+        ]
+      },
+      {
+        "code": "796",
+        "name": "Huyện Tân Hưng",
+        "aliases": [
+          "huyen tan hung",
+          "tan hung"
+        ]
+      },
+      {
+        "code": "797",
+        "name": "Huyện Vĩnh Hưng",
+        "aliases": [
+          "huyen vinh hung",
+          "vinh hung"
+        ]
+      },
+      {
+        "code": "798",
+        "name": "Huyện Mộc Hóa",
+        "aliases": [
+          "huyen moc hoa",
+          "moc hoa"
+        ]
+      },
+      {
+        "code": "799",
+        "name": "Huyện Tân Thạnh",
+        "aliases": [
+          "huyen tan thanh",
+          "tan thanh"
+        ]
+      },
+      {
+        "code": "800",
+        "name": "Huyện Thạnh Hóa",
+        "aliases": [
+          "huyen thanh hoa",
+          "thanh hoa"
+        ]
+      },
+      {
+        "code": "801",
+        "name": "Huyện Đức Huệ",
+        "aliases": [
+          "duc hue",
+          "huyen duc hue"
+        ]
+      },
+      {
+        "code": "802",
+        "name": "Huyện Đức Hòa",
+        "aliases": [
+          "duc hoa",
+          "huyen duc hoa"
+        ]
+      },
+      {
+        "code": "803",
+        "name": "Huyện Bến Lức",
+        "aliases": [
+          "ben luc",
+          "huyen ben luc"
+        ]
+      },
+      {
+        "code": "804",
+        "name": "Huyện Thủ Thừa",
+        "aliases": [
+          "huyen thu thua",
+          "thu thua"
+        ]
+      },
+      {
+        "code": "805",
+        "name": "Huyện Tân Trụ",
+        "aliases": [
+          "huyen tan tru",
+          "tan tru"
+        ]
+      },
+      {
+        "code": "806",
+        "name": "Huyện Cần Đước",
+        "aliases": [
+          "can duoc",
+          "huyen can duoc"
+        ]
+      },
+      {
+        "code": "807",
+        "name": "Huyện Cần Giuộc",
+        "aliases": [
+          "can giuoc",
+          "huyen can giuoc"
+        ]
+      },
+      {
+        "code": "808",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      }
+    ],
+    "82": [
+      {
+        "code": "815",
+        "name": "Thành phố Mỹ Tho",
+        "aliases": [
+          "my tho",
+          "thanh pho my tho"
+        ]
+      },
+      {
+        "code": "816",
+        "name": "Thành phố Gò Công",
+        "aliases": [
+          "go cong",
+          "thanh pho go cong"
+        ]
+      },
+      {
+        "code": "817",
+        "name": "Thị xã Cai Lậy",
+        "aliases": [
+          "cai lay (thi xa)",
+          "thi xa cai lay"
+        ]
+      },
+      {
+        "code": "818",
+        "name": "Huyện Tân Phước",
+        "aliases": [
+          "huyen tan phuoc",
+          "tan phuoc"
+        ]
+      },
+      {
+        "code": "819",
+        "name": "Huyện Cái Bè",
+        "aliases": [
+          "cai be",
+          "huyen cai be"
+        ]
+      },
+      {
+        "code": "820",
+        "name": "Huyện Cai Lậy",
+        "aliases": [
+          "cai lay (huyen)",
+          "huyen cai lay"
+        ]
+      },
+      {
+        "code": "821",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "822",
+        "name": "Huyện Chợ Gạo",
+        "aliases": [
+          "cho gao",
+          "huyen cho gao"
+        ]
+      },
+      {
+        "code": "823",
+        "name": "Huyện Gò Công Tây",
+        "aliases": [
+          "go cong tay",
+          "huyen go cong tay"
+        ]
+      },
+      {
+        "code": "824",
+        "name": "Huyện Gò Công Đông",
+        "aliases": [
+          "go cong dong",
+          "huyen go cong dong"
+        ]
+      },
+      {
+        "code": "825",
+        "name": "Huyện Tân Phú Đông",
+        "aliases": [
+          "huyen tan phu dong",
+          "tan phu dong"
+        ]
+      }
+    ],
+    "83": [
+      {
+        "code": "829",
+        "name": "Thành phố Bến Tre",
+        "aliases": [
+          "ben tre",
+          "thanh pho ben tre"
+        ]
+      },
+      {
+        "code": "831",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "832",
+        "name": "Huyện Chợ Lách",
+        "aliases": [
+          "cho lach",
+          "huyen cho lach"
+        ]
+      },
+      {
+        "code": "833",
+        "name": "Huyện Mỏ Cày Nam",
+        "aliases": [
+          "huyen mo cay nam",
+          "mo cay nam"
+        ]
+      },
+      {
+        "code": "834",
+        "name": "Huyện Giồng Trôm",
+        "aliases": [
+          "giong trom",
+          "huyen giong trom"
+        ]
+      },
+      {
+        "code": "835",
+        "name": "Huyện Bình Đại",
+        "aliases": [
+          "binh dai",
+          "huyen binh dai"
+        ]
+      },
+      {
+        "code": "836",
+        "name": "Huyện Ba Tri",
+        "aliases": [
+          "ba tri",
+          "huyen ba tri"
+        ]
+      },
+      {
+        "code": "837",
+        "name": "Huyện Thạnh Phú",
+        "aliases": [
+          "huyen thanh phu",
+          "thanh phu"
+        ]
+      },
+      {
+        "code": "838",
+        "name": "Huyện Mỏ Cày Bắc",
+        "aliases": [
+          "huyen mo cay bac",
+          "mo cay bac"
+        ]
+      }
+    ],
+    "84": [
+      {
+        "code": "842",
+        "name": "Thành phố Trà Vinh",
+        "aliases": [
+          "thanh pho tra vinh",
+          "tra vinh"
+        ]
+      },
+      {
+        "code": "844",
+        "name": "Huyện Càng Long",
+        "aliases": [
+          "cang long",
+          "huyen cang long"
+        ]
+      },
+      {
+        "code": "845",
+        "name": "Huyện Cầu Kè",
+        "aliases": [
+          "cau ke",
+          "huyen cau ke"
+        ]
+      },
+      {
+        "code": "846",
+        "name": "Huyện Tiểu Cần",
+        "aliases": [
+          "huyen tieu can",
+          "tieu can"
+        ]
+      },
+      {
+        "code": "847",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "848",
+        "name": "Huyện Cầu Ngang",
+        "aliases": [
+          "cau ngang",
+          "huyen cau ngang"
+        ]
+      },
+      {
+        "code": "849",
+        "name": "Huyện Trà Cú",
+        "aliases": [
+          "huyen tra cu",
+          "tra cu"
+        ]
+      },
+      {
+        "code": "850",
+        "name": "Huyện Duyên Hải",
+        "aliases": [
+          "duyen hai (huyen)",
+          "huyen duyen hai"
+        ]
+      },
+      {
+        "code": "851",
+        "name": "Thị xã Duyên Hải",
+        "aliases": [
+          "duyen hai (thi xa)",
+          "thi xa duyen hai"
+        ]
+      }
+    ],
+    "86": [
+      {
+        "code": "855",
+        "name": "Thành phố Vĩnh Long",
+        "aliases": [
+          "thanh pho vinh long",
+          "vinh long"
+        ]
+      },
+      {
+        "code": "857",
+        "name": "Huyện Long Hồ",
+        "aliases": [
+          "huyen long ho",
+          "long ho"
+        ]
+      },
+      {
+        "code": "858",
+        "name": "Huyện Mang Thít",
+        "aliases": [
+          "huyen mang thit",
+          "mang thit"
+        ]
+      },
+      {
+        "code": "859",
+        "name": "Huyện Vũng Liêm",
+        "aliases": [
+          "huyen vung liem",
+          "vung liem"
+        ]
+      },
+      {
+        "code": "860",
+        "name": "Huyện Tam Bình",
+        "aliases": [
+          "huyen tam binh",
+          "tam binh"
+        ]
+      },
+      {
+        "code": "861",
+        "name": "Thị xã Bình Minh",
+        "aliases": [
+          "binh minh",
+          "thi xa binh minh"
+        ]
+      },
+      {
+        "code": "862",
+        "name": "Huyện Trà Ôn",
+        "aliases": [
+          "huyen tra on",
+          "tra on"
+        ]
+      },
+      {
+        "code": "863",
+        "name": "Huyện Bình Tân",
+        "aliases": [
+          "binh tan",
+          "huyen binh tan"
+        ]
+      }
+    ],
+    "87": [
+      {
+        "code": "866",
+        "name": "Thành phố Cao Lãnh",
+        "aliases": [
+          "cao lanh (thanh pho)",
+          "thanh pho cao lanh"
+        ]
+      },
+      {
+        "code": "867",
+        "name": "Thành phố Sa Đéc",
+        "aliases": [
+          "sa dec",
+          "thanh pho sa dec"
+        ]
+      },
+      {
+        "code": "868",
+        "name": "Thành phố Hồng Ngự",
+        "aliases": [
+          "hong ngu (thanh pho)",
+          "thanh pho hong ngu"
+        ]
+      },
+      {
+        "code": "869",
+        "name": "Huyện Tân Hồng",
+        "aliases": [
+          "huyen tan hong",
+          "tan hong"
+        ]
+      },
+      {
+        "code": "870",
+        "name": "Huyện Hồng Ngự",
+        "aliases": [
+          "hong ngu (huyen)",
+          "huyen hong ngu"
+        ]
+      },
+      {
+        "code": "871",
+        "name": "Huyện Tam Nông",
+        "aliases": [
+          "huyen tam nong",
+          "tam nong"
+        ]
+      },
+      {
+        "code": "872",
+        "name": "Huyện Tháp Mười",
+        "aliases": [
+          "huyen thap muoi",
+          "thap muoi"
+        ]
+      },
+      {
+        "code": "873",
+        "name": "Huyện Cao Lãnh",
+        "aliases": [
+          "cao lanh (huyen)",
+          "huyen cao lanh"
+        ]
+      },
+      {
+        "code": "874",
+        "name": "Huyện Thanh Bình",
+        "aliases": [
+          "huyen thanh binh",
+          "thanh binh"
+        ]
+      },
+      {
+        "code": "875",
+        "name": "Huyện Lấp Vò",
+        "aliases": [
+          "huyen lap vo",
+          "lap vo"
+        ]
+      },
+      {
+        "code": "876",
+        "name": "Huyện Lai Vung",
+        "aliases": [
+          "huyen lai vung",
+          "lai vung"
+        ]
+      },
+      {
+        "code": "877",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      }
+    ],
+    "89": [
+      {
+        "code": "883",
+        "name": "Thành phố Long Xuyên",
+        "aliases": [
+          "long xuyen",
+          "thanh pho long xuyen"
+        ]
+      },
+      {
+        "code": "884",
+        "name": "Thành phố Châu Đốc",
+        "aliases": [
+          "chau doc",
+          "thanh pho chau doc"
+        ]
+      },
+      {
+        "code": "886",
+        "name": "Huyện An Phú",
+        "aliases": [
+          "an phu",
+          "huyen an phu"
+        ]
+      },
+      {
+        "code": "887",
+        "name": "Thị xã Tân Châu",
+        "aliases": [
+          "tan chau",
+          "thi xa tan chau"
+        ]
+      },
+      {
+        "code": "888",
+        "name": "Huyện Phú Tân",
+        "aliases": [
+          "huyen phu tan",
+          "phu tan"
+        ]
+      },
+      {
+        "code": "889",
+        "name": "Huyện Châu Phú",
+        "aliases": [
+          "chau phu",
+          "huyen chau phu"
+        ]
+      },
+      {
+        "code": "890",
+        "name": "Thị xã Tịnh Biên",
+        "aliases": [
+          "thi xa tinh bien",
+          "tinh bien"
+        ]
+      },
+      {
+        "code": "891",
+        "name": "Huyện Tri Tôn",
+        "aliases": [
+          "huyen tri ton",
+          "tri ton"
+        ]
+      },
+      {
+        "code": "892",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "893",
+        "name": "Huyện Chợ Mới",
+        "aliases": [
+          "cho moi",
+          "huyen cho moi"
+        ]
+      },
+      {
+        "code": "894",
+        "name": "Huyện Thoại Sơn",
+        "aliases": [
+          "huyen thoai son",
+          "thoai son"
+        ]
+      }
+    ],
+    "91": [
+      {
+        "code": "899",
+        "name": "Thành phố Rạch Giá",
+        "aliases": [
+          "rach gia",
+          "thanh pho rach gia"
+        ]
+      },
+      {
+        "code": "900",
+        "name": "Thành phố Hà Tiên",
+        "aliases": [
+          "ha tien",
+          "thanh pho ha tien"
+        ]
+      },
+      {
+        "code": "902",
+        "name": "Huyện Kiên Lương",
+        "aliases": [
+          "huyen kien luong",
+          "kien luong"
+        ]
+      },
+      {
+        "code": "903",
+        "name": "Huyện Hòn Đất",
+        "aliases": [
+          "hon dat",
+          "huyen hon dat"
+        ]
+      },
+      {
+        "code": "904",
+        "name": "Huyện Tân Hiệp",
+        "aliases": [
+          "huyen tan hiep",
+          "tan hiep"
+        ]
+      },
+      {
+        "code": "905",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "906",
+        "name": "Huyện Giồng Riềng",
+        "aliases": [
+          "giong rieng",
+          "huyen giong rieng"
+        ]
+      },
+      {
+        "code": "907",
+        "name": "Huyện Gò Quao",
+        "aliases": [
+          "go quao",
+          "huyen go quao"
+        ]
+      },
+      {
+        "code": "908",
+        "name": "Huyện An Biên",
+        "aliases": [
+          "an bien",
+          "huyen an bien"
+        ]
+      },
+      {
+        "code": "909",
+        "name": "Huyện An Minh",
+        "aliases": [
+          "an minh",
+          "huyen an minh"
+        ]
+      },
+      {
+        "code": "910",
+        "name": "Huyện Vĩnh Thuận",
+        "aliases": [
+          "huyen vinh thuan",
+          "vinh thuan"
+        ]
+      },
+      {
+        "code": "911",
+        "name": "Thành phố Phú Quốc",
+        "aliases": [
+          "phu quoc",
+          "thanh pho phu quoc"
+        ]
+      },
+      {
+        "code": "912",
+        "name": "Huyện Kiên Hải",
+        "aliases": [
+          "huyen kien hai",
+          "kien hai"
+        ]
+      },
+      {
+        "code": "913",
+        "name": "Huyện U Minh Thượng",
+        "aliases": [
+          "huyen u minh thuong",
+          "u minh thuong"
+        ]
+      },
+      {
+        "code": "914",
+        "name": "Huyện Giang Thành",
+        "aliases": [
+          "giang thanh",
+          "huyen giang thanh"
+        ]
+      }
+    ],
+    "92": [
+      {
+        "code": "916",
+        "name": "Quận Ninh Kiều",
+        "aliases": [
+          "ninh kieu",
+          "quan ninh kieu"
+        ]
+      },
+      {
+        "code": "917",
+        "name": "Quận Ô Môn",
+        "aliases": [
+          "o mon",
+          "quan o mon"
+        ]
+      },
+      {
+        "code": "918",
+        "name": "Quận Bình Thủy",
+        "aliases": [
+          "binh thuy",
+          "quan binh thuy"
+        ]
+      },
+      {
+        "code": "919",
+        "name": "Quận Cái Răng",
+        "aliases": [
+          "cai rang",
+          "quan cai rang"
+        ]
+      },
+      {
+        "code": "923",
+        "name": "Quận Thốt Nốt",
+        "aliases": [
+          "quan thot not",
+          "thot not"
+        ]
+      },
+      {
+        "code": "924",
+        "name": "Huyện Vĩnh Thạnh",
+        "aliases": [
+          "huyen vinh thanh",
+          "vinh thanh"
+        ]
+      },
+      {
+        "code": "925",
+        "name": "Huyện Cờ Đỏ",
+        "aliases": [
+          "co do",
+          "huyen co do"
+        ]
+      },
+      {
+        "code": "926",
+        "name": "Huyện Phong Điền",
+        "aliases": [
+          "huyen phong dien",
+          "phong dien"
+        ]
+      },
+      {
+        "code": "927",
+        "name": "Huyện Thới Lai",
+        "aliases": [
+          "huyen thoi lai",
+          "thoi lai"
+        ]
+      }
+    ],
+    "93": [
+      {
+        "code": "930",
+        "name": "Thành phố Vị Thanh",
+        "aliases": [
+          "thanh pho vi thanh",
+          "vi thanh"
+        ]
+      },
+      {
+        "code": "931",
+        "name": "Thành phố Ngã Bảy",
+        "aliases": [
+          "nga bay",
+          "thanh pho nga bay"
+        ]
+      },
+      {
+        "code": "932",
+        "name": "Huyện Châu Thành A",
+        "aliases": [
+          "chau thanh a",
+          "huyen chau thanh a"
+        ]
+      },
+      {
+        "code": "933",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "934",
+        "name": "Huyện Phụng Hiệp",
+        "aliases": [
+          "huyen phung hiep",
+          "phung hiep"
+        ]
+      },
+      {
+        "code": "935",
+        "name": "Huyện Vị Thủy",
+        "aliases": [
+          "huyen vi thuy",
+          "vi thuy"
+        ]
+      },
+      {
+        "code": "936",
+        "name": "Huyện Long Mỹ",
+        "aliases": [
+          "huyen long my",
+          "long my (huyen)"
+        ]
+      },
+      {
+        "code": "937",
+        "name": "Thị xã Long Mỹ",
+        "aliases": [
+          "long my (thi xa)",
+          "thi xa long my"
+        ]
+      }
+    ],
+    "94": [
+      {
+        "code": "941",
+        "name": "Thành phố Sóc Trăng",
+        "aliases": [
+          "soc trang",
+          "thanh pho soc trang"
+        ]
+      },
+      {
+        "code": "942",
+        "name": "Huyện Châu Thành",
+        "aliases": [
+          "chau thanh",
+          "huyen chau thanh"
+        ]
+      },
+      {
+        "code": "943",
+        "name": "Huyện Kế Sách",
+        "aliases": [
+          "huyen ke sach",
+          "ke sach"
+        ]
+      },
+      {
+        "code": "944",
+        "name": "Huyện Mỹ Tú",
+        "aliases": [
+          "huyen my tu",
+          "my tu"
+        ]
+      },
+      {
+        "code": "945",
+        "name": "Huyện Cù Lao Dung",
+        "aliases": [
+          "cu lao dung",
+          "huyen cu lao dung"
+        ]
+      },
+      {
+        "code": "946",
+        "name": "Huyện Long Phú",
+        "aliases": [
+          "huyen long phu",
+          "long phu"
+        ]
+      },
+      {
+        "code": "947",
+        "name": "Huyện Mỹ Xuyên",
+        "aliases": [
+          "huyen my xuyen",
+          "my xuyen"
+        ]
+      },
+      {
+        "code": "948",
+        "name": "Thị xã Ngã Năm",
+        "aliases": [
+          "nga nam",
+          "thi xa nga nam"
+        ]
+      },
+      {
+        "code": "949",
+        "name": "Huyện Thạnh Trị",
+        "aliases": [
+          "huyen thanh tri",
+          "thanh tri"
+        ]
+      },
+      {
+        "code": "950",
+        "name": "Thị xã Vĩnh Châu",
+        "aliases": [
+          "thi xa vinh chau",
+          "vinh chau"
+        ]
+      },
+      {
+        "code": "951",
+        "name": "Huyện Trần Đề",
+        "aliases": [
+          "huyen tran de",
+          "tran de"
+        ]
+      }
+    ],
+    "95": [
+      {
+        "code": "954",
+        "name": "Thành phố Bạc Liêu",
+        "aliases": [
+          "bac lieu",
+          "thanh pho bac lieu"
+        ]
+      },
+      {
+        "code": "956",
+        "name": "Huyện Hồng Dân",
+        "aliases": [
+          "hong dan",
+          "huyen hong dan"
+        ]
+      },
+      {
+        "code": "957",
+        "name": "Huyện Phước Long",
+        "aliases": [
+          "huyen phuoc long",
+          "phuoc long"
+        ]
+      },
+      {
+        "code": "958",
+        "name": "Huyện Vĩnh Lợi",
+        "aliases": [
+          "huyen vinh loi",
+          "vinh loi"
+        ]
+      },
+      {
+        "code": "959",
+        "name": "Thị xã Giá Rai",
+        "aliases": [
+          "gia rai",
+          "thi xa gia rai"
+        ]
+      },
+      {
+        "code": "960",
+        "name": "Huyện Đông Hải",
+        "aliases": [
+          "dong hai",
+          "huyen dong hai"
+        ]
+      },
+      {
+        "code": "961",
+        "name": "Huyện Hòa Bình",
+        "aliases": [
+          "hoa binh",
+          "huyen hoa binh"
+        ]
+      }
+    ],
+    "96": [
+      {
+        "code": "964",
+        "name": "Thành phố Cà Mau",
+        "aliases": [
+          "ca mau",
+          "thanh pho ca mau"
+        ]
+      },
+      {
+        "code": "966",
+        "name": "Huyện U Minh",
+        "aliases": [
+          "huyen u minh",
+          "u minh"
+        ]
+      },
+      {
+        "code": "967",
+        "name": "Huyện Thới Bình",
+        "aliases": [
+          "huyen thoi binh",
+          "thoi binh"
+        ]
+      },
+      {
+        "code": "968",
+        "name": "Huyện Trần Văn Thời",
+        "aliases": [
+          "huyen tran van thoi",
+          "tran van thoi"
+        ]
+      },
+      {
+        "code": "969",
+        "name": "Huyện Cái Nước",
+        "aliases": [
+          "cai nuoc",
+          "huyen cai nuoc"
+        ]
+      },
+      {
+        "code": "970",
+        "name": "Huyện Đầm Dơi",
+        "aliases": [
+          "dam doi",
+          "huyen dam doi"
+        ]
+      },
+      {
+        "code": "971",
+        "name": "Huyện Năm Căn",
+        "aliases": [
+          "huyen nam can",
+          "nam can"
+        ]
+      },
+      {
+        "code": "972",
+        "name": "Huyện Phú Tân",
+        "aliases": [
+          "huyen phu tan",
+          "phu tan"
+        ]
+      },
+      {
+        "code": "973",
+        "name": "Huyện Ngọc Hiển",
+        "aliases": [
+          "huyen ngoc hien",
+          "ngoc hien"
+        ]
+      }
     ]
   }
 }
