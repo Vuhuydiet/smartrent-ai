@@ -236,11 +236,30 @@ async def _do_report(
         # of telling the user it's a transient system error.
         status = e.response.status_code
         backend_msg = None
+        backend_code = None
         try:
-            backend_msg = e.response.json().get("message")
+            payload = e.response.json()
+            backend_msg = payload.get("message")
+            backend_code = payload.get("code")
         except Exception:
             backend_msg = (e.response.text or "").strip()[:200] or None
-        logger.error("submit_listing_report HTTP %s: %s", status, backend_msg)
+        logger.error(
+            "submit_listing_report HTTP %s (code=%s): %s",
+            status,
+            backend_code,
+            backend_msg,
+        )
+        # Listing no longer publicly visible (backend #348, code 22001) — surface
+        # a clear Vietnamese reason instead of the raw English backend message.
+        if backend_code == "22001" or (
+            status == 400
+            and backend_msg
+            and "no longer available" in backend_msg.lower()
+        ):
+            return {
+                "status": "error",
+                "error": "Tin này không còn hiển thị nên không thể báo cáo.",
+            }
         error = f"Báo cáo thất bại (HTTP {status})"
         if backend_msg:
             error += f": {backend_msg}"

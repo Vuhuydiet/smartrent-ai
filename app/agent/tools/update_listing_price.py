@@ -57,20 +57,35 @@ async def _do_update_price(
 ) -> Dict[str, Any]:
     """Core logic — separated so it can be called directly in tests."""
     if not confirmed:
+        raw_price: Any = None
         try:
             current = await backend_client.get_listing(listing_id)
-            old_price = current.get("price")
+            if isinstance(current, dict):
+                raw_price = current.get("price")
         except Exception:  # noqa: BLE001
-            old_price = None
+            # The public detail endpoint returns 404 for listings that aren't
+            # currently visible (pending review, rejected, expired, suspended —
+            # backend #352). The owner can still reprice via the owner-scoped
+            # endpoint; we just can't preview the old price here.
+            raw_price = None
+        old_price = raw_price if isinstance(raw_price, (int, float)) else None
+        if old_price is not None:
+            message = (
+                f"Xác nhận đổi giá tin {listing_id} từ {int(old_price):,} sang "
+                f"{int(new_price):,} VND? (Trả lời 'có' để xác nhận.)"
+            )
+        else:
+            message = (
+                f"Xác nhận đổi giá tin {listing_id} thành {int(new_price):,} VND? "
+                "(Chưa lấy được giá hiện tại — có thể tin đang chờ duyệt hoặc đã "
+                "hết hạn. Trả lời 'có' để xác nhận.)"
+            )
         return {
             "status": "needs_confirmation",
             "listingId": listing_id,
             "currentPrice": old_price,
             "newPrice": new_price,
-            "message": (
-                f"Xác nhận đổi giá tin {listing_id} từ {old_price} sang "
-                f"{int(new_price):,} VND? (Trả lời 'có' để xác nhận.)"
-            ),
+            "message": message,
         }
 
     try:

@@ -5,7 +5,16 @@ reasonId (the catalog id, not the display position)."""
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 from app.agent.tools.report_listing import _do_report
+
+
+def _http_error(status: int, json_body: dict) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", "http://backend/v1/listings/1/reports")
+    resp = httpx.Response(status, json=json_body, request=req)
+    return httpx.HTTPStatusError(str(status), request=req, response=resp)
+
 
 # The catalog id order != display order (LISTING ids 1-7, MAP ids 8-11, both
 # restart display_order at 1 → interleaved). id 8 is "the 2nd shown reason".
@@ -143,3 +152,25 @@ def test_confirm_unmatched_reason_text_errors_without_submitting():
     assert result["status"] == "error"
     assert "không khớp" in result["error"].lower()
     submit.assert_not_called()
+
+
+def test_confirm_listing_no_longer_reportable_is_vietnamese():
+    # Backend #348: reporting a listing that is no longer publicly visible returns
+    # 400 / code 22001 with an English message. The tool must surface a clear
+    # Vietnamese reason, not the raw English backend text.
+    submit = AsyncMock(
+        side_effect=_http_error(
+            400,
+            {
+                "code": "22001",
+                "message": "Listing is no longer available and cannot be reported",
+            },
+        )
+    )
+    with _patch_reasons(), _patch_profile(), patch(
+        "app.core.backend_client.submit_listing_report", submit
+    ):
+        result = asyncio.run(_do_report("561388", True, [1], "", "tok"))
+    assert result["status"] == "error"
+    assert "không còn hiển thị" in result["error"].lower()
+    assert "no longer available" not in result["error"].lower()
