@@ -18,7 +18,7 @@
         "how to post"
       ],
       "steps": [
-        "Đăng nhập tài khoản SmartRent.",
+        "Đăng nhập tài khoản Thuê Nhà Trọ.",
         "Nhấn nút 'Đăng tin mới' trên thanh menu.",
         "Chọn loại tin: Cho thuê hoặc Bán.",
         "Chọn loại BĐS: Phòng trọ, Căn hộ, Nhà nguyên căn, Studio, Văn phòng.",
@@ -40,7 +40,7 @@
     },
     {
       "id": "guide_search_property",
-      "name": "Tìm kiếm BĐS trên SmartRent",
+      "name": "Tìm kiếm BĐS trên Thuê Nhà Trọ",
       "keywords": [
         "tìm kiếm",
         "search",
@@ -55,7 +55,7 @@
         "how to find"
       ],
       "steps": [
-        "Truy cập trang chủ SmartRent hoặc mở ứng dụng.",
+        "Truy cập trang chủ Thuê Nhà Trọ hoặc mở ứng dụng.",
         "Chọn loại BĐS muốn tìm: Cho thuê hoặc Mua bán.",
         "Chọn khu vực: Tỉnh/Thành phố → Quận/Huyện (bắt buộc).",
         "Tùy chọn thêm bộ lọc: khoảng giá, diện tích, số phòng ngủ, tiện nghi.",
@@ -115,7 +115,7 @@
         "Mở tin đăng BĐS muốn liên hệ.",
         "Xem thông tin liên hệ: số điện thoại, Zalo (nếu có).",
         "Nhấn nút 'Gọi điện' để gọi trực tiếp cho chủ nhà.",
-        "Hoặc nhấn 'Nhắn tin' để gửi tin nhắn qua hệ thống SmartRent.",
+        "Hoặc nhấn 'Nhắn tin' để gửi tin nhắn qua hệ thống Thuê Nhà Trọ.",
         "Hẹn lịch xem nhà trực tiếp với chủ nhà."
       ],
       "tips": [
@@ -142,7 +142,7 @@
         "premium listing"
       ],
       "steps": [
-        "Đăng nhập tài khoản SmartRent.",
+        "Đăng nhập tài khoản Thuê Nhà Trọ.",
         "Vào mục 'Quản lý tin đăng'.",
         "Chọn tin đăng muốn nâng cấp VIP.",
         "Nhấn 'Nâng cấp VIP'.",
@@ -169,7 +169,7 @@
         "xem lại"
       ],
       "steps": [
-        "Đăng nhập tài khoản SmartRent.",
+        "Đăng nhập tài khoản Thuê Nhà Trọ.",
         "Vào mục 'Tin đã lưu' hoặc 'Yêu thích' từ menu tài khoản.",
         "Xem danh sách tất cả tin bạn đã lưu.",
         "Nhấn vào tin để xem chi tiết.",

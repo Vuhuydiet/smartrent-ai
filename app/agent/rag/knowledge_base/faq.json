@@ -17,8 +17,8 @@
         "list my property",
         "how to post"
       ],
-      "question": "Cách đăng tin cho thuê nhà/phòng trên SmartRent?",
-      "answer": "Để đăng tin trên SmartRent: (1) Đăng nhập tài khoản, chọn 'Đăng tin mới'. (2) Điền thông tin: loại BĐS, địa chỉ, diện tích, giá thuê, tiện nghi. (3) Tải ảnh chụp rõ ràng (khuyến nghị ít nhất 5 ảnh). (4) Chọn gói tin (thường/VIP). (5) Xác nhận và chờ duyệt. Tin đăng thường được duyệt trong 2-24 giờ."
+      "question": "Cách đăng tin cho thuê nhà/phòng trên Thuê Nhà Trọ?",
+      "answer": "Để đăng tin trên Thuê Nhà Trọ: (1) Đăng nhập tài khoản, chọn 'Đăng tin mới'. (2) Điền thông tin: loại BĐS, địa chỉ, diện tích, giá thuê, tiện nghi. (3) Tải ảnh chụp rõ ràng (khuyến nghị ít nhất 5 ảnh). (4) Chọn gói tin (thường/VIP). (5) Xác nhận và chờ duyệt. Tin đăng thường được duyệt trong 2-24 giờ."
     },
     {
       "id": "platform_contact_landlord",
@@ -36,8 +36,8 @@
         "message owner",
         "how to contact"
       ],
-      "question": "Làm thế nào để liên hệ với chủ nhà trên SmartRent?",
-      "answer": "Bạn có thể liên hệ chủ nhà bằng cách: (1) Xem số điện thoại hiển thị trong phần chi tiết tin đăng. (2) Nhấn nút 'Liên hệ' để gọi điện trực tiếp. (3) Gửi tin nhắn qua hệ thống chat nội bộ SmartRent. Lưu ý: Tránh giao dịch ngoài nền tảng để được bảo vệ quyền lợi."
+      "question": "Làm thế nào để liên hệ với chủ nhà trên Thuê Nhà Trọ?",
+      "answer": "Bạn có thể liên hệ chủ nhà bằng cách: (1) Xem số điện thoại hiển thị trong phần chi tiết tin đăng. (2) Nhấn nút 'Liên hệ' để gọi điện trực tiếp. (3) Gửi tin nhắn qua hệ thống chat nội bộ Thuê Nhà Trọ. Lưu ý: Tránh giao dịch ngoài nền tảng để được bảo vệ quyền lợi."
     },
     {
       "id": "platform_account",
@@ -56,8 +56,8 @@
         "make account",
         "new account"
       ],
-      "question": "Cách tạo tài khoản SmartRent?",
-      "answer": "Để tạo tài khoản SmartRent: (1) Truy cập SmartRent và nhấn 'Đăng ký'. (2) Nhập email, số điện thoại và tạo mật khẩu. (3) Xác minh email hoặc OTP điện thoại. (4) Hoàn thiện hồ sơ cá nhân. Đăng ký miễn phí và ngay lập tức có thể sử dụng."
+      "question": "Cách tạo tài khoản Thuê Nhà Trọ?",
+      "answer": "Để tạo tài khoản Thuê Nhà Trọ: (1) Truy cập Thuê Nhà Trọ và nhấn 'Đăng ký'. (2) Nhập email, số điện thoại và tạo mật khẩu. (3) Xác minh email hoặc OTP điện thoại. (4) Hoàn thiện hồ sơ cá nhân. Đăng ký miễn phí và ngay lập tức có thể sử dụng."
     },
     {
       "id": "platform_vip",
@@ -75,8 +75,8 @@
         "featured ad",
         "promote listing"
       ],
-      "question": "Gói tin VIP trên SmartRent có lợi ích gì?",
-      "answer": "Gói tin VIP trên SmartRent có 3 cấp: Silver, Gold, Diamond. Lợi ích: Hiển thị ưu tiên trên trang tìm kiếm, đánh dấu nổi bật, hiển thị ở vị trí đầu, tăng lượt xem gấp 3-10 lần so với tin thường. Khuyến nghị dùng VIP Gold/Diamond cho phòng/nhà ở vị trí cạnh tranh cao."
+      "question": "Gói tin VIP trên Thuê Nhà Trọ có lợi ích gì?",
+      "answer": "Gói tin VIP trên Thuê Nhà Trọ có 3 cấp: Silver, Gold, Diamond. Lợi ích: Hiển thị ưu tiên trên trang tìm kiếm, đánh dấu nổi bật, hiển thị ở vị trí đầu, tăng lượt xem gấp 3-10 lần so với tin thường. Khuyến nghị dùng VIP Gold/Diamond cho phòng/nhà ở vị trí cạnh tranh cao."
     },
     {
       "id": "platform_payment",
@@ -93,8 +93,8 @@
         "how much does it cost",
         "cost"
       ],
-      "question": "Phí dịch vụ trên SmartRent như thế nào?",
-      "answer": "SmartRent thu phí theo gói đăng tin: Tin thường miễn phí nhưng hiển thị hạn chế. Gói VIP Silver/Gold/Diamond tính phí theo ngày đăng. Người thuê tìm kiếm và liên hệ hoàn toàn miễn phí."
+      "question": "Phí dịch vụ trên Thuê Nhà Trọ như thế nào?",
+      "answer": "Thuê Nhà Trọ thu phí theo gói đăng tin: Tin thường miễn phí nhưng hiển thị hạn chế. Gói VIP Silver/Gold/Diamond tính phí theo ngày đăng. Người thuê tìm kiếm và liên hệ hoàn toàn miễn phí."
     },
     {
       "id": "rent_documents",
@@ -334,8 +334,8 @@
         "how much is vip",
         "subscription cost"
       ],
-      "question": "Giá các gói VIP trên SmartRent là bao nhiêu?",
-      "answer": "SmartRent có 3 gói VIP cho tin đăng: VIP Silver — hiển thị ưu tiên nhẹ, tăng lượt xem gấp 3 lần, phí thấp nhất. VIP Gold — nhãn nổi bật, hiển thị đầu trang tìm kiếm, tăng lượt xem gấp 5 lần. VIP Diamond — vị trí cao nhất, nhãn đặc biệt, tăng lượt xem gấp 10 lần. Phí tính theo số ngày đăng tin. Xem chi tiết bảng giá tại mục 'Bảng giá' trên trang SmartRent."
+      "question": "Giá các gói VIP trên Thuê Nhà Trọ là bao nhiêu?",
+      "answer": "Thuê Nhà Trọ có 3 gói VIP cho tin đăng: VIP Silver — hiển thị ưu tiên nhẹ, tăng lượt xem gấp 3 lần, phí thấp nhất. VIP Gold — nhãn nổi bật, hiển thị đầu trang tìm kiếm, tăng lượt xem gấp 5 lần. VIP Diamond — vị trí cao nhất, nhãn đặc biệt, tăng lượt xem gấp 10 lần. Phí tính theo số ngày đăng tin. Xem chi tiết bảng giá tại mục 'Bảng giá' trên trang Thuê Nhà Trọ."
     },
     {
       "id": "subscription_upgrade",
@@ -352,7 +352,7 @@
         "change plan",
         "switch tier"
       ],
-      "question": "Cách nâng cấp gói VIP trên SmartRent?",
+      "question": "Cách nâng cấp gói VIP trên Thuê Nhà Trọ?",
       "answer": "Để nâng cấp gói VIP: (1) Vào trang quản lý tin đăng của bạn. (2) Chọn tin muốn nâng cấp. (3) Nhấn 'Nâng cấp VIP' và chọn gói mới (Silver/Gold/Diamond). (4) Thanh toán chênh lệch phí. Gói mới sẽ có hiệu lực ngay lập tức. Bạn có thể nâng cấp bất kỳ lúc nào trong thời gian tin đăng còn hiệu lực."
     },
     {
@@ -389,7 +389,7 @@
         "subscription expiry"
       ],
       "question": "Cách kiểm tra trạng thái gói VIP hiện tại?",
-      "answer": "Để kiểm tra trạng thái VIP: (1) Đăng nhập tài khoản SmartRent. (2) Vào mục 'Quản lý tin đăng'. (3) Mỗi tin đăng sẽ hiển thị nhãn VIP hiện tại (Silver/Gold/Diamond) và ngày hết hạn. Tin VIP còn hạn sẽ có biểu tượng đặc biệt. Tin hết hạn VIP sẽ tự động chuyển về trạng thái thường."
+      "answer": "Để kiểm tra trạng thái VIP: (1) Đăng nhập tài khoản Thuê Nhà Trọ. (2) Vào mục 'Quản lý tin đăng'. (3) Mỗi tin đăng sẽ hiển thị nhãn VIP hiện tại (Silver/Gold/Diamond) và ngày hết hạn. Tin VIP còn hạn sẽ có biểu tượng đặc biệt. Tin hết hạn VIP sẽ tự động chuyển về trạng thái thường."
     },
     {
       "id": "account_change_password",
@@ -405,7 +405,7 @@
         "new password",
         "password"
       ],
-      "question": "Cách đổi mật khẩu tài khoản SmartRent?",
+      "question": "Cách đổi mật khẩu tài khoản Thuê Nhà Trọ?",
       "answer": "Đổi mật khẩu: (1) Đăng nhập và vào 'Cài đặt tài khoản'. (2) Chọn 'Đổi mật khẩu'. (3) Nhập mật khẩu cũ và mật khẩu mới. (4) Xác nhận. Nếu quên mật khẩu: Nhấn 'Quên mật khẩu' ở trang đăng nhập → nhập email đã đăng ký → nhận link đặt lại mật khẩu qua email → tạo mật khẩu mới."
     },
     {
@@ -425,7 +425,7 @@
         "change phone",
         "change avatar"
       ],
-      "question": "Cách cập nhật thông tin cá nhân trên SmartRent?",
+      "question": "Cách cập nhật thông tin cá nhân trên Thuê Nhà Trọ?",
       "answer": "Để cập nhật thông tin cá nhân: (1) Đăng nhập và vào 'Hồ sơ cá nhân' hoặc 'Cài đặt tài khoản'. (2) Bạn có thể thay đổi: tên hiển thị, số điện thoại, ảnh đại diện. (3) Email đăng ký không thể thay đổi sau khi xác minh. (4) Nhấn 'Lưu thay đổi' để cập nhật. Thông tin sẽ được cập nhật ngay lập tức trên hệ thống."
     },
     {
@@ -441,8 +441,8 @@
         "remove account",
         "deactivate"
       ],
-      "question": "Cách xóa tài khoản SmartRent?",
-      "answer": "Để xóa tài khoản SmartRent: (1) Đăng nhập và vào 'Cài đặt tài khoản'. (2) Chọn 'Xóa tài khoản' ở cuối trang. (3) Xác nhận bằng mật khẩu. Lưu ý: Sau khi xóa, tất cả tin đăng, lịch sử tìm kiếm và tin nhắn sẽ bị xóa vĩnh viễn. Gói VIP đang sử dụng sẽ không được hoàn tiền. Hãy cân nhắc kỹ trước khi xóa."
+      "question": "Cách xóa tài khoản Thuê Nhà Trọ?",
+      "answer": "Để xóa tài khoản Thuê Nhà Trọ: (1) Đăng nhập và vào 'Cài đặt tài khoản'. (2) Chọn 'Xóa tài khoản' ở cuối trang. (3) Xác nhận bằng mật khẩu. Lưu ý: Sau khi xóa, tất cả tin đăng, lịch sử tìm kiếm và tin nhắn sẽ bị xóa vĩnh viễn. Gói VIP đang sử dụng sẽ không được hoàn tiền. Hãy cân nhắc kỹ trước khi xóa."
     },
     {
       "id": "account_verify",
@@ -459,7 +459,7 @@
         "phone verification",
         "otp verification"
       ],
-      "question": "Cách xác minh tài khoản SmartRent?",
+      "question": "Cách xác minh tài khoản Thuê Nhà Trọ?",
       "answer": "Xác minh tài khoản giúp tăng độ tin cậy: (1) Xác minh email: Kiểm tra hộp thư (kể cả spam) → nhấn link xác nhận. (2) Xác minh số điện thoại: Nhập SĐT → nhận mã OTP → nhập mã xác nhận. Tài khoản đã xác minh sẽ có nhãn 'Đã xác minh', giúp chủ nhà và người thuê tin tưởng hơn khi liên hệ."
     },
     {
@@ -480,7 +480,7 @@
         "wishlist",
         "save for later"
       ],
-      "question": "Cách lưu tin đăng yêu thích trên SmartRent?",
+      "question": "Cách lưu tin đăng yêu thích trên Thuê Nhà Trọ?",
       "answer": "Để lưu tin yêu thích: (1) Khi xem tin đăng, nhấn biểu tượng trái tim hoặc nút 'Lưu tin'. (2) Tin sẽ được thêm vào danh sách 'Tin đã lưu' trong tài khoản. (3) Truy cập tin đã lưu bất kỳ lúc nào từ menu tài khoản. (4) Bạn có thể bỏ lưu bằng cách nhấn lại biểu tượng trái tim. Cần đăng nhập để sử dụng tính năng này."
     },
     {
@@ -500,8 +500,8 @@
         "narrow search",
         "refine results"
       ],
-      "question": "Cách sử dụng bộ lọc tìm kiếm trên SmartRent?",
-      "answer": "SmartRent hỗ trợ nhiều bộ lọc tìm kiếm: (1) Vị trí: Chọn tỉnh/thành, quận/huyện, phường/xã. (2) Loại BĐS: Phòng trọ, căn hộ, nhà nguyên căn, studio, văn phòng. (3) Giá: Đặt khoảng giá tối thiểu - tối đa. (4) Diện tích: Lọc theo m². (5) Tiện nghi: WiFi, điều hòa, máy giặt, bãi đỗ xe... (6) Nội thất: Đầy đủ, cơ bản, không nội thất. (7) Sắp xếp: Giá tăng/giảm, mới nhất. Kết hợp nhiều bộ lọc để tìm chính xác hơn."
+      "question": "Cách sử dụng bộ lọc tìm kiếm trên Thuê Nhà Trọ?",
+      "answer": "Thuê Nhà Trọ hỗ trợ nhiều bộ lọc tìm kiếm: (1) Vị trí: Chọn tỉnh/thành, quận/huyện, phường/xã. (2) Loại BĐS: Phòng trọ, căn hộ, nhà nguyên căn, studio, văn phòng. (3) Giá: Đặt khoảng giá tối thiểu - tối đa. (4) Diện tích: Lọc theo m². (5) Tiện nghi: WiFi, điều hòa, máy giặt, bãi đỗ xe... (6) Nội thất: Đầy đủ, cơ bản, không nội thất. (7) Sắp xếp: Giá tăng/giảm, mới nhất. Kết hợp nhiều bộ lọc để tìm chính xác hơn."
     },
     {
       "id": "feature_notifications",
@@ -519,8 +519,8 @@
         "notification settings",
         "push alerts"
       ],
-      "question": "Hệ thống thông báo trên SmartRent hoạt động như thế nào?",
-      "answer": "SmartRent gửi thông báo khi: (1) Có tin đăng mới phù hợp với tìm kiếm đã lưu. (2) Chủ nhà/người thuê gửi tin nhắn cho bạn. (3) Tin đăng của bạn được duyệt hoặc sắp hết hạn. (4) Có cập nhật về gói VIP. Bạn có thể quản lý thông báo trong 'Cài đặt thông báo' để bật/tắt từng loại thông báo theo nhu cầu."
+      "question": "Hệ thống thông báo trên Thuê Nhà Trọ hoạt động như thế nào?",
+      "answer": "Thuê Nhà Trọ gửi thông báo khi: (1) Có tin đăng mới phù hợp với tìm kiếm đã lưu. (2) Chủ nhà/người thuê gửi tin nhắn cho bạn. (3) Tin đăng của bạn được duyệt hoặc sắp hết hạn. (4) Có cập nhật về gói VIP. Bạn có thể quản lý thông báo trong 'Cài đặt thông báo' để bật/tắt từng loại thông báo theo nhu cầu."
     },
     {
       "id": "feature_report_listing",
@@ -539,8 +539,8 @@
         "flag listing",
         "complaint"
       ],
-      "question": "Cách báo cáo tin đăng vi phạm trên SmartRent?",
-      "answer": "Để báo cáo tin vi phạm: (1) Mở tin đăng muốn báo cáo. (2) Nhấn nút 'Báo cáo' (biểu tượng cờ). (3) Chọn lý do: tin giả, giá không chính xác, ảnh không đúng, nội dung không phù hợp, lừa đảo. (4) Mô tả chi tiết (nếu có). (5) Gửi báo cáo. Đội ngũ SmartRent sẽ xem xét trong 24-48 giờ và xử lý nếu xác nhận vi phạm."
+      "question": "Cách báo cáo tin đăng vi phạm trên Thuê Nhà Trọ?",
+      "answer": "Để báo cáo tin vi phạm: (1) Mở tin đăng muốn báo cáo. (2) Nhấn nút 'Báo cáo' (biểu tượng cờ). (3) Chọn lý do: tin giả, giá không chính xác, ảnh không đúng, nội dung không phù hợp, lừa đảo. (4) Mô tả chi tiết (nếu có). (5) Gửi báo cáo. Đội ngũ Thuê Nhà Trọ sẽ xem xét trong 24-48 giờ và xử lý nếu xác nhận vi phạm."
     },
     {
       "id": "feature_share_listing",
@@ -574,8 +574,8 @@
         "personalized listings",
         "recommended for me"
       ],
-      "question": "Hệ thống gợi ý BĐS trên SmartRent hoạt động như thế nào?",
-      "answer": "SmartRent sử dụng AI để gợi ý BĐS phù hợp: (1) Dựa trên lịch sử tìm kiếm và xem tin của bạn. (2) Phân tích sở thích về vị trí, giá, loại BĐS. (3) Tìm các tin đăng tương tự với những tin bạn đã quan tâm. (4) Ưu tiên tin mới đăng và tin VIP. Bạn càng sử dụng SmartRent nhiều, gợi ý càng chính xác. Bạn cũng có thể hỏi chatbot 'gợi ý cho tôi' để nhận đề xuất."
+      "question": "Hệ thống gợi ý BĐS trên Thuê Nhà Trọ hoạt động như thế nào?",
+      "answer": "Thuê Nhà Trọ sử dụng AI để gợi ý BĐS phù hợp: (1) Dựa trên lịch sử tìm kiếm và xem tin của bạn. (2) Phân tích sở thích về vị trí, giá, loại BĐS. (3) Tìm các tin đăng tương tự với những tin bạn đã quan tâm. (4) Ưu tiên tin mới đăng và tin VIP. Bạn càng sử dụng Thuê Nhà Trọ nhiều, gợi ý càng chính xác. Bạn cũng có thể hỏi chatbot 'gợi ý cho tôi' để nhận đề xuất."
     },
     {
       "id": "feature_verified_listing",
@@ -591,8 +591,8 @@
         "authenticated listing",
         "quality check"
       ],
-      "question": "Tin đăng xác minh trên SmartRent là gì?",
-      "answer": "Tin đăng xác minh là tin đã được SmartRent kiểm tra: (1) AI tự động phân tích ảnh và nội dung tin đăng. (2) Kiểm tra tính nhất quán giữa ảnh, mô tả và giá. (3) Đánh giá chất lượng ảnh và mức độ đầy đủ thông tin. Tin xác minh có nhãn đặc biệt, giúp người thuê an tâm hơn. Chủ nhà có thể tăng khả năng xác minh bằng cách đăng ảnh rõ ràng và mô tả chi tiết."
+      "question": "Tin đăng xác minh trên Thuê Nhà Trọ là gì?",
+      "answer": "Tin đăng xác minh là tin đã được Thuê Nhà Trọ kiểm tra: (1) AI tự động phân tích ảnh và nội dung tin đăng. (2) Kiểm tra tính nhất quán giữa ảnh, mô tả và giá. (3) Đánh giá chất lượng ảnh và mức độ đầy đủ thông tin. Tin xác minh có nhãn đặc biệt, giúp người thuê an tâm hơn. Chủ nhà có thể tăng khả năng xác minh bằng cách đăng ảnh rõ ràng và mô tả chi tiết."
     },
     {
       "id": "feature_listing_expiry",
@@ -651,7 +651,7 @@
         "avoid scam"
       ],
       "question": "Cách nhận biết tin đăng lừa đảo trên các nền tảng BĐS?",
-      "answer": "Dấu hiệu tin đăng lừa đảo: (1) Giá quá rẻ so với thị trường (rẻ hơn 30-50%). (2) Ảnh quá đẹp, có watermark của trang khác hoặc ảnh lấy từ internet. (3) Yêu cầu chuyển cọc trước khi xem nhà. (4) Chủ nhà không cho xem trực tiếp, chỉ trao đổi online. (5) Thông tin mâu thuẫn (ảnh và mô tả không khớp). (6) Số điện thoại liên hệ không hoạt động. Khi nghi ngờ, hãy báo cáo tin đăng trên SmartRent."
+      "answer": "Dấu hiệu tin đăng lừa đảo: (1) Giá quá rẻ so với thị trường (rẻ hơn 30-50%). (2) Ảnh quá đẹp, có watermark của trang khác hoặc ảnh lấy từ internet. (3) Yêu cầu chuyển cọc trước khi xem nhà. (4) Chủ nhà không cho xem trực tiếp, chỉ trao đổi online. (5) Thông tin mâu thuẫn (ảnh và mô tả không khớp). (6) Số điện thoại liên hệ không hoạt động. Khi nghi ngờ, hãy báo cáo tin đăng trên Thuê Nhà Trọ."
     },
     {
       "id": "safety_dispute",
@@ -670,8 +670,8 @@
         "report dispute",
         "support"
       ],
-      "question": "Khi gặp tranh chấp với chủ nhà, SmartRent có hỗ trợ không?",
-      "answer": "SmartRent hỗ trợ giải quyết tranh chấp: (1) Liên hệ bộ phận hỗ trợ qua email hoặc hotline trên trang SmartRent. (2) Cung cấp bằng chứng: hợp đồng, tin nhắn, ảnh chụp. (3) SmartRent sẽ xem xét và hòa giải giữa hai bên. (4) Trong trường hợp nghiêm trọng, SmartRent có thể cấm tài khoản vi phạm. Lưu ý: SmartRent khuyến nghị luôn ký hợp đồng và giao dịch qua nền tảng để có bằng chứng rõ ràng."
+      "question": "Khi gặp tranh chấp với chủ nhà, Thuê Nhà Trọ có hỗ trợ không?",
+      "answer": "Thuê Nhà Trọ hỗ trợ giải quyết tranh chấp: (1) Liên hệ bộ phận hỗ trợ qua email hoặc hotline trên trang Thuê Nhà Trọ. (2) Cung cấp bằng chứng: hợp đồng, tin nhắn, ảnh chụp. (3) Thuê Nhà Trọ sẽ xem xét và hòa giải giữa hai bên. (4) Trong trường hợp nghiêm trọng, Thuê Nhà Trọ có thể cấm tài khoản vi phạm. Lưu ý: Thuê Nhà Trọ khuyến nghị luôn ký hợp đồng và giao dịch qua nền tảng để có bằng chứng rõ ràng."
     },
     {
       "id": "safety_transaction_tips",
@@ -707,8 +707,8 @@
         "bot help",
         "chatbot features"
       ],
-      "question": "Chatbot SmartRent có thể giúp gì?",
-      "answer": "Chatbot AI SmartRent có thể hỗ trợ: (1) Tìm kiếm BĐS theo yêu cầu bằng ngôn ngữ tự nhiên. (2) Xem chi tiết và so sánh các tin đăng. (3) Đánh giá giá thuê có hợp lý không. (4) Gợi ý BĐS phù hợp với sở thích. (5) Trả lời câu hỏi về cách sử dụng SmartRent. (6) Tư vấn kinh nghiệm thuê nhà, pháp lý cơ bản. Bạn chỉ cần gõ yêu cầu bằng tiếng Việt và chatbot sẽ hỗ trợ."
+      "question": "Chatbot Thuê Nhà Trọ có thể giúp gì?",
+      "answer": "Chatbot AI Thuê Nhà Trọ có thể hỗ trợ: (1) Tìm kiếm BĐS theo yêu cầu bằng ngôn ngữ tự nhiên. (2) Xem chi tiết và so sánh các tin đăng. (3) Đánh giá giá thuê có hợp lý không. (4) Gợi ý BĐS phù hợp với sở thích. (5) Trả lời câu hỏi về cách sử dụng Thuê Nhà Trọ. (6) Tư vấn kinh nghiệm thuê nhà, pháp lý cơ bản. Bạn chỉ cần gõ yêu cầu bằng tiếng Việt và chatbot sẽ hỗ trợ."
     }
   ]
 }

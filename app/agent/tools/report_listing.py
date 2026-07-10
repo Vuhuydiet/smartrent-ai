@@ -284,7 +284,7 @@ async def _do_report(
         "message": (
             f"Đã ghi nhận báo cáo tin {listing_id} với lý do: "
             f"{', '.join(str(r) for r in reported_reasons)}. "
-            "Cảm ơn bạn đã giúp cộng đồng SmartRent an toàn hơn."
+            "Cảm ơn bạn đã giúp cộng đồng Thuê Nhà Trọ an toàn hơn."
         ),
     }
 
