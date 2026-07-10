@@ -13,6 +13,7 @@ from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,12 @@ async def _fetch_detail(
             return {"status": "error", "error": data["error"]}
 
         addr = data.get("address") or {}
+        listing_id = str(data.get("listingId", ""))
         listing_for_llm: Dict[str, Any] = {
-            "listingId": str(data.get("listingId", "")),
+            "listingId": listing_id,
+            # Canonical share URL — the LLM must echo this verbatim, never build
+            # its own domain/path.
+            "url": f"{settings.FRONTEND_URL}/listing-detail/{listing_id}",
             "title": data.get("title", ""),
             "description": (data.get("description") or "")[:_MAX_DESCRIPTION_LENGTH],
             "price": data.get("price"),
