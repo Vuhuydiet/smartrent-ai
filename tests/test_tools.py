@@ -86,3 +86,26 @@ def test_zero_results_includes_structured_hint():
     assert result["status"] == "success"
     assert result["count"] == 0
     assert "hint" in result
+
+
+def test_search_result_carries_canonical_share_url():
+    # The compact payload must include a canonical listing URL so the model
+    # shares a real link instead of fabricating a domain/path (the "chia sẻ tin"
+    # bug produced "smartrent.vn/listing/..").
+    from app.core.config import settings
+
+    with patch(
+        "app.core.backend_client.search_listings",
+        AsyncMock(
+            return_value={
+                "listings": [{"listingId": 704422, "title": "Phòng trọ Q1"}],
+                "totalCount": 1,
+            }
+        ),
+    ):
+        result = asyncio.run(_do_search(MagicMock(), {"size": 5, "provinceCode": "79"}))
+
+    assert result["status"] == "success"
+    assert (
+        result["listings"][0]["url"] == f"{settings.FRONTEND_URL}/listing-detail/704422"
+    )

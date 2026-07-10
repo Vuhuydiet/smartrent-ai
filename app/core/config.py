@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # SmartRent Backend Configuration
     SMARTRENT_BACKEND_URL: str = "http://localhost:8080"
     SMARTRENT_AI_URL: str = "http://localhost:8000"
+    # Public frontend site URL — used to build canonical listing links the LLM
+    # can share (e.g. https://thuenhatro.net/listing-detail/{id}). The model must
+    # echo the `url` field from tool payloads, never fabricate a domain/path.
+    FRONTEND_URL: str = "https://thuenhatro.net"
     # Shared secret the Spring backend sends as X-Internal-Api-Key when proxying
     # chat. Empty = open (local dev); set in deployed envs to reject public callers.
     INTERNAL_AI_API_KEY: str = ""

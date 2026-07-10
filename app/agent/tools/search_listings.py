@@ -21,6 +21,7 @@ from pydantic import Field
 
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +60,12 @@ def _has_search_criteria(params: Dict[str, Any]) -> bool:
 def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
     """Extract only the fields the LLM needs, handling nested address."""
     addr = item.get("address") or {}
+    listing_id = str(item.get("listingId", ""))
     summary: Dict[str, Any] = {
-        "listingId": str(item.get("listingId", "")),
+        "listingId": listing_id,
+        # Canonical share URL — the LLM must echo this verbatim, never build its
+        # own domain/path.
+        "url": f"{settings.FRONTEND_URL}/listing-detail/{listing_id}",
         "title": item.get("title", ""),
         "price": item.get("price"),
         "priceUnit": item.get("priceUnit", ""),

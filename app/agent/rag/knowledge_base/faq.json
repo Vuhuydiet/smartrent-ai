@@ -557,7 +557,7 @@
         "share with friend"
       ],
       "question": "Cách chia sẻ tin đăng cho bạn bè?",
-      "answer": "Để chia sẻ tin đăng: (1) Mở tin đăng muốn chia sẻ. (2) Nhấn nút 'Chia sẻ'. (3) Chọn kênh: sao chép link, chia sẻ qua Zalo, Facebook, hoặc tin nhắn. Mỗi tin đăng đều có link riêng, bạn có thể sao chép và gửi trực tiếp cho bất kỳ ai."
+      "answer": "Để chia sẻ tin đăng: (1) Mở tin đăng muốn chia sẻ. (2) Nhấn nút 'Chia sẻ' trên trang tin. (3) Chọn kênh: sao chép link, chia sẻ qua Zalo, Facebook, hoặc tin nhắn. Link chia sẻ được lấy trực tiếp từ nút 'Chia sẻ' hoặc thanh địa chỉ của trang tin đó."
     },
     {
       "id": "feature_recommendations",
