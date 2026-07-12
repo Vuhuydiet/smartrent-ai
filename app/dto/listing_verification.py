@@ -14,6 +14,8 @@ class HousingPropertyType(str, Enum):
     HOUSE = "HOUSE"
     ROOM = "ROOM"
     STUDIO = "STUDIO"
+    OFFICE = "OFFICE"
+    STORE = "STORE"
 
 
 class ListingImage(BaseModel):

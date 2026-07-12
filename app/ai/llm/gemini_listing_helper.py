@@ -109,11 +109,28 @@ class GeminiListingVerificationHelper:
         return """
 You are an AI expert in rental property listing verification. Analyze the provided content (text and images if available) and evaluate it across three main categories:
 
+### LANGUAGE REQUIREMENT:
+- ALL descriptive text fields in your response (issues, message, suggestions, major_concerns, recommendations, etc.) MUST be written in Vietnamese.
+- Only fixed enum values (severity, priority) remain in English.
+
 1. **IMAGE/MEDIA VALIDATION** (if images provided):
    - Are images clear, well-lit, and high quality?
    - Do images show actual property spaces (not stock photos)?
    - Are images appropriate for rental listings?
    - Do images match the described property?
+
+   - **INVALID IMAGE TYPES (CRITICAL - must flag and reduce quality_score)**:
+     - **Anime / Manga / Cartoon characters**: Any image depicting a 2D or 3D animated fictional character, anime girl/boy, manga-style illustration, cartoon avatar, or any non-photographic character art. Even if other images are real room photos, this MUST be flagged.
+     - **Profile pictures / Avatars**: Any image that appears to be a personal profile photo, social media avatar, or portrait of a person (real or fictional) rather than a property photo.
+     - **Completely unrelated images**: Screenshots, memes, logos, QR codes, maps, or any image clearly not showing the interior or exterior of a property.
+
+   - **SCORING FOR MIXED IMAGES**: If a listing has N total images and K of them are invalid (anime, avatar, unrelated):
+     - valid_ratio = (N - K) / N
+     - quality_score = max(0.1, valid_ratio * 0.9)
+     - If valid_ratio < 0.6: is_valid = false, flag in major_concerns
+     - Always list each invalid image in issues (e.g. "Ảnh 1: Hình nhân vật anime/avatar, không phải ảnh bất động sản thực tế")
+
+   - **TOXIC & INAPPROPRIATE LANGUAGE (REJECT IMMEDIATELY)**: If the title or description contains vulgar/profane/offensive Vietnamese words (e.g., "đm", "vcl", "má nó", "chửi bậy"), set overall is_valid: false, overall_score: 0.1, and list it in violations.
 
 2. **CONTENT RELEVANCE**:
    - Is this clearly a rental property listing?
@@ -132,33 +149,33 @@ Return a JSON response with this exact structure (keep messages concise, max 100
     "image_analysis": {
         "is_valid": boolean,
         "quality_score": float (0-1),
-        "issues": ["max 3 brief issues"],
+        "issues": ["max 3 brief issues in Vietnamese"],
         "total_images_analyzed": integer
     },
     "content_analysis": {
         "is_rental_related": boolean,
         "category_match": boolean,
         "content_score": float (0-1),
-        "issues": ["max 2 brief issues"],
-        "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "brief message"}]
+        "issues": ["max 2 brief issues in Vietnamese"],
+        "violations": [{"category": "string", "severity": "low|medium|high|critical", "message": "brief message in Vietnamese"}]
     },
     "completeness_analysis": {
         "is_complete": boolean,
         "completeness_score": float (0-1),
         "missing_fields": ["max 3 field names"],
-        "quality_issues": ["max 2 brief issues"],
-        "suggestions": [{"category": "string", "message": "brief suggestion", "priority": "low|medium|high"}]
+        "quality_issues": ["max 2 brief issues in Vietnamese"],
+        "suggestions": [{"category": "string", "message": "brief suggestion in Vietnamese", "priority": "low|medium|high"}]
     },
     "overall_assessment": {
         "is_valid": boolean,
         "overall_score": float (0-1),
         "confidence": float (0-1),
-        "major_concerns": ["max 2 primary issues"],
-        "recommendations": ["max 2 brief recommendations"]
+        "major_concerns": ["max 2 primary issues in Vietnamese"],
+        "recommendations": ["max 2 brief recommendations in Vietnamese"]
     }
 }
 
-Be thorough but CONCISE. Keep all text fields short and focused.
+Be thorough but CONCISE. Keep all text fields short and focused. All descriptive text MUST be in Vietnamese.
 """
 
     # ------------------------------------------------------------------

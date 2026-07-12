@@ -500,10 +500,13 @@ class LLMGateway:
 
         Uses Vertex AI native async (generate_content_async).
         """
-        from vertexai.generative_models import (  # type: ignore[import]
-            GenerationConfig,
-            GenerativeModel,
+        from io import BytesIO
+
+        from vertexai.generative_models import GenerationConfig, GenerativeModel
+        from vertexai.generative_models import (
+            Image as VertexImage,  # type: ignore[import]
         )
+        from vertexai.generative_models import Part
 
         from app.core.config import settings
 
@@ -515,7 +518,23 @@ class LLMGateway:
         if generation_config:
             gen_kwargs["generation_config"] = GenerationConfig(**generation_config)
 
-        content_parts: List[Any] = [prompt] + images
+        # Convert PIL Image objects → Vertex AI Part objects
+        def _pil_to_part(img: Any) -> Any:
+            try:
+                from PIL import Image as PILImage
+
+                if isinstance(img, PILImage.Image):
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    buf = BytesIO()
+                    img.save(buf, format="JPEG")
+                    return Part.from_image(VertexImage.from_bytes(buf.getvalue()))
+            except Exception as conv_err:
+                logger.warning("Could not convert image to Vertex Part: %s", conv_err)
+            return img  # fallback: pass as-is and let Vertex SDK handle it
+
+        image_parts = [_pil_to_part(img) for img in images]
+        content_parts: List[Any] = [prompt] + image_parts
 
         generation = active_trace.generation(
             name=span_name,
