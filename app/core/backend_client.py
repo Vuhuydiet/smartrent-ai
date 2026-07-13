@@ -8,7 +8,8 @@ All backend API calls go through this module so that:
 """
 
 import logging
-from typing import Any, Dict, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, Optional
 
 import httpx
 
@@ -18,6 +19,46 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = 30.0
 
+# Reuse a single pooled AsyncClient across all backend calls. The chat agent's
+# multi-turn tool loop can fire many backend requests within one conversation
+# turn; a fresh `httpx.AsyncClient` per call built a new connection pool and
+# paid TCP setup every time. A shared client keeps connections alive between
+# tool calls, cutting mid-stream stalls.
+_LIMITS = httpx.Limits(
+    max_keepalive_connections=20,
+    max_connections=100,
+    keepalive_expiry=30.0,
+)
+
+_shared_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_shared_client() -> httpx.AsyncClient:
+    """Return a lazily-created, process-wide pooled AsyncClient."""
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(timeout=_TIMEOUT, limits=_LIMITS)
+    return _shared_client
+
+
+@asynccontextmanager
+async def _backend_client() -> AsyncIterator[httpx.AsyncClient]:
+    """Borrow the shared pooled client without closing it on exit.
+
+    Drop-in for `httpx.AsyncClient(...)` at the call sites: it preserves the
+    existing `async with ... as client:` shape but hands back the long-lived
+    shared client instead of creating and tearing one down per request.
+    """
+    yield _get_shared_client()
+
+
+async def aclose_shared_client() -> None:
+    """Close the shared client. Wired into the app's shutdown/lifespan."""
+    global _shared_client
+    if _shared_client is not None and not _shared_client.is_closed:
+        await _shared_client.aclose()
+        _shared_client = None
+
 
 async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -25,7 +66,7 @@ async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns the raw `data` payload on success, or an error dict.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.post(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
             json=params,
@@ -54,7 +95,7 @@ async def get_listing(listing_id: str) -> Dict[str, Any]:
 
     Returns the raw `data` payload on success, or an error dict.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}",
         )
@@ -84,7 +125,7 @@ async def get_similar_listings(
     Returns similar listings. Auth optional (provides personalization if present).
     """
     headers = _auth_headers(token)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/recommendations/similar/{listing_id}",
             params={"topN": top_n},
@@ -111,7 +152,7 @@ async def get_personalized_recommendations(
     Returns personalized feed based on user's browsing history. Requires auth.
     """
     headers = _auth_headers(token)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/recommendations/personalized",
             params={"topN": top_n},
@@ -140,7 +181,7 @@ async def get_user_profile(token: str) -> Dict[str, Any]:
 
     Returns authenticated user's profile.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/users",
             headers=_auth_headers(token),
@@ -162,7 +203,7 @@ async def get_saved_listings(
 
     Returns paginated saved listings for authenticated user.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings/my-saved",
             params={"page": page, "size": size},
@@ -183,7 +224,7 @@ async def save_listing(listing_id: Any, token: str) -> Dict[str, Any]:
 
     Save a listing to user's favorites.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.post(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings",
             json={"listingId": listing_id},
@@ -204,7 +245,7 @@ async def unsave_listing(listing_id: Any, token: str) -> Dict[str, Any]:
 
     Remove a listing from user's favorites.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.delete(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/saved-listings/{listing_id}",
             headers=_auth_headers(token),
@@ -224,7 +265,7 @@ async def get_user_membership(token: str) -> Dict[str, Any]:
 
     Returns current active membership/subscription.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/memberships/my-membership",
             headers=_auth_headers(token),
@@ -249,7 +290,7 @@ async def get_pricing_history(listing_id: int) -> Dict[str, Any]:
 
     Returns full price change history for a listing.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/pricing-history",
         )
@@ -268,7 +309,7 @@ async def get_price_statistics(listing_id: int) -> Dict[str, Any]:
 
     Returns min/max/avg price and change counts for a listing.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/price-statistics",
         )
@@ -289,7 +330,7 @@ async def get_recent_price_changes(
 
     Returns listing IDs with recent price changes.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/recent-price-changes",
             params={"daysBack": days_back, "page": page, "size": size},
@@ -322,7 +363,7 @@ async def get_my_listings(
     body.setdefault("page", 1)
     body.setdefault("size", 20)
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.post(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/my-listings",
             json=body,
@@ -354,7 +395,7 @@ async def update_listing_price(
     if effective_at:
         body["effectiveAt"] = effective_at
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.put(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/price",
             json=body,
@@ -386,7 +427,7 @@ async def search_new_address(
     Used by the address_translator tool to find new-structure codes for a
     district/ward name the user mentions.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/addresses/search-new-address",
             params={"keyword": keyword, "page": page, "limit": limit},
@@ -411,7 +452,7 @@ async def list_notifications(
     page: int = 1, size: int = 20, token: Optional[str] = None
 ) -> Dict[str, Any]:
     """GET /v1/notifications — paginated. Auth required."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/notifications",
             params={"page": page, "size": size},
@@ -426,7 +467,7 @@ async def list_notifications(
 
 async def mark_all_notifications_read(token: Optional[str] = None) -> Dict[str, Any]:
     """PATCH /v1/notifications/read-all. Auth required."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.patch(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/notifications/read-all",
             headers=_auth_headers(token),
@@ -445,7 +486,7 @@ async def mark_all_notifications_read(token: Optional[str] = None) -> Dict[str, 
 
 async def get_report_reasons() -> Dict[str, Any]:
     """GET /v1/listings/reports/reasons — public list of report categories."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/reports/reasons",
         )
@@ -467,7 +508,7 @@ async def submit_listing_report(
     Body shape per backend: reasonIds[], otherFeedback, reporterName,
     reporterPhone, reporterEmail. Auth optional (anonymous reports allowed).
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with _backend_client() as client:
         response = await client.post(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}/reports",
             json=body,
