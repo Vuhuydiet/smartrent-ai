@@ -152,12 +152,20 @@ async def chat_stream(
                 # Yield to the event loop so uvicorn can drain the
                 # ASGI send queue to the socket between events.
                 await asyncio.sleep(0)
-                logger.info(
-                    "SSE [chat-stream] yielded event #%d (%s) at +%.0fms",
-                    event_count,
-                    name,
-                    (time.perf_counter() - gen_start) * 1000,
-                )
+                # Log only the first event's latency (a time-to-first-token
+                # proxy). Logging every event put synchronous stdout I/O on
+                # the per-token hot path, adding jitter to the token stream.
+                if event_count == 1:
+                    logger.info(
+                        "SSE [chat-stream] first event (%s) at +%.0fms",
+                        name,
+                        (time.perf_counter() - gen_start) * 1000,
+                    )
+            logger.info(
+                "SSE [chat-stream] completed: %d events in %.0fms",
+                event_count,
+                (time.perf_counter() - gen_start) * 1000,
+            )
         except asyncio.CancelledError:
             logger.info("Client disconnected from /chat/stream")
             raise

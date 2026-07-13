@@ -45,6 +45,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning("Failed to flush Langfuse on shutdown: %s", e)
 
+    try:
+        from app.core.backend_client import aclose_shared_client
+
+        await aclose_shared_client()
+    except Exception as e:
+        logger.warning("Failed to close backend HTTP client on shutdown: %s", e)
+
 
 app = FastAPI(
     title="SmartRent AI - House Pricing API",
