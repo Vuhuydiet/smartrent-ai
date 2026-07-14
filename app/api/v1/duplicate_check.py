@@ -29,6 +29,9 @@ class DuplicateCheckRequest(BaseModel):
     districtId: Optional[int] = None
     address: Optional[str] = None
     imageUrls: Optional[List[str]] = None
+    # ID of the listing being checked — used to exclude it from its own
+    # candidate set (defensive against self-match on re-moderation).
+    listingId: Optional[Any] = None
 
 
 class SuspiciousMatch(BaseModel):
@@ -39,6 +42,7 @@ class SuspiciousMatch(BaseModel):
     descriptionSimilarity: float = 0
     addressSimilarity: float = 0
     priceSimilarity: float = 0
+    imageSimilarity: float = 0
     llmScore: Optional[float] = None
     llmReason: Optional[str] = None
 
@@ -93,6 +97,7 @@ async def check_duplicate(request: DuplicateCheckRequest) -> DuplicateCheckRespo
             "districtId": request.districtId,
             "address": request.address or "",
             "imageUrls": request.imageUrls or [],
+            "listingId": request.listingId,
         }
 
         result = await service.check_duplicate(listing_data)
