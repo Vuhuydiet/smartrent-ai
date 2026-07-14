@@ -106,8 +106,12 @@ def build_suggestions(
         out.append({"label": "Gợi ý thêm", "query": "gợi ý thêm cho tôi"})
     elif last in ("get_listing_detail", "compare_listings"):
         out = list(_DETAIL)
+        if not has_auth:
+            # "Lưu tin này" requires login — drop it for guests.
+            out = [chip for chip in out if chip["query"] != "lưu tin này"]
     elif last == "my_listings_status":
-        out = list(_OWNER)
+        # Owner dashboard actions are auth-only.
+        out = list(_OWNER) if has_auth else []
     elif not tools_used and n == 0:
         out = list(_STARTER)
     else:
