@@ -211,6 +211,36 @@ class ListingVerificationResponse(BaseModel):
     model_used: str = Field(default_factory=lambda: settings.LLM_VISION_MODEL)
     processing_time_seconds: Optional[float] = None
 
+    # --- Degradation signal -------------------------------------------------
+    # When the LLM call fails we still return 200 with a response built from
+    # basic field-presence rules, so a listing is never blocked. That response is
+    # otherwise INDISTINGUISHABLE from a real analysis: it carries a score, and
+    # claims things like is_rental_related=true that nothing actually verified.
+    # These fields are how a caller tells the two apart — never show the scores
+    # of a response with ai_available=false as though the AI produced them.
+    ai_available: bool = Field(
+        default=True,
+        description=(
+            "False when the LLM call failed and the scores below come from basic "
+            "field-presence rules rather than an actual AI analysis."
+        ),
+    )
+    error_code: Optional[str] = Field(
+        default=None,
+        description=(
+            "Machine-readable reason the AI did not run: LLM_QUOTA_EXCEEDED, "
+            "LLM_AUTH, LLM_NOT_CONFIGURED, LLM_MODEL_NOT_FOUND, LLM_TIMEOUT, "
+            "LLM_ERROR. Null on a successful analysis."
+        ),
+    )
+    error_detail: Optional[str] = Field(
+        default=None,
+        description=(
+            "The underlying provider error, kept verbatim so a failure can be "
+            "diagnosed from the response instead of only from server logs."
+        ),
+    )
+
 
 class ListingVerificationError(BaseModel):
     """Error response model"""

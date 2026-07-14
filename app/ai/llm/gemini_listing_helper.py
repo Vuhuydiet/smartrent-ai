@@ -618,12 +618,48 @@ Return a JSON response with this exact structure (keep messages concise, max 100
         return data
 
     @staticmethod
-    def _handle_generation_error(error_msg: str) -> Dict[str, Any]:
-        """Map errors to a structured payload the service layer understands."""
-        logger.error("Error in analysis: %s", error_msg)
+    def _classify_error(error_msg: str) -> str:
+        """
+        Map a provider error to a stable code.
 
-        if "quota exceeded" in error_msg.lower() or "429" in error_msg:
-            return {"error": "quota exceeded", "analysis_completed": False}
-        if "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-            return {"error": "invalid api key", "analysis_completed": False}
-        return {"error": error_msg, "analysis_completed": False}
+        Matching is done on a normalised string: the old check looked for the
+        literal ``"api key"`` (with a space), so the one error we raise ourselves —
+        "…no credentials configured. Set GCP_CREDENTIALS_BASE64 … or GEMINI_API_KEY"
+        — never matched it and was reported as a generic, unactionable failure.
+        Underscores are folded to spaces so both spellings hit.
+        """
+        msg = error_msg.lower().replace("_", " ")
+
+        if "quota" in msg or "429" in msg or "rate limit" in msg:
+            return "LLM_QUOTA_EXCEEDED"
+        if "no credentials configured" in msg or "not configured" in msg:
+            return "LLM_NOT_CONFIGURED"
+        if (
+            "api key" in msg
+            or "unauthorized" in msg
+            or "permission denied" in msg
+            or "401" in msg
+            or "403" in msg
+            or "credential" in msg
+        ):
+            return "LLM_AUTH"
+        if "not found" in msg or "404" in msg or "does not exist" in msg:
+            return "LLM_MODEL_NOT_FOUND"
+        if "timeout" in msg or "timed out" in msg or "deadline" in msg:
+            return "LLM_TIMEOUT"
+        return "LLM_ERROR"
+
+    @classmethod
+    def _handle_generation_error(cls, error_msg: str) -> Dict[str, Any]:
+        """Map errors to a structured payload the service layer understands."""
+        code = cls._classify_error(error_msg)
+        logger.error("Error in analysis [%s]: %s", code, error_msg)
+
+        # Keep the provider's message verbatim. Replacing it with a canned string
+        # ("quota exceeded") threw away the only detail that makes a failure
+        # diagnosable — the code above is what callers should branch on.
+        return {
+            "error": error_msg,
+            "error_code": code,
+            "analysis_completed": False,
+        }
