@@ -40,6 +40,17 @@ def test_owner_context():
     assert any("hết hạn" in s["label"].lower() for s in out)
 
 
+def test_detail_guest_hides_save_chip():
+    out = build_suggestions(["get_listing_detail"], _listings(1), has_auth=False)
+    labels = [s["label"] for s in out]
+    assert "Lưu tin này" not in labels
+    assert any("Xung quanh" in lbl for lbl in labels)
+
+
+def test_owner_context_empty_for_guest():
+    assert build_suggestions(["my_listings_status"], [], has_auth=False) == []
+
+
 def test_starter_when_no_tool_and_no_listings():
     out = build_suggestions([], [], has_auth=False)
     assert len(out) == 3

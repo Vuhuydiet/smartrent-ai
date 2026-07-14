@@ -19,9 +19,10 @@ Flow per request
 
 import asyncio
 import functools
+import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Dict, List, Optional, cast
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, cast
 
 from agents import Agent, Runner, RunResultStreaming  # type: ignore[import]
 from agents.exceptions import MaxTurnsExceeded  # type: ignore[import]
@@ -258,6 +259,105 @@ KHÔNG CÓ KẾT QUẢ — QUY TRÌNH 2 BƯỚC:
 """
 
 
+# ---------------------------------------------------------------------------
+# Grounded follow-up suggestions
+# ---------------------------------------------------------------------------
+#
+# The agent appends a machine-readable FOLLOWUPS block at the very end of its
+# answer (see _FOLLOWUPS_INSTRUCTION). run_stream strips it from the visible
+# text and re-emits it as a `suggestions` event so the chips are grounded in
+# what was actually said. If the model omits or malforms the block we fall back
+# to the rule-based chips in app.agent.suggestions.
+
+FOLLOWUPS_MARKER = "[[FOLLOWUPS]]"
+_MAX_FOLLOWUPS = 4
+
+_FOLLOWUPS_INSTRUCTION = """\
+GỢI Ý CÂU HỎI TIẾP THEO (ẩn với người dùng — hệ thống tự xử lý):
+- SAU KHI đã trả lời xong hoàn toàn, in ở CUỐI CÙNG đúng một khối trên MỘT dòng:
+  [[FOLLOWUPS]][{"label":"...","query":"..."}]
+- Tối đa 4 gợi ý, tiếng Việt, BÁM SÁT nội dung vừa trao đổi (KHÔNG chung chung).
+  * label = chữ trên nút, NGẮN (≤ 24 ký tự).
+  * query = câu người dùng sẽ gửi khi bấm nút (tự nhiên, đủ ý, bạn trả lời được).
+- Khối [[FOLLOWUPS]] PHẢI là JSON hợp lệ và là thứ CUỐI CÙNG trong câu trả lời,
+  KHÔNG có chữ nào sau nó. Hệ thống cắt bỏ khối này khỏi phần hiển thị — người dùng
+  KHÔNG bao giờ thấy "[[FOLLOWUPS]]", nên TUYỆT ĐỐI đừng nhắc tới nó trong lời đáp.
+- Nếu không có gợi ý phù hợp thì BỎ khối này (đừng in [[FOLLOWUPS]])."""
+
+
+class _FollowupStreamGate:
+    """Forward streamed answer text while withholding everything from
+    FOLLOWUPS_MARKER onward, so the machine-readable block never reaches the
+    client. A delta may split the marker across chunks, so we hold back a short
+    suffix until we know it is not the start of the marker."""
+
+    def __init__(self) -> None:
+        self._hold = len(FOLLOWUPS_MARKER) - 1
+        self._pending = ""
+        self._sealed = False
+
+    def feed(self, delta: str) -> str:
+        """Return the portion of `delta` that is safe to stream to the client."""
+        if self._sealed:
+            return ""
+        self._pending += delta
+        idx = self._pending.find(FOLLOWUPS_MARKER)
+        if idx != -1:
+            visible = self._pending[:idx]
+            self._pending = ""
+            self._sealed = True
+            return visible
+        if len(self._pending) > self._hold:
+            visible = self._pending[: -self._hold]
+            self._pending = self._pending[-self._hold :]
+            return visible
+        return ""
+
+    def flush(self) -> str:
+        """Release any text held back (call at a tool boundary or end-of-stream)."""
+        if self._sealed:
+            return ""
+        visible = self._pending
+        self._pending = ""
+        return visible
+
+
+def _parse_followups(raw: str) -> List[Dict[str, str]]:
+    """Parse the JSON array after FOLLOWUPS_MARKER into chip dicts (best-effort)."""
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start == -1 or end == -1 or end < start:
+        return []
+    try:
+        items = json.loads(raw[start : end + 1])
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(items, list):
+        return []
+    out: List[Dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label", "")).strip()
+        query = str(item.get("query", "")).strip()
+        if label and query:
+            out.append({"label": label[:60], "query": query[:200]})
+        if len(out) >= _MAX_FOLLOWUPS:
+            break
+    return out
+
+
+def _split_followups(text: str) -> Tuple[str, List[Dict[str, str]]]:
+    """Split answer text into (visible_text, followup_chips).
+
+    followup_chips is [] when no valid FOLLOWUPS block is present."""
+    idx = text.rfind(FOLLOWUPS_MARKER)
+    if idx == -1:
+        return text, []
+    visible = text[:idx].rstrip()
+    return visible, _parse_followups(text[idx + len(FOLLOWUPS_MARKER) :])
+
+
 @functools.lru_cache(maxsize=8)
 def _build_static_instructions(
     base_prompt: str,
@@ -276,6 +376,7 @@ def _build_static_instructions(
     parts = [resolved]
     if static_prefix:
         parts.append(static_prefix)
+    parts.append(_FOLLOWUPS_INSTRUCTION)
     return "\n\n".join(parts)
 
 
@@ -363,8 +464,6 @@ def _parse_tool_arguments(raw: Any) -> Dict[str, Any]:
         parsed = args_raw
     elif isinstance(args_raw, str):
         try:
-            import json
-
             parsed = json.loads(args_raw)
         except Exception:  # noqa: BLE001
             return {}
@@ -657,11 +756,10 @@ class AgentOrchestrator:
                 )
 
             # ── Extract output ──────────────────────────────────────
-            final_text = (
-                str(result.final_output).strip()
-                if result.final_output
-                else "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
-            )
+            raw_final = str(result.final_output).strip() if result.final_output else ""
+            final_text, _ = _split_followups(raw_final)
+            if not final_text:
+                final_text = "Tôi đã xử lý yêu cầu của bạn. Hãy xem kết quả bên dưới."
             tools_used = _tool_names_used(result.new_items)
             listings_payload = self._build_listings_payload(tool_ctx.collected_listings)
 
@@ -779,6 +877,7 @@ class AgentOrchestrator:
                 max_turns=MAX_AGENT_TURNS,
             )
 
+            gate = _FollowupStreamGate()
             async for event in stream.stream_events():
                 etype = getattr(event, "type", None)
 
@@ -788,10 +887,19 @@ class AgentOrchestrator:
                         delta = getattr(data, "delta", "")
                         if delta:
                             any_text_streamed = True
-                            yield {"event": "text", "data": {"delta": delta}}
+                            visible = gate.feed(delta)
+                            if visible:
+                                yield {"event": "text", "data": {"delta": visible}}
                     continue
 
                 if etype == "run_item_stream_event":
+                    # A tool boundary ends the current text segment — release any
+                    # tail the gate held back. The FOLLOWUPS block only appears at
+                    # the very end of the final answer, never before a tool call,
+                    # so flushing here can't leak it.
+                    held = gate.flush()
+                    if held:
+                        yield {"event": "text", "data": {"delta": held}}
                     item = getattr(event, "item", None)
                     item_type = getattr(item, "type", None)
                     raw = getattr(item, "raw_item", None)
@@ -835,12 +943,20 @@ class AgentOrchestrator:
 
                 # AgentUpdatedStreamEvent / others — ignored
 
-            # Stream complete — close generation span
-            final_text = str(stream.final_output).strip() if stream.final_output else ""
-            llm_span.end(output=final_text[:2000] if final_text else "(tool-only)")
+            # Stream complete — flush any tail the gate held back, then split the
+            # final output into visible text + grounded follow-up chips.
+            tail = gate.flush()
+            if tail:
+                yield {"event": "text", "data": {"delta": tail}}
 
-            if not any_text_streamed and final_text:
-                yield {"event": "text", "data": {"delta": final_text}}
+            raw_final = str(stream.final_output).strip() if stream.final_output else ""
+            visible_final, suggestions = _split_followups(raw_final)
+            llm_span.end(
+                output=visible_final[:2000] if visible_final else "(tool-only)"
+            )
+
+            if not any_text_streamed and visible_final:
+                yield {"event": "text", "data": {"delta": visible_final}}
             elif not any_text_streamed:
                 yield {
                     "event": "text",
@@ -853,14 +969,17 @@ class AgentOrchestrator:
             if listings_payload:
                 yield {"event": "listings", "data": listings_payload}
 
-            try:
-                suggestions = build_suggestions(
-                    tools_used,
-                    tool_ctx.collected_listings,
-                    bool(auth_token),
-                )
-            except Exception:  # noqa: BLE001 — never let suggestions break the stream
-                suggestions = []
+            # Prefer the agent's grounded followups; fall back to rule-based chips
+            # when the model omitted or malformed the block.
+            if not suggestions:
+                try:
+                    suggestions = build_suggestions(
+                        tools_used,
+                        tool_ctx.collected_listings,
+                        bool(auth_token),
+                    )
+                except Exception:  # noqa: BLE001 — never let suggestions break stream
+                    suggestions = []
             if suggestions:
                 yield {"event": "suggestions", "data": {"items": suggestions}}
 
