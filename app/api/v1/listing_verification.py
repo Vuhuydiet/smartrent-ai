@@ -109,35 +109,61 @@ async def verify_listing(
     summary="Health Check",
     description="Check if the listing verification service is operational",
 )
-async def health_check() -> Dict[str, Any]:
+async def health_check(probe: bool = False) -> Dict[str, Any]:
     """
-    Health check endpoint for the listing verification service.
+    Health check for the listing verification service.
 
-    Returns:
-        dict: Service status and version information
+    By default this verifies the LLM is actually *configured* — a cheap,
+    no-network check that constructs the model and surfaces the "no credentials
+    configured" case that previously stayed hidden until every analysis silently
+    fell back to basic rules while this endpoint still reported "healthy".
+
+    Pass ``?probe=true`` for a real round-trip to the LLM (a tiny completion) when
+    you need to confirm the provider is reachable and authenticated — kept opt-in
+    because it costs a token and adds latency, so it must not run on every poll.
     """
+    base = {
+        "service": "listing_verification",
+        "version": "1.0.0",
+        "ai_model": settings.LLM_VISION_MODEL,
+        "capabilities": [
+            "image_analysis",
+            "content_verification",
+            "completeness_check",
+            "multimodal_analysis",
+        ],
+    }
+
+    # 1. Configuration check (no network). Catches the missing-credential case.
     try:
-        # Basic service health check
-        return {
-            "status": "healthy",
-            "service": "listing_verification",
-            "version": "1.0.0",
-            "ai_model": settings.LLM_VISION_MODEL,
-            "capabilities": [
-                "image_analysis",
-                "content_verification",
-                "completeness_check",
-                "multimodal_analysis",
-            ],
-        }
+        from app.ai.llm.agent_factory import make_model
 
+        make_model(settings.LLM_VISION_MODEL)
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
+        logger.error("Health check: LLM not configured: %s", e)
         return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "unhealthy",
-                "error": str(e),
-                "service": "listing_verification",
-            },
+            content={**base, "status": "unhealthy", "ai_available": False,
+                     "error_code": "LLM_NOT_CONFIGURED", "error": str(e)},
+        )
+
+    if not probe:
+        return {**base, "status": "healthy", "ai_available": True}
+
+    # 2. Live probe (opt-in): actually call the LLM.
+    try:
+        service = ListingVerificationService()
+        result = await service.gemini_helper.analyze_text_content(
+            text_content="ping",
+            analysis_prompt="Reply with a JSON object: {\"ok\": true}",
+        )
+        if isinstance(result, dict) and result.get("error"):
+            raise RuntimeError(result["error"])
+        return {**base, "status": "healthy", "ai_available": True, "probed": True}
+    except Exception as e:
+        logger.error("Health check: LLM probe failed: %s", e)
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={**base, "status": "unhealthy", "ai_available": False,
+                     "error_code": "LLM_ERROR", "error": str(e), "probed": True},
         )

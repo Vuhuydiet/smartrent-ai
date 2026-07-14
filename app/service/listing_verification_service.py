@@ -10,6 +10,7 @@ from app.dto.listing_verification import (
     ListingVerificationRequest,
     ListingVerificationResponse,
     Suggestion,
+    VerificationSuggestedStatus,
     VideoValidation,
     Violation,
 )
@@ -123,7 +124,9 @@ class ListingVerificationService:
         # Handle error cases
         if "error" in analysis_result:
             return self._create_fallback_response(
-                listing_data, analysis_result["error"]
+                listing_data,
+                analysis_result["error"],
+                error_code=analysis_result.get("error_code", "LLM_ERROR"),
             )
 
         # Extract analysis components
@@ -254,20 +257,33 @@ class ListingVerificationService:
         )
 
     def _create_fallback_response(
-        self, listing_data: ListingVerificationRequest, error_msg: str
+        self,
+        listing_data: ListingVerificationRequest,
+        error_msg: str,
+        error_code: str = "LLM_ERROR",
     ) -> ListingVerificationResponse:
-        """Create a fallback response when AI analysis fails"""
+        """Create a fallback response when AI analysis fails.
 
-        logger.warning(f"Creating fallback response due to error: {error_msg}")
+        The returned scores are NOT an AI verdict — they come from basic
+        field-presence rules. ``ai_available=False`` / ``error_code`` on the
+        response are set so callers can tell this apart from a real analysis and
+        route the listing to a human instead of trusting the numbers.
+        """
 
-        # Clean up error message for user-friendly display
-        if "quota exceeded" in error_msg.lower() or "429" in error_msg:
+        logger.warning(
+            "Creating fallback response [%s] due to error: %s", error_code, error_msg
+        )
+
+        # User-facing summary line, keyed off the stable code (not fragile
+        # substring matching on the raw message).
+        if error_code == "LLM_QUOTA_EXCEEDED":
             clean_error_msg = "AI service temporarily unavailable due to quota limits. Using basic validation."
-        elif (
-            "invalid api key" in error_msg.lower()
-            or "unauthorized" in error_msg.lower()
-        ):
+        elif error_code in ("LLM_AUTH", "LLM_NOT_CONFIGURED"):
             clean_error_msg = "AI service configuration issue. Using basic validation."
+        elif error_code == "LLM_MODEL_NOT_FOUND":
+            clean_error_msg = "AI model unavailable. Using basic validation."
+        elif error_code == "LLM_TIMEOUT":
+            clean_error_msg = "AI analysis timed out. Using basic validation rules."
         else:
             clean_error_msg = "AI analysis unavailable. Using basic validation rules."
 
@@ -342,4 +358,10 @@ class ListingVerificationService:
             ],
             reason=fallback_reason,
             violation_codes=[],
+            # Force manual review and mark the whole response as non-AI so callers
+            # never treat these placeholder scores as a real verdict.
+            suggested_status=VerificationSuggestedStatus.NEEDS_REVIEW,
+            ai_available=False,
+            error_code=error_code,
+            error_detail=error_msg,
         )
