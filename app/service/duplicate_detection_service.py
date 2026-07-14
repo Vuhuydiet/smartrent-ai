@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set, cast
 
 from agents import Agent, Runner  # type: ignore[import]
 
+from app.ai.cpu_bound import run_cpu_bound
 from app.ai.image_similarity import best_image_similarity, hash_image_set
 from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
@@ -126,7 +127,9 @@ class DuplicateDetectionService:
         logger.info("Step 1: %d candidates retrieved.", len(candidates))
 
         # ── Step 2: Fast similarity scoring ───────────────────────────
-        scored = self._score_candidates(listing, candidates)
+        # TF-IDF is CPU-bound; run it off the loop under the shared cap so a
+        # batch burst can't pin the single worker's CPU.
+        scored = await run_cpu_bound(self._score_candidates, listing, candidates)
         suspicious = [s for s in scored if s["score"] >= _SUSPICIOUS_THRESHOLD]
 
         if not suspicious:

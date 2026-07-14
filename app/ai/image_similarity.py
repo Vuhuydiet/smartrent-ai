@@ -18,6 +18,8 @@ from typing import Any, List, Optional
 
 import httpx
 
+from app.ai.cpu_bound import run_cpu_bound
+
 logger = logging.getLogger(__name__)
 
 # Bounds — keep per-check image work small (Step 3 runs on ≤ _MAX_LLM_CHECKS
@@ -51,7 +53,8 @@ async def fetch_and_hash(url: str, client: httpx.AsyncClient) -> Optional[Any]:
         content = response.content
         if not content or len(content) > _IMG_MAX_BYTES:
             return None
-        return _phash(content)
+        # Decode is CPU-bound — run it off the loop under the shared cap.
+        return await run_cpu_bound(_phash, content)
     except Exception as e:  # noqa: BLE001 — best-effort, never propagate
         logger.debug("Image fetch failed for %s: %s", str(url)[:120], e)
         return None
