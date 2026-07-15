@@ -11,6 +11,7 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import localize_listing_enums
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 from app.core.config import settings
@@ -72,7 +73,7 @@ async def _fetch_detail(
                 listing_for_llm[key] = val
 
         ctx.context.collected_listings.append(data)
-        return {"status": "success", "listing": listing_for_llm}
+        return {"status": "success", "listing": localize_listing_enums(listing_for_llm)}
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:

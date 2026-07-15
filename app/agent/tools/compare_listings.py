@@ -19,6 +19,7 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import localize_listing_enums
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
@@ -77,7 +78,7 @@ def _normalise_for_comparison(data: Dict[str, Any]) -> Dict[str, Any]:
         val = data.get(key)
         if val is not None:
             row[key] = val
-    return row
+    return localize_listing_enums(row)
 
 
 def _summary_callouts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
