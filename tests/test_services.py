@@ -799,6 +799,61 @@ def test_sanitize_missing_fields_non_list():
     assert result["completeness_validation"]["missing_fields"] == []
 
 
+def test_sanitize_issues_dict_shape_extracts_details():
+    """Regression: the LLM sometimes returns each issue as an object shaped
+    {"severity": ..., "priority": ..., "type": ..., "details": ...} instead of
+    a plain string. The sanitizer's fallback key list didn't include "details",
+    so it fell through to str(dict) and leaked a Python-repr blob like
+    "{'severity': 'CRITICAL', ...}" straight into the admin UI instead of the
+    human-readable details sentence."""
+    from app.ai.llm.gemini_listing_helper import GeminiListingVerificationHelper
+
+    raw_json = json.dumps(
+        {
+            "is_valid": True,
+            "score": 0.9,
+            "image_validation": {
+                "issues": [
+                    {
+                        "severity": "CRITICAL",
+                        "priority": "HIGH",
+                        "type": "INVALID_IMAGE_TYPE",
+                        "details": "Anh 1: khong phai bat dong san.",
+                    }
+                ]
+            },
+            "content_validation": {
+                "issues": [
+                    {
+                        "severity": "MAJOR",
+                        "priority": "HIGH",
+                        "type": "INCONSISTENT_INFORMATION",
+                        "details": "Dia chi khong khop.",
+                    }
+                ]
+            },
+            "completeness_validation": {
+                "quality_issues": [
+                    {
+                        "severity": "MAJOR",
+                        "priority": "HIGH",
+                        "type": "INCONSISTENT_INFORMATION",
+                        "details": "Dia chi khong khop.",
+                    }
+                ]
+            },
+        }
+    )
+    result = GeminiListingVerificationHelper._handle_api_response(raw_json)
+    assert result["image_validation"]["issues"] == [
+        "Anh 1: khong phai bat dong san."
+    ]
+    assert result["content_validation"]["issues"] == ["Dia chi khong khop."]
+    assert result["completeness_validation"]["quality_issues"] == [
+        "Dia chi khong khop."
+    ]
+
+
 # ---------------------------------------------------------------------------
 # get_chat_tools registry
 # ---------------------------------------------------------------------------
