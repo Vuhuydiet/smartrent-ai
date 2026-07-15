@@ -10,12 +10,26 @@ from app.dto.listing_verification import (
     ListingVerificationRequest,
     ListingVerificationResponse,
     Suggestion,
-    VerificationSuggestedStatus,
     VideoValidation,
     Violation,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AiAnalysisUnavailableError(Exception):
+    """Raised when the LLM call fails and no real analysis can be produced.
+
+    Deliberately NOT swallowed into a fake 200 response with basic-rule scores —
+    a caller (admin, or the backend's background pre-computation worker) needs to
+    know verification did not happen, not be handed placeholder numbers that look
+    like a verdict. The API layer maps this to a proper HTTP error; the backend's
+    background worker already treats any exception here as "retry later".
+    """
+
+    def __init__(self, error_code: str, message: str) -> None:
+        self.error_code = error_code
+        super().__init__(message)
 
 
 class ListingVerificationService:
@@ -121,12 +135,15 @@ class ListingVerificationService:
     ) -> ListingVerificationResponse:
         """Process the analysis result and create response"""
 
-        # Handle error cases
+        # Handle error cases: raise rather than fabricate a response. A basic-rule
+        # fallback here would return 200 with a score and claims like
+        # is_rental_related=true that nothing actually verified — indistinguishable
+        # from a real analysis to anything downstream that isn't specifically
+        # checking for it.
         if "error" in analysis_result:
-            return self._create_fallback_response(
-                listing_data,
-                analysis_result["error"],
+            raise AiAnalysisUnavailableError(
                 error_code=analysis_result.get("error_code", "LLM_ERROR"),
+                message=analysis_result["error"],
             )
 
         # Extract analysis components
@@ -254,114 +271,4 @@ class ListingVerificationService:
             suggestions=suggestions,
             reason=reason,
             violation_codes=violation_codes,
-        )
-
-    def _create_fallback_response(
-        self,
-        listing_data: ListingVerificationRequest,
-        error_msg: str,
-        error_code: str = "LLM_ERROR",
-    ) -> ListingVerificationResponse:
-        """Create a fallback response when AI analysis fails.
-
-        The returned scores are NOT an AI verdict — they come from basic
-        field-presence rules. ``ai_available=False`` / ``error_code`` on the
-        response are set so callers can tell this apart from a real analysis and
-        route the listing to a human instead of trusting the numbers.
-        """
-
-        logger.warning(
-            "Creating fallback response [%s] due to error: %s", error_code, error_msg
-        )
-
-        # User-facing summary line, keyed off the stable code (not fragile
-        # substring matching on the raw message).
-        if error_code == "LLM_QUOTA_EXCEEDED":
-            clean_error_msg = "AI service temporarily unavailable due to quota limits. Using basic validation."
-        elif error_code in ("LLM_AUTH", "LLM_NOT_CONFIGURED"):
-            clean_error_msg = "AI service configuration issue. Using basic validation."
-        elif error_code == "LLM_MODEL_NOT_FOUND":
-            clean_error_msg = "AI model unavailable. Using basic validation."
-        elif error_code == "LLM_TIMEOUT":
-            clean_error_msg = "AI analysis timed out. Using basic validation rules."
-        else:
-            clean_error_msg = "AI analysis unavailable. Using basic validation rules."
-
-        # Basic fallback validation
-        missing_fields = []
-        if not listing_data.area:
-            missing_fields.append("area")
-        if len(listing_data.description) < 50:
-            missing_fields.append("detailed_description")
-        if len(listing_data.images) < 1:  # Changed from 2 to 1
-            missing_fields.append("sufficient_images")
-
-        basic_score = max(0.6, 1.0 - len(missing_fields) * 0.15)  # Less penalty
-
-        from app.dto.listing_verification import StructuredReason
-
-        fallback_reason = StructuredReason(
-            blurriness_issue=False,
-            missing_fields=missing_fields,
-            inconsistent_info=False,
-            watermark_or_phone=False,
-            stock_photo=False,
-            details=clean_error_msg,
-        )
-
-        return ListingVerificationResponse(
-            is_valid=len(missing_fields) <= 1
-            and basic_score >= 0.6,  # Allow 1 missing field
-            score=basic_score,
-            confidence=0.5,  # Low confidence for fallback
-            image_validation=ImageValidation(
-                is_valid=len(listing_data.images) >= 1,  # Changed from 2 to 1
-                total_images=len(listing_data.images),
-                valid_images=len(listing_data.images),
-                issues=[clean_error_msg]
-                if len(listing_data.images) < 1
-                else [],  # Changed from 2 to 1
-                quality_score=0.7
-                if len(listing_data.images) >= 1
-                else 0.3,  # Changed from 2 to 1
-            ),
-            video_validation=VideoValidation(
-                is_valid=len(listing_data.videos)
-                == 0,  # Only valid if no videos (can't analyze in fallback)
-                total_videos=len(listing_data.videos),
-                valid_videos=0
-                if len(listing_data.videos) > 0
-                else 0,  # Can't validate in fallback
-                issues=[clean_error_msg] if len(listing_data.videos) > 0 else [],
-                quality_score=1.0 if len(listing_data.videos) == 0 else 0.5,
-            ),
-            content_validation=ContentValidation(
-                is_rental_related=True,
-                category_match=True,
-                content_score=basic_score,
-                issues=[clean_error_msg],
-            ),
-            completeness_validation=CompletenessValidation(
-                is_complete=len(missing_fields) == 0,
-                completeness_score=basic_score,
-                missing_fields=missing_fields,
-                quality_issues=[clean_error_msg] if len(missing_fields) > 0 else [],
-            ),
-            violations=[],
-            suggestions=[
-                Suggestion(
-                    category="system",
-                    message="AI analysis failed - manual review recommended",
-                    field=None,
-                    priority="high",
-                )
-            ],
-            reason=fallback_reason,
-            violation_codes=[],
-            # Force manual review and mark the whole response as non-AI so callers
-            # never treat these placeholder scores as a real verdict.
-            suggested_status=VerificationSuggestedStatus.NEEDS_REVIEW,
-            ai_available=False,
-            error_code=error_code,
-            error_detail=error_msg,
         )

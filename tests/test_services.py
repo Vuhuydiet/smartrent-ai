@@ -254,9 +254,19 @@ def test_prepare_text_content():
     assert "Bedrooms: 2" in text
 
 
-def test_fallback_response_missing_area():
+def test_process_analysis_result_raises_on_llm_error():
+    """An LLM failure must surface as an error, not a fabricated 200 response.
+
+    A basic-rule fallback here would return a score and claims like
+    is_rental_related=true that nothing verified — indistinguishable from a real
+    analysis to any caller that isn't specifically checking for it. It must raise
+    instead, carrying the classified error_code through.
+    """
     from app.dto.listing_verification import ListingVerificationRequest
-    from app.service.listing_verification_service import ListingVerificationService
+    from app.service.listing_verification_service import (
+        AiAnalysisUnavailableError,
+        ListingVerificationService,
+    )
 
     svc = ListingVerificationService.__new__(ListingVerificationService)
     req = ListingVerificationRequest(
@@ -267,9 +277,18 @@ def test_fallback_response_missing_area():
         images=[],
         videos=[],
     )
-    resp = svc._create_fallback_response(req, "quota exceeded")
-    assert resp.score >= 0.0
-    assert "area" in resp.reason.missing_fields
+
+    with pytest.raises(AiAnalysisUnavailableError) as exc_info:
+        svc._process_analysis_result(
+            {
+                "error": "quota exceeded",
+                "error_code": "LLM_QUOTA_EXCEEDED",
+                "analysis_completed": False,
+            },
+            req,
+        )
+
+    assert exc_info.value.error_code == "LLM_QUOTA_EXCEEDED"
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +722,26 @@ def test_handle_generation_error_quota():
     result = GeminiListingVerificationHelper._handle_generation_error(
         "quota exceeded - 429"
     )
-    assert result["error"] == "quota exceeded"
+    # The raw provider message is kept verbatim (it's the only thing that makes a
+    # failure diagnosable) — error_code is what callers should branch on.
+    assert result["error"] == "quota exceeded - 429"
+    assert result["error_code"] == "LLM_QUOTA_EXCEEDED"
+    assert result["analysis_completed"] is False
+
+
+def test_handle_generation_error_missing_credentials():
+    """Regression test: this is the one error the service raises itself — the
+    original substring check for "api key" (with a space) never matched
+    "GEMINI_API_KEY" (underscore) or "no credentials configured", so a missing
+    credential was silently reported as a generic, unactionable failure."""
+    from app.ai.llm.gemini_listing_helper import GeminiListingVerificationHelper
+
+    result = GeminiListingVerificationHelper._handle_generation_error(
+        "Gemini provider selected but no credentials configured. "
+        "Set GCP_CREDENTIALS_BASE64 + GCP_PROJECT_ID (Vertex AI) "
+        "or GEMINI_API_KEY (Google AI Studio)."
+    )
+    assert result["error_code"] == "LLM_NOT_CONFIGURED"
     assert result["analysis_completed"] is False
 
 
@@ -714,6 +752,7 @@ def test_handle_generation_error_generic():
         "some unknown error"
     )
     assert "error" in result
+    assert result["error_code"] == "LLM_ERROR"
     assert result["analysis_completed"] is False
 
 
