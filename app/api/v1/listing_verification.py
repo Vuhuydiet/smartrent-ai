@@ -167,8 +167,13 @@ async def health_check(probe: bool = False) -> Dict[str, Any]:
         logger.error("Health check: LLM not configured: %s", e)
         return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={**base, "status": "unhealthy", "ai_available": False,
-                     "error_code": "LLM_NOT_CONFIGURED", "error": str(e)},
+            content={
+                **base,
+                "status": "unhealthy",
+                "ai_available": False,
+                "error_code": "LLM_NOT_CONFIGURED",
+                "error": str(e),
+            },
         )
 
     if not probe:
@@ -179,7 +184,7 @@ async def health_check(probe: bool = False) -> Dict[str, Any]:
         service = ListingVerificationService()
         result = await service.gemini_helper.analyze_text_content(
             text_content="ping",
-            analysis_prompt="Reply with a JSON object: {\"ok\": true}",
+            analysis_prompt='Reply with a JSON object: {"ok": true}',
         )
         if isinstance(result, dict) and result.get("error"):
             raise RuntimeError(result["error"])
@@ -188,6 +193,12 @@ async def health_check(probe: bool = False) -> Dict[str, Any]:
         logger.error("Health check: LLM probe failed: %s", e)
         return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={**base, "status": "unhealthy", "ai_available": False,
-                     "error_code": "LLM_ERROR", "error": str(e), "probed": True},
+            content={
+                **base,
+                "status": "unhealthy",
+                "ai_available": False,
+                "error_code": "LLM_ERROR",
+                "error": str(e),
+                "probed": True,
+            },
         )
