@@ -16,6 +16,7 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import localize_listing_enums
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
@@ -40,7 +41,7 @@ def _compact_recommendation_item(item: Dict[str, Any]) -> Dict[str, Any]:
         val = item.get(key)
         if val is not None:
             summary[key] = val
-    return summary
+    return localize_listing_enums(summary)
 
 
 async def _similar(
