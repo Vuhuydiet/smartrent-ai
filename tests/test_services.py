@@ -119,11 +119,38 @@ def test_price_suggestion_health():
 
 
 def test_listing_verification_health():
-    response = client.get("/ai/health")
+    """Healthy path: LLM config resolves fine, so /health reports 200.
+
+    /health does a real (no-network) config check via make_model() — it's what
+    catches a missing credential before every analysis silently degrades. Patch
+    it to succeed here so this test verifies the endpoint's happy-path response
+    shape without depending on real GCP/Gemini credentials being present in the
+    test environment (this suite is explicitly "no real LLM calls" — see module
+    docstring).
+    """
+    with patch("app.ai.llm.agent_factory.make_model", return_value=object()):
+        response = client.get("/ai/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "healthy"
     assert body["service"] == "listing_verification"
+    assert body["ai_available"] is True
+
+
+def test_listing_verification_health_unconfigured():
+    """No LLM credentials configured -> 503, not a silent "healthy"."""
+    with patch(
+        "app.ai.llm.agent_factory.make_model",
+        side_effect=ValueError(
+            "Gemini provider selected but no credentials configured."
+        ),
+    ):
+        response = client.get("/ai/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unhealthy"
+    assert body["ai_available"] is False
+    assert body["error_code"] == "LLM_NOT_CONFIGURED"
 
 
 def test_listing_verification_missing_fields():
