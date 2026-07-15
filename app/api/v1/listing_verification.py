@@ -10,7 +10,10 @@ from app.dto.listing_verification import (
     ListingVerificationRequest,
     ListingVerificationResponse,
 )
-from app.service.listing_verification_service import ListingVerificationService
+from app.service.listing_verification_service import (
+    AiAnalysisUnavailableError,
+    ListingVerificationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,7 @@ router = APIRouter()
     responses={
         400: {"model": ListingVerificationError},
         500: {"model": ListingVerificationError},
+        503: {"model": ListingVerificationError},
     },
     summary="Verify Rental Listing",
     description="""
@@ -83,6 +87,26 @@ async def verify_listing(
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=jsonable_encoder(error),
+        )
+
+    except AiAnalysisUnavailableError as e:
+        # The LLM call failed. Report it as a real error (503) instead of
+        # returning 200 with a fabricated basic-rule response — the caller
+        # (an admin clicking Verify, or the backend's background pre-computation
+        # worker) needs to know verification did not happen, not be handed
+        # placeholder scores that look like a real analysis. The background
+        # worker already treats any non-2xx here as "retry later".
+        logger.warning(f"AI analysis unavailable [{e.error_code}]: {str(e)}")
+        error = ListingVerificationError(
+            error=e.error_code,
+            message=str(e),
+            details={},
+        )
+        from fastapi.encoders import jsonable_encoder
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=jsonable_encoder(error),
         )
 

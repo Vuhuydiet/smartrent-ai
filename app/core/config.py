@@ -44,7 +44,16 @@ class Settings(BaseSettings):
     # Per-task model identifiers — bare model names (e.g. "gemini-2.5-flash",
     # "gpt-4o-mini"). The factory prepends the provider prefix when needed.
     LLM_CHAT_MODEL: str = "gemini-2.5-flash"  # Chat / agent loop
-    LLM_VISION_MODEL: str = "gemini-2.5-flash"  # Listing verification (text+image)
+    # gemini-3.1-flash-lite: listing verification was failing with
+    # error_code=LLM_MODEL_NOT_FOUND on gemini-2.5-flash via Vertex AI (likely
+    # not yet GA'd for this project/region). 3.1-flash-lite supports vision +
+    # structured JSON output (both required by the verification prompt) and is
+    # ~1.2-1.7x cheaper per token than 2.5-flash.
+    # RISK: this is a NEWER generation than the 2.5 model that just failed —
+    # if it hits the same LLM_MODEL_NOT_FOUND on this Vertex project/region,
+    # fall back to "gemini-2.0-flash-lite" instead: long-GA, stable, same
+    # vision+schema support, and cheaper still (~4-8x vs 2.5-flash).
+    LLM_VISION_MODEL: str = "gemini-3.1-flash-lite"  # Listing verification (text+image)
     LLM_PRICE_MODEL: str = "gemini-2.5-flash"  # Price prediction
     # Low temperature for the chat/agent loop → deterministic tool-calling and
     # fewer hallucinated params. Configurable so it can be tuned without a deploy.
