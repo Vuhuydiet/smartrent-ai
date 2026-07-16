@@ -58,6 +58,50 @@ def _has_search_criteria(params: Dict[str, Any]) -> bool:
     return has_location or bool(params.get("keyword"))
 
 
+# The backend's ListingFilterRequest takes price / area / bedroom filters as a
+# SINGLE `from..to` string (either side optional) — it has no minPrice/maxPrice
+# fields. Sending those made Jackson silently drop them, so e.g. a maxPrice
+# ceiling was ignored and over-budget listings came back. Each tuple maps the
+# tool's (minKey, maxKey) to the backend's combined range field.
+_RANGE_PARAM_MAP = (
+    ("minPrice", "maxPrice", "price"),
+    ("minArea", "maxArea", "area"),
+    ("minBedrooms", "maxBedrooms", "bedroomsRange"),
+)
+
+
+def _fmt_bound(n: Any) -> str:
+    """Render a numeric bound without a trailing '.0' for whole numbers.
+
+    Bedroom bounds feed the backend's Integer range parser, which rejects
+    '2.0'; price/area go through decimal/float parsers that tolerate it, but a
+    clean integer string keeps the range readable in logs either way.
+    """
+    if isinstance(n, bool):  # bool is an int subclass — guard against True/False
+        return str(n)
+    if isinstance(n, float) and n.is_integer():
+        return str(int(n))
+    return str(n)
+
+
+def _apply_range_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Rewrite min/max pairs into the backend's combined `from..to` fields.
+
+    Mutates and returns `params`. Idempotent and safe when neither bound is
+    present (the pair is left untouched). Applied at the backend boundary so
+    both the single-type and multi-type search paths are covered.
+    """
+    for lo_key, hi_key, dst in _RANGE_PARAM_MAP:
+        lo = params.pop(lo_key, None)
+        hi = params.pop(hi_key, None)
+        if lo is None and hi is None:
+            continue
+        lo_s = "" if lo is None else _fmt_bound(lo)
+        hi_s = "" if hi is None else _fmt_bound(hi)
+        params[dst] = f"{lo_s}..{hi_s}"
+    return params
+
+
 def _compact_search_item(item: Dict[str, Any]) -> Dict[str, Any]:
     """Extract only the fields the LLM needs, handling nested address."""
     addr = item.get("address") or {}
@@ -87,6 +131,7 @@ async def _do_search(
     ctx: RunContextWrapper[ToolContext], params: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Core search logic — separated so it can be called directly in tests."""
+    _apply_range_params(params)
     if not _has_search_criteria(params):
         return {"status": "error", "error": _NO_CRITERIA_ERROR}
     try:
@@ -157,6 +202,7 @@ async def _do_multi_type_search(
     a listing somehow appears in multiple — rare since the backend's
     productType is a strict single-enum match).
     """
+    _apply_range_params(params)
     if not _has_search_criteria(params):
         return {"status": "error", "error": _NO_CRITERIA_ERROR}
 

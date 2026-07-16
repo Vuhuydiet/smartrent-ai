@@ -88,6 +88,66 @@ def test_zero_results_includes_structured_hint():
     assert "hint" in result
 
 
+def test_max_price_translated_to_backend_range_string():
+    # The backend's ListingFilterRequest has NO minPrice/maxPrice fields — price
+    # is a single "from..to" string. Sending maxPrice as its own field made
+    # Jackson drop it silently, so every over-budget listing still came back.
+    # The tool must translate maxPrice=5tr → price="..5000000".
+    mock = AsyncMock(return_value={"listings": [], "totalCount": 0})
+    with patch("app.core.backend_client.search_listings", mock):
+        asyncio.run(
+            _do_search(
+                MagicMock(),
+                {"size": 5, "provinceCode": "79", "maxPrice": 5_000_000.0},
+            )
+        )
+    sent = mock.call_args.args[0]
+    assert sent.get("price") == "..5000000"
+    assert "maxPrice" not in sent
+    assert "minPrice" not in sent
+
+
+def test_min_and_max_price_form_full_range():
+    mock = AsyncMock(return_value={"listings": [], "totalCount": 0})
+    with patch("app.core.backend_client.search_listings", mock):
+        asyncio.run(
+            _do_search(
+                MagicMock(),
+                {
+                    "size": 5,
+                    "provinceCode": "79",
+                    "minPrice": 3_000_000.0,
+                    "maxPrice": 5_000_000.0,
+                },
+            )
+        )
+    assert mock.call_args.args[0].get("price") == "3000000..5000000"
+
+
+def test_area_and_bedroom_ranges_translated():
+    # Same silent-drop trap for area (→ `area`) and bedrooms (→ `bedroomsRange`).
+    mock = AsyncMock(return_value={"listings": [], "totalCount": 0})
+    with patch("app.core.backend_client.search_listings", mock):
+        asyncio.run(
+            _do_search(
+                MagicMock(),
+                {
+                    "size": 5,
+                    "provinceCode": "79",
+                    "minArea": 30.0,
+                    "maxArea": 60.0,
+                    "minBedrooms": 2,
+                    "maxBedrooms": 3,
+                },
+            )
+        )
+    sent = mock.call_args.args[0]
+    assert sent.get("area") == "30..60"
+    assert sent.get("bedroomsRange") == "2..3"
+    for dropped in ("minArea", "maxArea", "minBedrooms", "maxBedrooms"):
+        assert dropped not in sent
+
+
 def test_search_result_carries_canonical_share_url():
     # The compact payload must include a canonical listing URL so the model
     # shares a real link instead of fabricating a domain/path (the "chia sẻ tin"
