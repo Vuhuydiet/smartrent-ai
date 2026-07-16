@@ -7,8 +7,10 @@ from app.dto.listing_verification import (
     CompletenessValidation,
     ContentValidation,
     ImageValidation,
+    ListingType,
     ListingVerificationRequest,
     ListingVerificationResponse,
+    PriceUnit,
     Suggestion,
     VideoValidation,
     Violation,
@@ -95,29 +97,63 @@ class ListingVerificationService:
             logger.error(f"Error during listing verification: {str(e)}")
             raise
 
+    def _format_price(self, listing_data: ListingVerificationRequest) -> str:
+        """Render price with the correct basis so the LLM doesn't assume monthly rent."""
+        if listing_data.listing_type == ListingType.SALE:
+            return f"{listing_data.price} VND (gia ban mot lan, khong phai gia thue)"
+
+        unit_label = {
+            PriceUnit.MONTH: "VND/thang",
+            PriceUnit.DAY: "VND/ngay",
+            PriceUnit.YEAR: "VND/nam",
+        }.get(listing_data.price_unit, "VND/thang (mac dinh, khong ro don vi)")
+        return f"{listing_data.price} {unit_label}"
+
     def _prepare_text_content(self, listing_data: ListingVerificationRequest) -> str:
         """Prepare text content for analysis"""
-        metadata_str = "None"
+        metadata_parts = []
         if listing_data.metadata:
-            metadata_parts = []
             if listing_data.metadata.bedrooms:
                 metadata_parts.append(f"Bedrooms: {listing_data.metadata.bedrooms}")
             if listing_data.metadata.bathrooms:
                 metadata_parts.append(f"Bathrooms: {listing_data.metadata.bathrooms}")
             if listing_data.metadata.floor:
                 metadata_parts.append(f"Floor: {listing_data.metadata.floor}")
+            if listing_data.metadata.total_floors:
+                metadata_parts.append(f"Total floors: {listing_data.metadata.total_floors}")
+        if listing_data.direction:
+            metadata_parts.append(f"Direction: {listing_data.direction}")
+        if listing_data.furnishing:
+            metadata_parts.append(f"Furnishing: {listing_data.furnishing}")
+        if listing_data.room_capacity:
+            metadata_parts.append(f"Room capacity: {listing_data.room_capacity}")
 
-            metadata_str = ", ".join(metadata_parts) if metadata_parts else "None"
+        metadata_str = ", ".join(metadata_parts) if metadata_parts else "None"
+
+        utility_parts = []
+        if listing_data.water_price:
+            utility_parts.append(f"Water: {listing_data.water_price}")
+        if listing_data.electricity_price:
+            utility_parts.append(f"Electricity: {listing_data.electricity_price}")
+        if listing_data.internet_price:
+            utility_parts.append(f"Internet: {listing_data.internet_price}")
+        if listing_data.service_fee:
+            utility_parts.append(f"Service fee: {listing_data.service_fee}")
+        utility_str = ", ".join(utility_parts) if utility_parts else "Not specified"
 
         text_content = f"""
 ### LISTING INFORMATION:
 - **Title**: {listing_data.title}
 - **Description**: {listing_data.description}
-- **Price**: {listing_data.price} (VND per month)
+- **Listing Type**: {listing_data.listing_type.value if listing_data.listing_type else 'Not specified'}
+- **Price**: {self._format_price(listing_data)}
 - **Area**: {listing_data.area or 'Not specified'} m2
 - **Address**: {listing_data.address}
 - **Property Type**: {listing_data.property_type.value if listing_data.property_type else 'Not specified'}
 - **Amenities**: {', '.join(listing_data.amenities) if listing_data.amenities else 'None'}
+
+### UTILITY COSTS:
+- {utility_str}
 
 ### MEDIA STATS:
 - **Number of Images Attached**: {len(listing_data.images)}
