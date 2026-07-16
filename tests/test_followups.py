@@ -71,3 +71,20 @@ def test_parse_followups_caps_at_four():
 def test_parse_followups_handles_code_fence():
     raw = '```json\n[{"label":"a","query":"b"}]\n```'
     assert _parse_followups(raw) == [{"label": "a", "query": "b"}]
+
+
+def test_instruction_example_block_stays_parseable():
+    # The FOLLOWUPS instruction embeds a worked example for the clarifying-
+    # question case ("phòng trọ / căn hộ / studio"). It must stay valid JSON so
+    # the model has a correct pattern to copy — guards against a future edit
+    # breaking the example (which would silently degrade grounded suggestions).
+    from app.agent.orchestrator import _FOLLOWUPS_INSTRUCTION
+
+    example = next(
+        line
+        for line in _FOLLOWUPS_INSTRUCTION.splitlines()
+        if "[[FOLLOWUPS]][{" in line and "..." not in line
+    )
+    _, chips = _split_followups("Câu hỏi làm rõ." + example.strip())
+    assert len(chips) == 3
+    assert all(c["label"] and c["query"] for c in chips)
