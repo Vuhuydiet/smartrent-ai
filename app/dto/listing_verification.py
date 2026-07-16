@@ -71,13 +71,16 @@ class ListingVerificationRequest(BaseModel):
         ..., min_length=10, max_length=50000, description="Property description"
     )
     price: float = Field(
-        ..., gt=0, description="Listing price, interpreted using listing_type and price_unit"
+        ...,
+        gt=0,
+        description="Listing price, interpreted using listing_type and price_unit",
     )
     price_unit: Optional[PriceUnit] = Field(
         None, description="Unit the price is denominated in (MONTH, DAY, YEAR)"
     )
     listing_type: Optional[ListingType] = Field(
-        None, description="Transaction type: RENT (cho thue), SALE (ban), SHARE (o ghep)"
+        None,
+        description="Transaction type: RENT (cho thue), SALE (ban), SHARE (o ghep)",
     )
     area: Optional[float] = Field(
         None, gt=0, description="Property area in square meters"
@@ -100,7 +103,9 @@ class ListingVerificationRequest(BaseModel):
     )
     direction: Optional[str] = Field(None, description="House/room direction")
     furnishing: Optional[str] = Field(None, description="Furnishing status")
-    room_capacity: Optional[int] = Field(None, description="Max occupants the room supports")
+    room_capacity: Optional[int] = Field(
+        None, description="Max occupants the room supports"
+    )
     water_price: Optional[str] = Field(None, description="Water cost")
     electricity_price: Optional[str] = Field(None, description="Electricity cost")
     internet_price: Optional[str] = Field(None, description="Internet cost")

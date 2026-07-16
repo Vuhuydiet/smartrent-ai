@@ -102,11 +102,17 @@ class ListingVerificationService:
         if listing_data.listing_type == ListingType.SALE:
             return f"{listing_data.price} VND (gia ban mot lan, khong phai gia thue)"
 
-        unit_label = {
+        price_unit_labels = {
             PriceUnit.MONTH: "VND/thang",
             PriceUnit.DAY: "VND/ngay",
             PriceUnit.YEAR: "VND/nam",
-        }.get(listing_data.price_unit, "VND/thang (mac dinh, khong ro don vi)")
+        }
+        default_label = "VND/thang (mac dinh, khong ro don vi)"
+        unit_label = (
+            price_unit_labels.get(listing_data.price_unit, default_label)
+            if listing_data.price_unit is not None
+            else default_label
+        )
         return f"{listing_data.price} {unit_label}"
 
     def _prepare_text_content(self, listing_data: ListingVerificationRequest) -> str:
@@ -120,7 +126,9 @@ class ListingVerificationService:
             if listing_data.metadata.floor:
                 metadata_parts.append(f"Floor: {listing_data.metadata.floor}")
             if listing_data.metadata.total_floors:
-                metadata_parts.append(f"Total floors: {listing_data.metadata.total_floors}")
+                metadata_parts.append(
+                    f"Total floors: {listing_data.metadata.total_floors}"
+                )
         if listing_data.direction:
             metadata_parts.append(f"Direction: {listing_data.direction}")
         if listing_data.furnishing:
