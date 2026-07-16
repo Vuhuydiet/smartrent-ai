@@ -845,9 +845,7 @@ def test_sanitize_issues_dict_shape_extracts_details():
         }
     )
     result = GeminiListingVerificationHelper._handle_api_response(raw_json)
-    assert result["image_validation"]["issues"] == [
-        "Anh 1: khong phai bat dong san."
-    ]
+    assert result["image_validation"]["issues"] == ["Anh 1: khong phai bat dong san."]
     assert result["content_validation"]["issues"] == ["Dia chi khong khop."]
     assert result["completeness_validation"]["quality_issues"] == [
         "Dia chi khong khop."
