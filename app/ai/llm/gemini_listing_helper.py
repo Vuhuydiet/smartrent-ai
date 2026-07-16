@@ -70,16 +70,15 @@ class GeminiListingVerificationHelper:
             )
 
             # Extract keyframes from videos to feed alongside the images
-            extra_image_uris = await self._video_keyframes_to_data_uris(video_blobs)
-            all_image_uris = image_uris + extra_image_uris
+            video_frames = await self._video_keyframes_to_data_uris(video_blobs)
             logger.info(
-                "Final payload: %d images (incl. %d keyframes from %d videos)",
-                len(all_image_uris),
-                len(extra_image_uris),
+                "Final payload: %d images, %d video keyframes from %d videos",
+                len(image_uris),
+                len(video_frames),
                 len(video_blobs),
             )
 
-            if not all_image_uris:
+            if not image_uris and not video_frames:
                 logger.warning(
                     "No usable media after processing; falling back to text-only."
                 )
@@ -95,13 +94,37 @@ class GeminiListingVerificationHelper:
                 "2. Check for stock photos, watermarks, and consistency.\n"
                 "3. Ensure the media matches the described property.\n"
                 "4. Return valid JSON only.\n"
-                "5. IMPORTANT: All descriptive text fields (details, issues, messages, suggestions) MUST be written in Vietnamese."
+                "5. IMPORTANT: All descriptive text fields (details, issues, messages, suggestions) MUST be written in Vietnamese.\n"
+                "6. IMPORTANT: Each image below is preceded by a text label (e.g. 'Ảnh 3:', "
+                "'Video 1 - khung hình 2:'). That label is the image's true position as shown "
+                "to the listing owner and moderator — some images may have failed to load and "
+                "are absent, so the labels are not a dense 1..N sequence. When citing an image "
+                "in `issues`, copy its label verbatim as the prefix. Do NOT invent your own "
+                "sequential numbering based on the order you received the images."
             )
 
+            # Each image is preceded by an explicit "Ảnh N:" / "Video N - khung hình M:"
+            # text label using its *original* position (not the position after failed
+            # downloads are dropped), so the model's own issue labels always line up
+            # with what the FE gallery shows — see _download_image_data_uris and
+            # _video_keyframes_to_data_uris for how the indices are preserved.
             content_parts: List[Dict[str, Any]] = [
                 {"type": "input_text", "text": full_prompt}
             ]
-            for uri in all_image_uris:
+            for original_index, uri in image_uris:
+                content_parts.append(
+                    {"type": "input_text", "text": f"Ảnh {original_index + 1}:"}
+                )
+                content_parts.append(
+                    {"type": "input_image", "detail": "auto", "image_url": uri}
+                )
+            for video_index, frame_index, uri in video_frames:
+                content_parts.append(
+                    {
+                        "type": "input_text",
+                        "text": f"Video {video_index + 1} - khung hình {frame_index + 1}:",
+                    }
+                )
                 content_parts.append(
                     {"type": "input_image", "detail": "auto", "image_url": uri}
                 )
@@ -112,7 +135,7 @@ class GeminiListingVerificationHelper:
                 metadata={
                     "image_count": len(image_uris),
                     "video_count": len(video_blobs),
-                    "extra_keyframes": len(extra_image_uris),
+                    "extra_keyframes": len(video_frames),
                     "mode": "multimodal",
                     "model": settings.LLM_VISION_MODEL,
                 },
@@ -192,7 +215,7 @@ You are an AI expert in rental property listing verification. Your goal is to re
     - quality_score = max(0.1, valid_ratio * 0.9)
     - If valid_ratio < 0.6: suggested_status = "NEEDS_REVIEW", is_valid = false
     - If valid_ratio < 0.3: suggested_status = "REJECTED", is_valid = false
-    - Always list each invalid image as an issue in image_validation.issues (e.g. "Ảnh 1: Hình nhân vật anime/avatar, không phải ảnh bất động sản thực tế")
+    - Always list each invalid image as an issue in image_validation.issues, prefixed with the EXACT label ("Ảnh N:" / "Video N - khung hình M:") that preceded that image in the prompt — never your own count of images actually shown to you (e.g. "Ảnh 3: Hình nhân vật anime/avatar, không phải ảnh bất động sản thực tế")
 
 ### STATUS RECOMMENDATION:
 - If the listing matches the structured facts, has a clean description, and ALL images are real property photos, suggest "APPROVED" with a score of 0.8 or higher.
@@ -302,8 +325,17 @@ Return a JSON response with this exact structure (keep messages concise, max 100
         return f"data:image/jpeg;base64,{b64}"
 
     @classmethod
-    async def _download_image_data_uris(cls, image_urls: List[str]) -> List[str]:
-        """Download image URLs concurrently and return base64 data URIs."""
+    async def _download_image_data_uris(
+        cls, image_urls: List[str]
+    ) -> List[tuple[int, str]]:
+        """Download image URLs concurrently and return (original_index, data_uri) pairs.
+
+        `original_index` is the 0-based position of the image in `image_urls`
+        (i.e. in the request/UI's ordering), preserved even when some
+        downloads fail and get dropped — so the caller can label each image
+        with its true position instead of a dense 1..N count that would
+        silently drift out of sync with what the FE gallery shows.
+        """
         urls = image_urls[:_MAX_IMAGES]
         if not urls:
             return []
@@ -318,7 +350,7 @@ Return a JSON response with this exact structure (keep messages concise, max 100
 
         async with httpx.AsyncClient(headers=headers, timeout=10.0) as client:
 
-            async def _fetch(i: int, url: str) -> Optional[str]:
+            async def _fetch(i: int, url: str) -> Optional[tuple[int, str]]:
                 try:
                     resp = await client.get(url)
                     if resp.status_code != 200:
@@ -334,7 +366,7 @@ Return a JSON response with this exact structure (keep messages concise, max 100
                         img: Image.Image = Image.open(BytesIO(content))
                         return cls._pil_to_data_uri(img)
 
-                    return await asyncio.to_thread(_encode)
+                    return (i, await asyncio.to_thread(_encode))
                 except Exception as e:
                     logger.error("Error processing image %d: %s", i + 1, e)
                     return None
@@ -343,7 +375,7 @@ Return a JSON response with this exact structure (keep messages concise, max 100
                 *(_fetch(i, url) for i, url in enumerate(urls))
             )
 
-        return [u for u in results if u is not None]
+        return [pair for pair in results if pair is not None]
 
     @staticmethod
     async def _download_video_bytes(urls: List[str]) -> List[bytes]:
@@ -384,12 +416,18 @@ Return a JSON response with this exact structure (keep messages concise, max 100
         return [b for b in results if b is not None]
 
     @classmethod
-    async def _video_keyframes_to_data_uris(cls, video_blobs: List[bytes]) -> List[str]:
+    async def _video_keyframes_to_data_uris(
+        cls, video_blobs: List[bytes]
+    ) -> List[tuple[int, int, str]]:
         """
         Extract keyframes from each video (best-effort) and return them as
-        base64 data URIs. Videos that fail extraction are skipped silently
-        (with a warning) since the OpenAI Responses input format has no
-        native video type.
+        (video_index, frame_index, data_uri) triples, both 0-based. Videos
+        that fail extraction are skipped silently (with a warning) since the
+        OpenAI Responses input format has no native video type.
+
+        Kept separate from image indices (rather than continuing the same
+        counter) so a flagged keyframe is labeled "Video N - khung hình M"
+        instead of colliding with the FE's image-only "Ảnh N" numbering.
         """
         if not video_blobs:
             return []
@@ -402,28 +440,33 @@ Return a JSON response with this exact structure (keep messages concise, max 100
             )
             return []
 
-        all_uris: List[str] = []
-        for idx, blob in enumerate(video_blobs):
+        all_triples: List[tuple[int, int, str]] = []
+        for video_idx, blob in enumerate(video_blobs):
             try:
                 frames = await asyncio.to_thread(extract_keyframes, blob)
             except Exception as e:
-                logger.error("Keyframe extraction failed for video %d: %s", idx + 1, e)
+                logger.error(
+                    "Keyframe extraction failed for video %d: %s", video_idx + 1, e
+                )
                 continue
 
             if not frames:
-                logger.warning("No keyframes extracted from video %d", idx + 1)
+                logger.warning("No keyframes extracted from video %d", video_idx + 1)
                 continue
 
-            for f in frames:
+            for frame_idx, f in enumerate(frames):
                 try:
                     uri = await asyncio.to_thread(cls._pil_to_data_uri, f)
-                    all_uris.append(uri)
+                    all_triples.append((video_idx, frame_idx, uri))
                 except Exception as e:
                     logger.error(
-                        "Failed encoding keyframe from video %d: %s", idx + 1, e
+                        "Failed encoding keyframe %d from video %d: %s",
+                        frame_idx + 1,
+                        video_idx + 1,
+                        e,
                     )
 
-        return all_uris
+        return all_triples
 
     @staticmethod
     def _parse_json_response(response_text: str) -> Dict[str, Any]:
