@@ -192,7 +192,7 @@ You are an AI expert in rental property listing verification. Your goal is to re
 
 ### CORE VERIFICATION CRITERIA (REALISTIC & STRUCTURED):
 - **FACT & METADATA CONSISTENCY (CRITICAL)**: Do NOT strictly verify consistency against the listing title (since titles can be AI-generated, marketing-focused, or slightly mismatched). Instead, you MUST verify that the media and description match key structured facts:
-  - **Price (Giá)**: Check if the rent price is realistic and reasonable for the property type (e.g. avoid extreme typos like 100 VND or 100 Billion VND for a simple room).
+  - **Price (Giá)**: The price basis is given in the LISTING INFORMATION section (Listing Type + Price unit) — a SALE listing's price is a one-time sale price, not a monthly rent. Check if the price is realistic and reasonable for that basis and the property type (e.g. avoid extreme typos like 100 VND or 100 Billion VND for a simple room).
   - **Area (Diện tích)**: Ensure the visual scale of the images generally matches the described area (e.g., a 15m2 room should look like a cozy single room, while a 100m2 property should look spacious).
   - **Bedrooms / Bathrooms (Số phòng ngủ / vệ sinh)**: Cross-reference the metadata bedrooms/bathrooms with the room layouts visible in the media or described in the text.
   - **Property Type (Loại hình)**: Ensure the images generally reflect a residential rental property matching the selected type (e.g., a `ROOM` or `APARTMENT` should look like habitable housing, not a raw plot of outdoor dirt, a factory, or a non-residential commercial warehouse).
