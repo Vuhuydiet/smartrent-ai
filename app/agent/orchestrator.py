@@ -274,15 +274,22 @@ _MAX_FOLLOWUPS = 4
 
 _FOLLOWUPS_INSTRUCTION = """\
 GỢI Ý CÂU HỎI TIẾP THEO (ẩn với người dùng — hệ thống tự xử lý):
-- SAU KHI đã trả lời xong hoàn toàn, in ở CUỐI CÙNG đúng một khối trên MỘT dòng:
+- Ở CUỐI MỖI lượt trả lời — KỂ CẢ khi bạn đặt câu hỏi làm rõ (chưa trả lời xong) —
+  in ở DÒNG CUỐI đúng một khối:
   [[FOLLOWUPS]][{"label":"...","query":"..."}]
 - Tối đa 4 gợi ý, tiếng Việt, BÁM SÁT nội dung vừa trao đổi (KHÔNG chung chung).
   * label = chữ trên nút, NGẮN (≤ 24 ký tự).
-  * query = câu người dùng sẽ gửi khi bấm nút (tự nhiên, đủ ý, bạn trả lời được).
+  * query = câu người dùng sẽ gửi khi bấm nút (tự nhiên, đủ ý, HỢP NGỮ CẢNH hiện tại).
+- QUAN TRỌNG: khi bạn HỎI người dùng chọn giữa các lựa chọn (loại BĐS, khu vực,
+  khoảng giá, diện tích...), HÃY biến CHÍNH các lựa chọn đó thành followups — label là
+  lựa chọn, query là câu trả lời khớp câu hỏi bạn vừa hỏi (giữ nguyên bối cảnh, vd nếu
+  đang SO SÁNH thì query cũng phải là so sánh, không đổi thành tìm kiếm). Ví dụ khi bạn
+  hỏi "Bạn muốn so sánh loại hình nào: phòng trọ, căn hộ hay studio?":
+  [[FOLLOWUPS]][{"label":"Phòng trọ","query":"So sánh giá thuê phòng trọ"},{"label":"Căn hộ","query":"So sánh giá thuê căn hộ"},{"label":"Studio","query":"So sánh giá thuê studio"}]
 - Khối [[FOLLOWUPS]] PHẢI là JSON hợp lệ và là thứ CUỐI CÙNG trong câu trả lời,
   KHÔNG có chữ nào sau nó. Hệ thống cắt bỏ khối này khỏi phần hiển thị — người dùng
   KHÔNG bao giờ thấy "[[FOLLOWUPS]]", nên TUYỆT ĐỐI đừng nhắc tới nó trong lời đáp.
-- Nếu không có gợi ý phù hợp thì BỎ khối này (đừng in [[FOLLOWUPS]])."""
+- Chỉ bỏ khối này khi thật sự không có gợi ý nào hợp lý (hiếm khi)."""
 
 
 class _FollowupStreamGate:
