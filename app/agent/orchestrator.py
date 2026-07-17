@@ -289,6 +289,10 @@ GỢI Ý CÂU HỎI TIẾP THEO (ẩn với người dùng — hệ thống tự
 - Khối [[FOLLOWUPS]] PHẢI là JSON hợp lệ và là thứ CUỐI CÙNG trong câu trả lời,
   KHÔNG có chữ nào sau nó. Hệ thống cắt bỏ khối này khỏi phần hiển thị — người dùng
   KHÔNG bao giờ thấy "[[FOLLOWUPS]]", nên TUYỆT ĐỐI đừng nhắc tới nó trong lời đáp.
+- ĐẶT khối NGAY đầu một dòng mới, liền sau nội dung. TUYỆT ĐỐI KHÔNG in đường kẻ
+  ngang hay dấu phân cách (`---`, `***`, `___`, `===`) — hay bất kỳ dãy ký tự lặp
+  nào — trước khối hoặc ở bất kỳ đâu trong câu trả lời. KHÔNG lặp lại cùng một ký tự
+  nhiều lần để trang trí/căn dòng; điều này khiến hệ thống lỗi.
 - Chỉ bỏ khối này khi thật sự không có gợi ý nào hợp lý (hiếm khi)."""
 
 
@@ -327,6 +331,83 @@ class _FollowupStreamGate:
         visible = self._pending
         self._pending = ""
         return visible
+
+
+class _RepetitionGuard:
+    """Circuit-breaker for runaway model repetition, tripped BEFORE LiteLLM's own.
+
+    Gemini flash occasionally degenerates into an endless run of a single
+    character (a markdown divider ``------`` is the classic case) or repeats an
+    identical chunk. LiteLLM only kills such a stream once the same chunk repeats
+    ~100× (``litellm.REPEATED_STREAMING_CHUNK_LIMIT``), and it surfaces as a
+    ``MidStreamFallbackError`` — a hard crash the user sees as a generic error,
+    after a flood of junk has already reached the UI.
+
+    This guard trips far earlier. ``feed`` streams text through but withholds a
+    trailing run of a single repeated character, so a legitimate short sequence
+    is released intact (via ``flush``) while a runaway one is caught before it
+    floods the client. Once a run exceeds ``_MAX_RUN`` chars, or an identical
+    non-empty chunk repeats ``_MAX_REPEATS`` times, ``tripped`` is set and the
+    runaway text is dropped — the caller then ends the turn cleanly.
+
+    Both thresholds sit comfortably below LiteLLM's 100-chunk limit.
+    """
+
+    _MAX_RUN = 40  # trailing run of one repeated char
+    _MAX_REPEATS = 24  # identical consecutive non-empty chunks
+
+    def __init__(self) -> None:
+        self._run_char = ""
+        self._run_len = 0
+        self._last_chunk = ""
+        self._repeats = 0
+        self.tripped = False
+
+    def feed(self, text: str) -> str:
+        """Return the portion of ``text`` safe to stream now.
+
+        Sets ``tripped`` and withholds the runaway tail when degenerate
+        repetition is detected.
+        """
+        if self.tripped or not text:
+            return ""
+
+        # Signal 1 — an identical chunk repeated many times in a row.
+        if text == self._last_chunk:
+            self._repeats += 1
+        else:
+            self._last_chunk = text
+            self._repeats = 1
+        if self._repeats >= self._MAX_REPEATS:
+            self.tripped = True
+            return ""
+
+        # Signal 2 — a runaway trailing run of a single character. Track it
+        # across chunk boundaries: buffer the trailing run (so a short divider
+        # survives) and only emit the text before it.
+        combined = self._run_char * self._run_len + text
+        last = combined[-1]
+        run = 0
+        for ch in reversed(combined):
+            if ch != last:
+                break
+            run += 1
+        head = combined[: len(combined) - run]
+        if run >= self._MAX_RUN and not last.isspace():
+            self.tripped = True
+            return head  # drop the runaway run
+        self._run_char = last
+        self._run_len = run
+        return head
+
+    def flush(self) -> str:
+        """Release the buffered trailing run (call at end-of-stream)."""
+        if self.tripped:
+            return ""
+        out = self._run_char * self._run_len
+        self._run_char = ""
+        self._run_len = 0
+        return out
 
 
 def _parse_followups(raw: str) -> List[Dict[str, str]]:
@@ -885,6 +966,8 @@ class AgentOrchestrator:
             )
 
             gate = _FollowupStreamGate()
+            repguard = _RepetitionGuard()
+            degenerate = False
             async for event in stream.stream_events():
                 etype = getattr(event, "type", None)
 
@@ -893,10 +976,22 @@ class AgentOrchestrator:
                     if isinstance(data, ResponseTextDeltaEvent):
                         delta = getattr(data, "delta", "")
                         if delta:
-                            any_text_streamed = True
-                            visible = gate.feed(delta)
-                            if visible:
-                                yield {"event": "text", "data": {"delta": visible}}
+                            safe = repguard.feed(gate.feed(delta))
+                            if safe:
+                                any_text_streamed = True
+                                yield {"event": "text", "data": {"delta": safe}}
+                            if repguard.tripped:
+                                degenerate = True
+                                logger.warning(
+                                    "run_stream: runaway model repetition detected "
+                                    "mid-stream — stopping early (tools_used=%s)",
+                                    tools_used,
+                                )
+                                try:
+                                    stream.cancel()
+                                except Exception:  # noqa: BLE001
+                                    pass
+                                break
                     continue
 
                 if etype == "run_item_stream_event":
@@ -904,7 +999,7 @@ class AgentOrchestrator:
                     # tail the gate held back. The FOLLOWUPS block only appears at
                     # the very end of the final answer, never before a tool call,
                     # so flushing here can't leak it.
-                    held = gate.flush()
+                    held = repguard.feed(gate.flush())
                     if held:
                         yield {"event": "text", "data": {"delta": held}}
                     item = getattr(event, "item", None)
@@ -950,10 +1045,56 @@ class AgentOrchestrator:
 
                 # AgentUpdatedStreamEvent / others — ignored
 
-            # Stream complete — flush any tail the gate held back, then split the
-            # final output into visible text + grounded follow-up chips.
-            tail = gate.flush()
+            if degenerate:
+                # Model degenerated into runaway repetition and we stopped the
+                # stream early. Any tools already ran, so salvage the turn rather
+                # than crash: skip the model's now-garbage final output + grounded
+                # followups, emit collected listings + rule-based chips, and close
+                # cleanly. The runaway tail was dropped by the guard, never shown.
+                llm_span.end(output="(degenerate repetition — salvaged)")
+                trace.update(
+                    metadata={"degenerate_repetition": True, "tools_used": tools_used}
+                )
+                if not any_text_streamed:
+                    yield {
+                        "event": "text",
+                        "data": {
+                            "delta": "Tôi đã xử lý xong yêu cầu của bạn. Hãy xem kết quả bên dưới."
+                        },
+                    }
+                listings_payload = self._build_listings_payload(
+                    tool_ctx.collected_listings
+                )
+                if listings_payload:
+                    yield {"event": "listings", "data": listings_payload}
+                try:
+                    suggestions = build_suggestions(
+                        tools_used, tool_ctx.collected_listings, bool(auth_token)
+                    )
+                except Exception:  # noqa: BLE001 — never let suggestions break stream
+                    suggestions = []
+                if suggestions:
+                    yield {"event": "suggestions", "data": {"items": suggestions}}
+                yield {
+                    "event": "done",
+                    "data": {
+                        "metadata": {
+                            "model": settings.LLM_CHAT_MODEL,
+                            "provider": settings.LLM_PROVIDER,
+                            "tools_used": tools_used,
+                            "degenerate_repetition": True,
+                        },
+                        "tools_used": tools_used,
+                    },
+                }
+                return
+
+            # Stream complete — flush any tail held back (gate marker-hold +
+            # repetition-guard run buffer), then split the final output into
+            # visible text + grounded follow-up chips.
+            tail = repguard.feed(gate.flush()) + repguard.flush()
             if tail:
+                any_text_streamed = True
                 yield {"event": "text", "data": {"delta": tail}}
 
             raw_final = str(stream.final_output).strip() if stream.final_output else ""
