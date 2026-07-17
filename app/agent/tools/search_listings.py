@@ -58,6 +58,57 @@ def _has_search_criteria(params: Dict[str, Any]) -> bool:
     return has_location or bool(params.get("keyword"))
 
 
+# Provinces large enough that a province-only query returns tens of thousands of
+# listings — a "phòng trọ ở TP.HCM" search that is both slow to run and useless
+# to show. For these we require at least one narrowing signal before hitting the
+# backend. Data-driven: TP.HCM (~35k) and Hà Nội (~20k) dominate the catalogue;
+# smaller provinces (e.g. Cần Thơ ~tens of results) are fine province-only, so
+# they are deliberately excluded. Extend this set as the dataset grows.
+_MAJOR_METRO_PROVINCE_CODES = frozenset({"79", "01"})
+
+# Filters that meaningfully cut a metro result set below "the whole city". A bare
+# province — even WITH a productType — is not enough: "phòng trọ ở TP.HCM" still
+# spans tens of thousands of rows. So productType / productTypes / listingType /
+# sortBy / page / size are intentionally NOT counted as narrowing here.
+_NARROWING_KEYS = (
+    "districtCode",
+    "newWardCode",
+    "wardId",
+    "latitude",
+    "keyword",
+    "minPrice",
+    "maxPrice",
+    "minArea",
+    "maxArea",
+    "minBedrooms",
+    "maxBedrooms",
+    "bedrooms",
+    "bathrooms",
+    "amenityIds",
+)
+
+_NEED_NARROWING_MSG = (
+    "Khu vực này có RẤT nhiều tin nên tìm kiểu chỉ-có-tỉnh sẽ ra hàng chục nghìn "
+    "kết quả không sát nhu cầu. ĐỪNG gọi lại search vội. HÃY HỎI người dùng thêm "
+    "ít nhất MỘT tiêu chí để lọc: khu vực cụ thể hơn (quận/huyện) HOẶC khoảng "
+    "ngân sách (giá). Chỉ gọi lại search khi người dùng đã cung cấp thêm."
+)
+
+
+def _needs_narrowing(params: Dict[str, Any]) -> bool:
+    """True when a major-metro search is scoped only to the province (too broad).
+
+    Catches the slow, useless "whole big-city" query — a call on TP.HCM / Hà Nội
+    with no district, budget, or other narrowing filter. The model should ask the
+    user for one more criterion first, instead of dumping tens of thousands of
+    rows. productType alone does NOT count (see ``_NARROWING_KEYS``).
+    """
+    province = params.get("provinceCode") or params.get("provinceId")
+    if str(province) not in _MAJOR_METRO_PROVINCE_CODES:
+        return False
+    return not any(params.get(k) for k in _NARROWING_KEYS)
+
+
 # The backend's ListingFilterRequest takes price / area / bedroom filters as a
 # SINGLE `from..to` string (either side optional) — it has no minPrice/maxPrice
 # fields. Sending those made Jackson silently drop them, so e.g. a maxPrice
@@ -505,6 +556,18 @@ async def search_listings(
     # model to fill it wrongly).
     if "provinceCode" in params:
         params.setdefault("provinceId", params["provinceCode"])
+
+    # Too-broad guard: a major-metro province with no narrowing filter would scan
+    # the whole city (tens of thousands of rows — slow and useless). Ask the user
+    # to narrow BEFORE calling the backend, rather than returning a giant set.
+    # Runs before the product-type dispatch so it covers both the single- and
+    # multi-type paths (e.g. "phòng trọ ở TP.HCM" → productTypes but no district).
+    if _needs_narrowing(params):
+        logger.info(
+            "search_listings: metro province-only query (province=%s) — asking to narrow",
+            params.get("provinceCode"),
+        )
+        return {"status": "need_narrowing", "message": _NEED_NARROWING_MSG}
 
     # productTypes (array) wins over productType (single). When 2+ types are
     # passed, fan out and merge. A 1-element array collapses to a single call.
