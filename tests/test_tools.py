@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from app.agent.tools.search_listings import _do_search, search_listings
+from app.agent.tools.search_listings import (
+    _do_search,
+    _needs_narrowing,
+    search_listings,
+)
 
 
 def test_schema_uses_district_code_not_district_id():
@@ -146,6 +150,42 @@ def test_area_and_bedroom_ranges_translated():
     assert sent.get("bedroomsRange") == "2..3"
     for dropped in ("minArea", "maxArea", "minBedrooms", "maxBedrooms"):
         assert dropped not in sent
+
+
+def test_metro_province_only_needs_narrowing():
+    # "Tìm phòng trọ ở TP.HCM" resolves to province 79 (+ a product type the
+    # tool handles separately), with no district or budget. That would return
+    # tens of thousands of rows — the tool must ask the user to narrow instead.
+    assert _needs_narrowing({"provinceCode": "79"}) is True
+    assert _needs_narrowing({"provinceCode": "01"}) is True
+    # provinceId is the internal mirror of provinceCode — guard both.
+    assert _needs_narrowing({"provinceId": "79"}) is True
+
+
+def test_metro_with_district_or_budget_is_not_narrowed():
+    # Any real narrowing signal lets the search proceed.
+    assert _needs_narrowing({"provinceCode": "79", "districtCode": "760"}) is False
+    assert _needs_narrowing({"provinceCode": "79", "maxPrice": 5_000_000.0}) is False
+    assert (
+        _needs_narrowing({"provinceCode": "79", "keyword": "gần ĐH Kiến Trúc"}) is False
+    )
+    assert _needs_narrowing({"provinceCode": "01", "minArea": 20.0}) is False
+
+
+def test_small_province_is_never_narrowed():
+    # Cần Thơ (92) returns a handful of results province-only — asking to narrow
+    # there would just annoy the user, so the guard must not trigger.
+    assert _needs_narrowing({"provinceCode": "92"}) is False
+    assert _needs_narrowing({"provinceCode": "48"}) is False
+    # No province at all is handled by the separate no-criteria guard, not here.
+    assert _needs_narrowing({"size": 5}) is False
+
+
+def test_metro_product_type_alone_still_needs_narrowing():
+    # productType is NOT a narrowing signal: "phòng trọ ở TP.HCM" still spans the
+    # whole city. (productTypes is handled outside `params`, so it can't sneak in
+    # as narrowing either.)
+    assert _needs_narrowing({"provinceCode": "79", "productType": "ROOM"}) is True
 
 
 def test_search_result_carries_canonical_share_url():
