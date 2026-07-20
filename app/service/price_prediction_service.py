@@ -24,7 +24,11 @@ from app.ai.llm.agent_factory import default_model_settings, make_model
 from app.ai.llm.gateway import get_gateway
 from app.core import backend_client
 from app.core.config import settings
-from app.dto.house_pricing import PriceSuggestionRequest, PriceSuggestionResponse
+from app.dto.house_pricing import (
+    PriceConfidence,
+    PriceSuggestionRequest,
+    PriceSuggestionResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,66 @@ If no listings found, use estimation based on Vietnam rental market standards:
 - Hanoi: 150k-200k VND/m²/month
 - Ho Chi Minh: 180k-250k VND/m²/month
 - Da Nang: 130k-180k VND/m²/month"""
+
+
+# --------------------------------------------------------------------------
+# Rule-based fallback tables.
+#
+# Keys must be matched as substrings against the *raw* names the frontend
+# sends, which are Vietnamese with diacritics ("Hà Nội", "Hoàn Kiếm").
+# ASCII spellings are kept alongside for callers that send transliterated
+# names. These mirror the tables in app/agent/tools/get_price_estimate.py.
+# --------------------------------------------------------------------------
+_CITY_RENT: Dict[str, Dict[str, int]] = {
+    "hà nội": {"high": 220_000, "medium": 160_000, "low": 110_000},
+    "hanoi": {"high": 220_000, "medium": 160_000, "low": 110_000},
+    "ha noi": {"high": 220_000, "medium": 160_000, "low": 110_000},
+    "hồ chí minh": {"high": 270_000, "medium": 190_000, "low": 130_000},
+    "ho chi minh": {"high": 270_000, "medium": 190_000, "low": 130_000},
+    "đà nẵng": {"high": 190_000, "medium": 140_000, "low": 90_000},
+    "da nang": {"high": 190_000, "medium": 140_000, "low": 90_000},
+}
+_DEFAULT_RENT: Dict[str, int] = {"high": 180_000, "medium": 130_000, "low": 90_000}
+
+_HIGH_TIER_DISTRICTS = (
+    "hoàn kiếm",
+    "hoan kiem",
+    "ba đình",
+    "ba dinh",
+    "tây hồ",
+    "tay ho",
+    "quận 1",
+    "quan 1",
+    "district 1",
+    "quận 3",
+    "quan 3",
+    "district 3",
+    "hải châu",
+    "hai chau",
+)
+_LOW_TIER_DISTRICTS = (
+    "hà đông",
+    "ha dong",
+    "thanh trì",
+    "thanh tri",
+    "gia lâm",
+    "gia lam",
+    "thủ đức",
+    "thu duc",
+    "bình tân",
+    "binh tan",
+    "gò vấp",
+    "go vap",
+)
+
+_PROPERTY_MULTIPLIERS: Dict[str, float] = {
+    "apartment": 1.0,
+    "house": 1.1,
+    "villa": 1.5,
+    "office": 1.2,
+    "room": 0.8,
+    "studio": 0.9,
+}
 
 
 @dataclass
@@ -172,11 +236,14 @@ class PricePredictionService:
                 model=settings.LLM_PRICE_MODEL,
                 input=prompt[:2000],
             )
+            # Keep our own handle on the context so we can count the listings the
+            # agent actually retrieved, rather than trusting the number it reports.
+            ctx = _PriceCtx()
             try:
                 run_result = await Runner.run(
                     starting_agent=agent,
                     input=prompt,
-                    context=_PriceCtx(),
+                    context=ctx,
                     max_turns=12,
                 )
                 result_text = str(run_result.final_output or "")
@@ -187,25 +254,38 @@ class PricePredictionService:
 
             trace.update(output={"response": result_text[:500]})
             result = self._parse_json(result_text)
+            price_range = self._validated_range(result)
+
+            listings_found = self._count_unique_listings(ctx.last_listings)
+            confidence = self._resolve_confidence(
+                result.get("confidence"), listings_found
+            )
 
             return PriceSuggestionResponse(
-                price_range={
-                    "min": int(result["min_price"]),
-                    "max": int(result["max_price"]),
-                },
+                price_range=price_range,
                 location=f"{request.district}, {request.city}",
                 property_type=request.property_type,
                 currency="VND",
+                source="ai_comparables",
+                listings_found=listings_found,
+                confidence=confidence,
             )
 
         except Exception as e:
-            logger.error("Error in AI price prediction: %s", e)
+            logger.warning(
+                "AI price prediction failed, using rule-based fallback: %s",
+                e,
+                exc_info=True,
+            )
             price_range = self._estimate_price_range(request)
             return PriceSuggestionResponse(
                 price_range=price_range,
                 location=f"{request.district}, {request.city}",
                 property_type=request.property_type,
                 currency="VND",
+                source="rule_based_fallback",
+                listings_found=0,
+                confidence="low",
             )
 
     @staticmethod
@@ -219,6 +299,72 @@ class PricePredictionService:
             text = text.strip()
         return json.loads(text)
 
+    # Sanity bounds for a monthly rent in VND. Anything outside this is treated
+    # as a hallucinated figure (e.g. the model answering in millions or in USD)
+    # and drops the whole response to the rule-based fallback.
+    _MIN_PLAUSIBLE_VND = 300_000
+    _MAX_PLAUSIBLE_VND = 5_000_000_000
+
+    @classmethod
+    def _validated_range(cls, result: Dict[str, Any]) -> Dict[str, int]:
+        """Validate the agent's price range, raising if it is not usable.
+
+        The LLM does the arithmetic, so nothing guarantees the numbers are
+        present, integral, ordered or even denominated in VND. Raising here
+        routes the request to the rule-based fallback instead of returning a
+        nonsensical range to the user.
+        """
+        try:
+            minimum = int(result["min_price"])
+            maximum = int(result["max_price"])
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"agent returned an unusable price range: {result}") from e
+
+        if minimum > maximum:
+            minimum, maximum = maximum, minimum
+
+        if not (
+            cls._MIN_PLAUSIBLE_VND <= minimum
+            and maximum <= cls._MAX_PLAUSIBLE_VND
+            and minimum > 0
+        ):
+            raise ValueError(
+                f"agent price range out of plausible VND bounds: {minimum}-{maximum}"
+            )
+
+        return {"min": minimum, "max": maximum}
+
+    @staticmethod
+    def _count_unique_listings(listings: List[Dict[str, Any]]) -> int:
+        """Count distinct listings retrieved across all tool calls.
+
+        The agent may search several times, so the same listing can be appended
+        more than once; de-duplicate by id and fall back to counting entries
+        that carry no id at all.
+        """
+        seen: set = set()
+        unidentified = 0
+        for listing in listings:
+            listing_id = listing.get("id") or listing.get("listingId")
+            if listing_id is None:
+                unidentified += 1
+            else:
+                seen.add(listing_id)
+        return len(seen) + unidentified
+
+    @staticmethod
+    def _resolve_confidence(reported: Any, listings_found: int) -> PriceConfidence:
+        """Trust the agent's confidence only as far as the evidence supports it."""
+        if listings_found == 0:
+            return "low"
+        candidate = str(reported).lower() if reported is not None else ""
+        if candidate not in ("high", "medium", "low"):
+            return "medium"
+        # A handful of comparables cannot justify a "high" claim.
+        if candidate == "high":
+            return "high" if listings_found >= 5 else "medium"
+        return "low" if candidate == "low" else "medium"
+
     @staticmethod
     def _estimate_price_range(request: PriceSuggestionRequest) -> Dict[str, int]:
         """Fallback estimation when AI analysis fails."""
@@ -227,52 +373,22 @@ class PricePredictionService:
         area = request.area or 30
         district = request.district.lower()
 
-        base_rent_per_m2 = {
-            "hanoi": {"high": 200_000, "medium": 150_000, "low": 100_000},
-            "ho chi minh": {"high": 250_000, "medium": 180_000, "low": 120_000},
-            "da nang": {"high": 180_000, "medium": 130_000, "low": 90_000},
-        }
-        type_multipliers = {
-            "apartment": 1.0,
-            "house": 1.1,
-            "villa": 1.5,
-            "office": 1.2,
-            "room": 0.8,
-            "studio": 0.9,
-        }
-
-        city_rents = base_rent_per_m2.get(
-            city, {"high": 180_000, "medium": 130_000, "low": 90_000}
-        )
+        city_rents = _DEFAULT_RENT
+        for key, rents in _CITY_RENT.items():
+            if key in city:
+                city_rents = rents
+                break
 
         tier = "medium"
-        high_districts = [
-            "hoan kiem",
-            "ba dinh",
-            "district 1",
-            "quan 1",
-            "hai chau",
-            "tay ho",
-            "district 3",
-        ]
-        low_districts = [
-            "ha dong",
-            "thanh tri",
-            "thu duc",
-            "binh thanh",
-            "binh tan",
-            "go vap",
-        ]
-        if any(x in district for x in high_districts):
+        if any(x in district for x in _HIGH_TIER_DISTRICTS):
             tier = "high"
-        elif any(x in district for x in low_districts):
+        elif any(x in district for x in _LOW_TIER_DISTRICTS):
             tier = "low"
 
         rent_per_m2 = city_rents[tier]
-        type_key = next(
-            (k for k in type_multipliers if k in property_type), "apartment"
+        multiplier = next(
+            (v for k, v in _PROPERTY_MULTIPLIERS.items() if k in property_type), 1.0
         )
-        multiplier = type_multipliers.get(type_key, 1.0)
         monthly_rent = rent_per_m2 * multiplier * area
 
         return {

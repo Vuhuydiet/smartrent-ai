@@ -1,6 +1,9 @@
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+PriceConfidence = Literal["high", "medium", "low"]
+PriceSource = Literal["ai_comparables", "rule_based_fallback"]
 
 
 class PriceSuggestionRequest(BaseModel):
@@ -41,3 +44,26 @@ class PriceSuggestionResponse(BaseModel):
     location: str = Field(..., description="Formatted location string (District, City)")
     property_type: str = Field(..., description="Type of property being evaluated")
     currency: str = Field(default="VND", description="Currency code (Vietnamese Dong)")
+    source: PriceSource = Field(
+        default="ai_comparables",
+        description=(
+            "How the range was produced. 'ai_comparables' = derived from real "
+            "listings retrieved from the backend; 'rule_based_fallback' = the "
+            "AI path failed and a hardcoded per-m² table was used instead."
+        ),
+    )
+    listings_found: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of comparable listings actually retrieved from the backend "
+            "and used as evidence. 0 means the range is not backed by market data."
+        ),
+    )
+    confidence: PriceConfidence = Field(
+        default="low",
+        description=(
+            "Confidence in the estimate. Forced to 'low' whenever no comparable "
+            "listings were retrieved or the rule-based fallback was used."
+        ),
+    )
