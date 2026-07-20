@@ -63,10 +63,15 @@ def _get_cache() -> "TTLCache[CacheKey, PriceSuggestionResponse, float]":
 
 
 def _normalize_text(value: str) -> str:
-    """Collapse diacritics/whitespace/case noise in free-text Vietnamese
-    location fields (e.g. " Hà Nội " vs "ha noi") so equivalent requests hit
+    """Collapse whitespace/case/encoding noise in free-text Vietnamese
+    location fields (e.g. " Hà Nội " vs "hà nội") so equivalent requests hit
     the same cache entry. NFC first so precomposed and decomposed diacritic
-    forms of the same character compare equal."""
+    forms of the same character compare equal.
+
+    Diacritics are deliberately NOT stripped: "ha noi" and "Hà Nội" stay
+    distinct keys. The frontend always sends the canonical accented name from
+    the address picker, so folding accents would only risk collapsing genuinely
+    different place names for no real hit-rate gain."""
     return unicodedata.normalize("NFC", value).strip().casefold()
 
 
