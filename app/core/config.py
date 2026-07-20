@@ -81,6 +81,22 @@ class Settings(BaseSettings):
     # uvicorn worker. Keeps a request burst from pinning the shared VM's CPU.
     CPU_BOUND_CONCURRENCY: int = 2
 
+    # Price Suggestion Configuration
+    # /price-suggestion runs an agent for up to 12 turns (each potentially
+    # calling back into the Java backend), so an in-process TTL cache avoids
+    # re-running it for repeat requests — most commonly the frontend wizard
+    # step re-mounting with the same property. Single uvicorn worker means no
+    # Redis is needed; the cache simply lives and dies with the process.
+    # 1 hour: comparable-listing prices don't meaningfully move within an
+    # hour, which is long enough to absorb repeated wizard mounts within one
+    # user session without pinning a stale estimate for too long.
+    PRICE_SUGGESTION_CACHE_TTL_SECONDS: int = 3600
+    # Each entry is one small JSON-able response, so this bounds memory to a
+    # trivial footprint while comfortably covering the realistic working set
+    # of distinct (location, property_type, area) combinations queried within
+    # one TTL window.
+    PRICE_SUGGESTION_CACHE_MAXSIZE: int = 500
+
     # Langfuse Observability
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""

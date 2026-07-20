@@ -30,5 +30,6 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-passlib, types-python-jose]
+        additional_dependencies:
+          [types-passlib, types-python-jose, "cachetools>=5.3.0"]
         exclude: ^(alembic/|tests/)

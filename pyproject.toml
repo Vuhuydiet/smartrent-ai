@@ -37,6 +37,7 @@ dependencies = [
     "mcp[cli]>=1.13.1",
     "chat2edit>=0.0.1",
     "opencv-python-headless>=4.8.0",
+    "cachetools>=5.3.0",
 ]
 
 [project.optional-dependencies]
