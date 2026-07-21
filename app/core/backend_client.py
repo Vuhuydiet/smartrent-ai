@@ -89,6 +89,35 @@ async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def get_price_comparables(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    POST /v1/listings/price-comparables
+
+    Purpose-built aggregate for price prediction: the backend filters comparable
+    listings by geo radius + type + area in SQL and returns deterministic price
+    statistics (min/p25/median/p75/max/avg + median price per m²). Unlike
+    `search_listings`, nothing here is paginated and no listing cards come back —
+    the range is computed server-side, not totalled up by the model.
+
+    Returns the raw `data` payload on success, or an error dict.
+    """
+    async with _backend_client() as client:
+        response = await client.post(
+            f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/price-comparables",
+            json=params,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") == "999999" and "data" in result:
+        return result["data"]
+
+    return {
+        "error": result.get("message", "Backend returned an unexpected response"),
+        "code": result.get("code"),
+    }
+
+
 async def get_listing(listing_id: str) -> Dict[str, Any]:
     """
     GET /v1/listings/{listing_id}

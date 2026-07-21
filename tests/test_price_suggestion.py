@@ -1,13 +1,15 @@
 """Tests for the price-suggestion response contract and rule-based fallback."""
 
+from typing import Any
+
 import pytest
 
 from app.dto.house_pricing import PriceSuggestionRequest
 from app.service.price_prediction_service import PricePredictionService
 
 
-def _request(**overrides) -> PriceSuggestionRequest:
-    payload = {
+def _request(**overrides: Any) -> PriceSuggestionRequest:
+    payload: dict[str, Any] = {
         "city": "Hà Nội",
         "district": "Hoàn Kiếm",
         "ward": "Phường Hàng Bạc",
@@ -20,64 +22,86 @@ def _request(**overrides) -> PriceSuggestionRequest:
     return PriceSuggestionRequest(**payload)
 
 
-class TestValidatedRange:
-    def test_accepts_a_plausible_range(self):
-        assert PricePredictionService._validated_range(
-            {"min_price": 5_000_000, "max_price": 8_000_000}
-        ) == {"min": 5_000_000, "max": 8_000_000}
+class TestRangeFromStats:
+    def test_uses_interquartile_band(self):
+        stats = {"min": 3_000_000, "p25": 4_000_000, "p75": 6_000_000, "max": 9_000_000}
+        assert PricePredictionService._range_from_stats(stats) == {
+            "min": 4_000_000,
+            "max": 6_000_000,
+        }
 
-    def test_reorders_an_inverted_range(self):
-        assert PricePredictionService._validated_range(
-            {"min_price": 8_000_000, "max_price": 5_000_000}
-        ) == {"min": 5_000_000, "max": 8_000_000}
+    def test_falls_back_to_min_max_when_quartiles_absent(self):
+        stats = {"min": 3_000_000, "max": 9_000_000}
+        assert PricePredictionService._range_from_stats(stats) == {
+            "min": 3_000_000,
+            "max": 9_000_000,
+        }
+
+    def test_spreads_a_degenerate_band_so_min_never_equals_max(self):
+        stats = {"p25": 5_000_000, "p75": 5_000_000}
+        result = PricePredictionService._range_from_stats(stats)
+        assert result["min"] < result["max"]
 
     @pytest.mark.parametrize(
-        "result",
+        "stats",
         [
             {},
-            {"min_price": 5_000_000},
-            {"min_price": None, "max_price": 8_000_000},
-            {"min_price": "abc", "max_price": "def"},
-            # Answered in millions instead of VND.
-            {"min_price": 5, "max_price": 8},
+            {"p25": None, "p75": None},
+            # Aggregates in millions instead of VND.
+            {"p25": 5, "p75": 8},
             # Absurdly large.
-            {"min_price": 1, "max_price": 9_000_000_000_000},
-            {"min_price": -1000, "max_price": 8_000_000},
+            {"p25": 1, "p75": 9_000_000_000_000},
         ],
     )
-    def test_rejects_unusable_output(self, result):
+    def test_rejects_unusable_stats(self, stats):
         with pytest.raises(ValueError):
-            PricePredictionService._validated_range(result)
+            PricePredictionService._range_from_stats(stats)
 
 
-class TestCountUniqueListings:
-    def test_deduplicates_across_repeated_searches(self):
-        listings = [{"id": 1}, {"id": 2}, {"id": 1}]
-        assert PricePredictionService._count_unique_listings(listings) == 2
+class TestBestStats:
+    def test_picks_the_query_with_the_largest_sample(self):
+        calls = [
+            {"sampleSize": 3, "median": 4_000_000},
+            {"sampleSize": 25, "median": 5_000_000},
+            {"sampleSize": 0},
+        ]
+        assert PricePredictionService._best_stats(calls)["sampleSize"] == 25
 
-    def test_counts_entries_without_an_id(self):
-        listings = [{"id": 1}, {"title": "no id"}, {"title": "also no id"}]
-        assert PricePredictionService._count_unique_listings(listings) == 3
-
-    def test_empty(self):
-        assert PricePredictionService._count_unique_listings([]) == 0
+    def test_raises_when_no_query_found_comparables(self):
+        with pytest.raises(ValueError):
+            PricePredictionService._best_stats([{"sampleSize": 0}, {"error": "x"}])
 
 
-class TestResolveConfidence:
-    def test_no_evidence_forces_low(self):
-        assert PricePredictionService._resolve_confidence("high", 0) == "low"
+class TestConfidenceFromStats:
+    def test_no_evidence_is_low(self):
+        assert PricePredictionService._confidence_from_stats({"sampleSize": 0}) == "low"
 
-    def test_high_requires_enough_comparables(self):
-        assert PricePredictionService._resolve_confidence("high", 3) == "medium"
-        assert PricePredictionService._resolve_confidence("high", 5) == "high"
+    def test_large_tight_sample_is_high(self):
+        stats = {
+            "sampleSize": 30,
+            "p25": 4_500_000,
+            "median": 5_000_000,
+            "p75": 5_500_000,
+        }
+        assert PricePredictionService._confidence_from_stats(stats) == "high"
 
-    def test_garbage_defaults_to_medium(self):
-        assert PricePredictionService._resolve_confidence("very sure", 10) == "medium"
-        assert PricePredictionService._resolve_confidence(None, 10) == "medium"
+    def test_moderate_sample_is_medium(self):
+        stats = {
+            "sampleSize": 10,
+            "p25": 4_000_000,
+            "median": 5_000_000,
+            "p75": 6_500_000,
+        }
+        assert PricePredictionService._confidence_from_stats(stats) == "medium"
 
-    def test_passes_through_valid_values(self):
-        assert PricePredictionService._resolve_confidence("low", 10) == "low"
-        assert PricePredictionService._resolve_confidence("MEDIUM", 10) == "medium"
+    def test_wide_dispersion_drops_to_low(self):
+        stats = {
+            "sampleSize": 30,
+            "p25": 2_000_000,
+            "median": 5_000_000,
+            "p75": 9_000_000,
+        }
+        assert PricePredictionService._confidence_from_stats(stats) == "low"
 
 
 class TestRuleBasedFallback:
