@@ -6,6 +6,7 @@ tests don't leak cache entries into each other.
 """
 
 import time
+from typing import Any
 
 import pytest
 
@@ -20,8 +21,8 @@ client = TestClient(app)
 URL = "/api/v1/price-suggestion/get-price-suggestion"
 
 
-def _request(**overrides) -> PriceSuggestionRequest:
-    payload = {
+def _request(**overrides: Any) -> PriceSuggestionRequest:
+    payload: dict[str, Any] = {
         "city": "Hà Nội",
         "district": "Hoàn Kiếm",
         "ward": "Phường Hàng Bạc",

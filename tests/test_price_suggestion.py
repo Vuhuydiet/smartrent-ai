@@ -1,13 +1,15 @@
 """Tests for the price-suggestion response contract and rule-based fallback."""
 
+from typing import Any
+
 import pytest
 
 from app.dto.house_pricing import PriceSuggestionRequest
 from app.service.price_prediction_service import PricePredictionService
 
 
-def _request(**overrides) -> PriceSuggestionRequest:
-    payload = {
+def _request(**overrides: Any) -> PriceSuggestionRequest:
+    payload: dict[str, Any] = {
         "city": "Hà Nội",
         "district": "Hoàn Kiếm",
         "ward": "Phường Hàng Bạc",
