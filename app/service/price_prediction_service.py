@@ -1,12 +1,13 @@
 """
-Price prediction service — uses an OpenAI Agents SDK Agent that calls the
-shared `search_listings` function tool to find comparable listings, then
-returns a structured price range.
+Price prediction service — an OpenAI Agents SDK Agent chooses the comparable-
+search criteria and calls the `get_price_comparables` tool, which returns price
+statistics computed server-side in SQL. The service builds the final range from
+those statistics (interquartile band) — the model never does the arithmetic.
 
-Falls back to a rule-based estimate when the AI agent fails.
+Falls back to a rule-based estimate when the AI agent fails or finds no
+comparables.
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, List, Optional
@@ -35,28 +36,26 @@ logger = logging.getLogger(__name__)
 _SYSTEM_INSTRUCTION = """\
 You are a real estate price prediction expert for Vietnam rental market.
 
-You have access to the SmartRent backend listing database through the
-`search_comparable_listings` tool.
+You have access to the SmartRent backend through the `get_price_comparables`
+tool. The tool does the maths for you: given your chosen criteria it filters
+comparable listings and returns price statistics computed in SQL
+(min/p25/median/p75/max/avg and median price per m²). You are responsible for
+CHOOSING GOOD CRITERIA — never for computing the range yourself.
 
 Your task:
-1. Use the tool to find similar rental properties in the requested location.
-2. Search within 2km radius of the coordinates.
-3. Filter by property type and area (±30% range).
-4. Analyze the prices of similar listings.
-5. Calculate a realistic price range based on market data.
+1. Call `get_price_comparables` for the requested property: same product_type,
+   listing_type RENT, price_unit MONTH, within a 2km radius, and an area band of
+   roughly ±30% around the target area (min_area/max_area).
+2. Look at `sampleSize`. If it is small (< 8), widen the search and call again:
+   first grow the radius (e.g. 3–5 km), then loosen the area band. Prefer the
+   query that yields the most comparables while staying representative.
+3. Once you have a query with enough comparables, you are done — the backend has
+   already produced the statistics. Reply with a one-line confirmation such as
+   "Found N comparables." Do NOT invent or recompute any price; the service reads
+   the SQL-computed statistics directly from your tool calls.
 
-Return ONLY a JSON object with this exact format:
-{
-    "min_price": <number in VND>,
-    "max_price": <number in VND>,
-    "listings_found": <number of listings analyzed>,
-    "confidence": <"high" | "medium" | "low">
-}
-
-If no listings found, use estimation based on Vietnam rental market standards:
-- Hanoi: 150k-200k VND/m²/month
-- Ho Chi Minh: 180k-250k VND/m²/month
-- Da Nang: 130k-180k VND/m²/month"""
+If every query returns sampleSize 0, say "No comparables found." and stop — the
+service will fall back to a rule-based estimate."""
 
 
 # --------------------------------------------------------------------------
@@ -121,77 +120,91 @@ _PROPERTY_MULTIPLIERS: Dict[str, float] = {
 
 @dataclass
 class _PriceCtx:
-    """Context for the price-prediction agent."""
+    """Context for the price-prediction agent.
 
-    last_listings: List[Dict[str, Any]] = field(default_factory=list)
+    Holds every comparables aggregate the agent pulled during the run so the
+    service can build the final range from the SQL-computed statistics of the
+    best-supported query, rather than trusting any number the model writes out.
+    """
+
+    stats_calls: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @function_tool(
-    name_override="search_comparable_listings",
-    description_override="Search for rental property listings in SmartRent database.",
+    name_override="get_price_comparables",
+    description_override=(
+        "Return deterministic price statistics (min/p25/median/p75/max/avg and "
+        "median price per m²) for comparable rental listings near a point. The "
+        "backend filters by geo radius + type + area and computes the numbers in "
+        "SQL — you choose the criteria; you do NOT compute the range yourself."
+    ),
 )
-async def _search_comparable_listings(
+async def _get_price_comparables(
     ctx: RunContextWrapper[_PriceCtx],
-    listing_type: Annotated[
-        str,
-        Field(
-            description="Type of listing",
-            json_schema_extra={"enum": ["RENT", "SELL"]},
-        ),
-    ],
-    latitude: Annotated[float, Field(description="Latitude coordinate")],
-    longitude: Annotated[float, Field(description="Longitude coordinate")],
-    radius_km: Annotated[
-        Optional[float], Field(description="Search radius in kilometers")
-    ] = None,
+    latitude: Annotated[float, Field(description="Center latitude")],
+    longitude: Annotated[float, Field(description="Center longitude")],
     product_type: Annotated[
-        Optional[str],
+        str,
         Field(
             description="Property type",
             json_schema_extra={
-                "enum": ["APARTMENT", "HOUSE", "VILLA", "OFFICE", "ROOM"]
+                "enum": ["ROOM", "APARTMENT", "HOUSE", "OFFICE", "STUDIO", "STORE"]
             },
         ),
+    ],
+    listing_type: Annotated[
+        str,
+        Field(
+            description="Listing type (usually RENT)",
+            json_schema_extra={"enum": ["RENT", "SALE", "SHARE"]},
+        ),
+    ] = "RENT",
+    radius_km: Annotated[
+        Optional[float],
+        Field(description="Search radius in km (default 2, max 20)"),
     ] = None,
+    price_unit: Annotated[
+        str,
+        Field(
+            description="Price unit to compare within (usually MONTH)",
+            json_schema_extra={"enum": ["MONTH", "DAY", "YEAR"]},
+        ),
+    ] = "MONTH",
     min_area: Annotated[
-        Optional[float], Field(description="Minimum area in m²")
+        Optional[float], Field(description="Minimum comparable area in m²")
     ] = None,
     max_area: Annotated[
-        Optional[float], Field(description="Maximum area in m²")
-    ] = None,
-    size: Annotated[
-        Optional[int], Field(description="Number of results to return")
+        Optional[float], Field(description="Maximum comparable area in m²")
     ] = None,
 ) -> Dict[str, Any]:
     params: Dict[str, Any] = {
-        "listingType": listing_type,
         "latitude": latitude,
         "longitude": longitude,
-        "excludeExpired": True,
+        "productType": product_type,
+        "listingType": listing_type,
+        "priceUnit": price_unit,
     }
     if radius_km is not None:
         params["radiusKm"] = radius_km
-    if product_type is not None:
-        params["propertyType"] = product_type
     if min_area is not None:
         params["minArea"] = min_area
     if max_area is not None:
         params["maxArea"] = max_area
-    if size is not None:
-        params["size"] = size
 
     try:
-        data = await backend_client.search_listings(params)
-        listings = data.get("listings", [])
-        ctx.context.last_listings.extend(listings)
-        logger.info("price-search returned %d results", len(listings))
-        return {"listings": listings, "total": len(listings)}
+        data = await backend_client.get_price_comparables(params)
+        if "error" in data:
+            logger.error("price-comparables backend error: %s", data.get("error"))
+            return {"sampleSize": 0, "error": data["error"]}
+        ctx.context.stats_calls.append(data)
+        logger.info("price-comparables returned sampleSize=%s", data.get("sampleSize"))
+        return data
     except httpx.HTTPStatusError as e:
-        logger.error("Backend HTTP %s in price-search", e.response.status_code)
-        return {"listings": [], "total": 0, "error": str(e)}
+        logger.error("Backend HTTP %s in price-comparables", e.response.status_code)
+        return {"sampleSize": 0, "error": str(e)}
     except Exception as e:
-        logger.error("price-search failed: %s", e, exc_info=True)
-        return {"listings": [], "total": 0, "error": str(e)}
+        logger.error("price-comparables failed: %s", e, exc_info=True)
+        return {"sampleSize": 0, "error": str(e)}
 
 
 class PricePredictionService:
@@ -228,7 +241,7 @@ class PricePredictionService:
                 instructions=_SYSTEM_INSTRUCTION,
                 model=make_model(settings.LLM_PRICE_MODEL),
                 model_settings=default_model_settings(temperature=0.3),
-                tools=[_search_comparable_listings],
+                tools=[_get_price_comparables],
             )
 
             generation = trace.generation(
@@ -236,8 +249,9 @@ class PricePredictionService:
                 model=settings.LLM_PRICE_MODEL,
                 input=prompt[:2000],
             )
-            # Keep our own handle on the context so we can count the listings the
-            # agent actually retrieved, rather than trusting the number it reports.
+            # Keep our own handle on the context so we can read the SQL-computed
+            # statistics the agent's tool calls produced, rather than trusting any
+            # number the model writes into its final message.
             ctx = _PriceCtx()
             try:
                 run_result = await Runner.run(
@@ -253,13 +267,14 @@ class PricePredictionService:
                 raise
 
             trace.update(output={"response": result_text[:500]})
-            result = self._parse_json(result_text)
-            price_range = self._validated_range(result)
 
-            listings_found = self._count_unique_listings(ctx.last_listings)
-            confidence = self._resolve_confidence(
-                result.get("confidence"), listings_found
-            )
+            # The range is built from the backend statistics of the best-supported
+            # query the agent ran — never from the model's prose. Raises (→ fallback)
+            # when no query returned any comparables.
+            best = self._best_stats(ctx.stats_calls)
+            price_range = self._range_from_stats(best)
+            listings_found = int(best.get("sampleSize") or 0)
+            confidence = self._confidence_from_stats(best)
 
             return PriceSuggestionResponse(
                 price_range=price_range,
@@ -288,82 +303,95 @@ class PricePredictionService:
                 confidence="low",
             )
 
-    @staticmethod
-    def _parse_json(text: str) -> Dict[str, Any]:
-        """Parse JSON from LLM response, stripping markdown fences."""
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-            if text.endswith("```"):
-                text = text.rsplit("\n```", 1)[0]
-            text = text.strip()
-        return json.loads(text)
-
-    # Sanity bounds for a monthly rent in VND. Anything outside this is treated
-    # as a hallucinated figure (e.g. the model answering in millions or in USD)
-    # and drops the whole response to the rule-based fallback.
+    # Sanity bounds for a monthly rent in VND. A backend aggregate outside this
+    # band means the comparables were mispriced/misfiltered, so we drop to the
+    # rule-based fallback rather than surfacing an absurd range.
     _MIN_PLAUSIBLE_VND = 300_000
     _MAX_PLAUSIBLE_VND = 5_000_000_000
 
-    @classmethod
-    def _validated_range(cls, result: Dict[str, Any]) -> Dict[str, int]:
-        """Validate the agent's price range, raising if it is not usable.
+    @staticmethod
+    def _best_stats(stats_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Pick the comparables query with the most evidence behind it.
 
-        The LLM does the arithmetic, so nothing guarantees the numbers are
-        present, integral, ordered or even denominated in VND. Raising here
-        routes the request to the rule-based fallback instead of returning a
-        nonsensical range to the user.
+        The agent may widen its search across several calls; the one with the
+        largest sample is the most representative. Raises when no call returned
+        any comparables so the caller falls back to a rule-based estimate.
         """
-        try:
-            minimum = int(result["min_price"])
-            maximum = int(result["max_price"])
-        except (KeyError, TypeError, ValueError) as e:
-            raise ValueError(f"agent returned an unusable price range: {result}") from e
+        usable = [c for c in stats_calls if int(c.get("sampleSize") or 0) > 0]
+        if not usable:
+            raise ValueError("no comparables returned by any query")
+        return max(usable, key=lambda c: int(c.get("sampleSize") or 0))
 
-        if minimum > maximum:
-            minimum, maximum = maximum, minimum
+    @classmethod
+    def _range_from_stats(cls, stats: Dict[str, Any]) -> Dict[str, int]:
+        """Build a price range from the backend statistics.
+
+        Uses the interquartile band (p25–p75) as the range: robust to the
+        outliers that raw min/max would drag in. Guarantees min < max even for a
+        tiny or single-price sample, and validates the numbers sit in a plausible
+        VND band (raising → rule-based fallback otherwise).
+        """
+        lower = cls._as_int(stats.get("p25")) or cls._as_int(stats.get("min"))
+        upper = cls._as_int(stats.get("p75")) or cls._as_int(stats.get("max"))
+        if lower is None or upper is None:
+            raise ValueError(f"comparables stats missing price bounds: {stats}")
+
+        if lower > upper:
+            lower, upper = upper, lower
+
+        # Degenerate band (all comparables at one price, or n==1): spread ±10%
+        # around the point so the UI never shows an identical min and max.
+        if lower == upper:
+            lower = int(lower * 0.9)
+            upper = int(upper * 1.1)
 
         if not (
-            cls._MIN_PLAUSIBLE_VND <= minimum
-            and maximum <= cls._MAX_PLAUSIBLE_VND
-            and minimum > 0
+            cls._MIN_PLAUSIBLE_VND <= lower
+            and upper <= cls._MAX_PLAUSIBLE_VND
+            and lower > 0
         ):
             raise ValueError(
-                f"agent price range out of plausible VND bounds: {minimum}-{maximum}"
+                f"comparables price range out of plausible VND bounds: {lower}-{upper}"
             )
 
-        return {"min": minimum, "max": maximum}
+        return {"min": lower, "max": upper}
 
-    @staticmethod
-    def _count_unique_listings(listings: List[Dict[str, Any]]) -> int:
-        """Count distinct listings retrieved across all tool calls.
+    @classmethod
+    def _confidence_from_stats(cls, stats: Dict[str, Any]) -> PriceConfidence:
+        """Derive confidence from sample size and price dispersion.
 
-        The agent may search several times, so the same listing can be appended
-        more than once; de-duplicate by id and fall back to counting entries
-        that carry no id at all.
+        Deterministic — driven by how much market evidence there is and how
+        tightly the comparables agree, not by anything the model asserts.
         """
-        seen: set = set()
-        unidentified = 0
-        for listing in listings:
-            listing_id = listing.get("id") or listing.get("listingId")
-            if listing_id is None:
-                unidentified += 1
-            else:
-                seen.add(listing_id)
-        return len(seen) + unidentified
+        sample = int(stats.get("sampleSize") or 0)
+        if sample == 0:
+            return "low"
+
+        median = cls._as_int(stats.get("median"))
+        p25 = cls._as_int(stats.get("p25"))
+        p75 = cls._as_int(stats.get("p75"))
+        # Coefficient-of-dispersion proxy: interquartile width over the median.
+        spread = (
+            (p75 - p25) / median
+            if median and p25 is not None and p75 is not None and median > 0
+            else 1.0
+        )
+
+        if sample >= 20 and spread <= 0.4:
+            return "high"
+        if sample >= 8 and spread <= 0.8:
+            return "medium"
+        return "low"
 
     @staticmethod
-    def _resolve_confidence(reported: Any, listings_found: int) -> PriceConfidence:
-        """Trust the agent's confidence only as far as the evidence supports it."""
-        if listings_found == 0:
-            return "low"
-        candidate = str(reported).lower() if reported is not None else ""
-        if candidate not in ("high", "medium", "low"):
-            return "medium"
-        # A handful of comparables cannot justify a "high" claim.
-        if candidate == "high":
-            return "high" if listings_found >= 5 else "medium"
-        return "low" if candidate == "low" else "medium"
+    def _as_int(value: Any) -> Optional[int]:
+        """Coerce a backend numeric field to int, tolerating None/strings."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _estimate_price_range(request: PriceSuggestionRequest) -> Dict[str, int]:

@@ -231,21 +231,22 @@ def test_price_estimate_default_city():
     assert result["max"] > result["min"]
 
 
-def test_parse_json_plain():
+def test_range_from_stats_uses_interquartile_band():
     from app.service.price_prediction_service import PricePredictionService
 
-    raw = '{"min_price": 5000000, "max_price": 8000000, "listings_found": 3, "confidence": "high"}'
-    result = PricePredictionService._parse_json(raw)
-    assert result["min_price"] == 5_000_000
-    assert result["confidence"] == "high"
+    stats = {"min": 3_000_000, "p25": 4_000_000, "p75": 6_000_000, "max": 9_000_000}
+    result = PricePredictionService._range_from_stats(stats)
+    assert result == {"min": 4_000_000, "max": 6_000_000}
 
 
-def test_parse_json_fenced():
+def test_best_stats_picks_largest_sample():
     from app.service.price_prediction_service import PricePredictionService
 
-    raw = '```json\n{"min_price": 4000000, "max_price": 7000000, "listings_found": 0, "confidence": "low"}\n```'
-    result = PricePredictionService._parse_json(raw)
-    assert result["min_price"] == 4_000_000
+    calls = [
+        {"sampleSize": 4, "median": 4_000_000},
+        {"sampleSize": 22, "median": 5_000_000},
+    ]
+    assert PricePredictionService._best_stats(calls)["sampleSize"] == 22
 
 
 # ---------------------------------------------------------------------------
