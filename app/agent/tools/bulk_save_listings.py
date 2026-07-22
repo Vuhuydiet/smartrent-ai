@@ -16,6 +16,7 @@ from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
 from app.agent.tool_context import ToolContext
+from app.agent.tools.save_listing import classify_saved_conflict
 from app.core import backend_client
 
 logger = logging.getLogger(__name__)
@@ -38,13 +39,22 @@ async def _one(action: str, listing_id: str, token: str) -> Tuple[str, Dict[str,
         else:
             data = await backend_client.save_listing(listing_id, token)
         if "error" in data:
+            if classify_saved_conflict(action, None, None, data["error"]):
+                return listing_id, {"status": "already_done"}
             return listing_id, {"status": "error", "error": data["error"]}
         return listing_id, {"status": "success"}
     except httpx.HTTPStatusError as e:
-        return listing_id, {
-            "status": "error",
-            "error": f"HTTP {e.response.status_code}",
-        }
+        details = backend_client.error_details(e)
+        # Saving 3 tin where 1 was already saved is a partial no-op, not a
+        # failure — bucket it separately so the summary doesn't say "1 tin lỗi".
+        if classify_saved_conflict(
+            action, details["status"], details["code"], details["message"]
+        ):
+            return listing_id, {"status": "already_done"}
+        error = f"HTTP {details['status']}"
+        if details["message"]:
+            error += f": {details['message']}"
+        return listing_id, {"status": "error", "error": error}
     except Exception as e:  # noqa: BLE001
         logger.warning("bulk_save_listings: %s %s failed: %s", action, listing_id, e)
         return listing_id, {"status": "error", "error": str(e)}
@@ -84,27 +94,37 @@ async def _do_bulk_save(
     results = await asyncio.gather(*(_one(action, lid, token) for lid in ids))
 
     succeeded: List[str] = []
+    already_done: List[str] = []
     failed: List[Dict[str, str]] = []
     for lid, res in results:
         if res["status"] == "success":
             succeeded.append(lid)
+        elif res["status"] == "already_done":
+            already_done.append(lid)
         else:
             failed.append({"listingId": lid, "error": res["error"]})
 
     verb = "lưu" if action == "save" else "bỏ lưu"
-    if not failed:
-        message = f"Đã {verb} {len(succeeded)} tin."
-    elif not succeeded:
-        message = f"Không {verb} được tin nào."
-    else:
-        message = f"Đã {verb} {len(succeeded)}/{len(ids)} tin. {len(failed)} tin lỗi."
+    state = "đã lưu sẵn" if action == "save" else "vốn chưa lưu"
+    parts: List[str] = []
+    if succeeded:
+        parts.append(f"Đã {verb} {len(succeeded)} tin.")
+    if already_done:
+        parts.append(f"{len(already_done)} tin {state} từ trước nên bỏ qua.")
+    if failed:
+        parts.append(f"{len(failed)} tin lỗi.")
+    if not parts:
+        parts.append(f"Không {verb} được tin nào.")
 
     return {
-        "status": "success" if succeeded else "error",
+        # Nothing failed → success, even if every listing was already in that
+        # state. The user's intent ("cho 3 tin này vào yêu thích") is satisfied.
+        "status": "error" if failed and not (succeeded or already_done) else "success",
         "action": action,
         "succeeded": succeeded,
+        "alreadyDone": already_done,
         "failed": failed,
-        "message": message,
+        "message": " ".join(parts),
     }
 
 
@@ -114,7 +134,9 @@ async def _do_bulk_save(
         "Save or unsave 2-10 listings in one go. Use when the user says "
         "'lưu cả 3 tin', 'lưu hết tin trên', 'bỏ lưu hết'. Resolve "
         "listingIds from prior search results — never ask the user. For a "
-        "single listing, prefer save_listing instead."
+        "single listing, prefer save_listing instead. `alreadyDone` lists the "
+        "listings that were already in that state — mention them as skipped, "
+        "not as errors."
     ),
 )
 async def bulk_save_listings(

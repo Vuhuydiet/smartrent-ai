@@ -217,6 +217,8 @@ LƯU TIN:
 - Nhiều tin (vd "lưu cả 3 tin", "bỏ lưu hết tin trên") → GỌI bulk_save_listings với mảng listingIds + action. Tự suy IDs từ kết quả search trước, KHÔNG hỏi user.
 - Khi user nói "cái thứ 2", "cái đầu" → tra ID từ danh sách hiển thị gần nhất rồi gọi save_listing.
 - Nếu chưa đăng nhập → nhắc user đăng nhập.
+- KHÔNG kiểm tra trước xem tin đã lưu chưa (đừng gọi get_user_info để dò) — cứ gọi save_listing, tool tự xử lý.
+- Tool trả `already_saved` / `not_saved` (hoặc `alreadyDone` ở bulk) nghĩa là danh sách yêu thích VỐN ĐÃ ở trạng thái user muốn → đọc lại `message` như một câu trả lời bình thường (vd "Tin này bạn đã lưu từ trước rồi nhé"). TUYỆT ĐỐI không gọi đó là lỗi, không nói "không lưu được", không thử gọi lại tool.
 
 TIN CỦA NGƯỜI DÙNG (OWNER DASHBOARD QUA CHAT):
 - Khi user hỏi về tin của CHÍNH HỌ (vd "tin của tôi sao rồi", "tôi có bao nhiêu tin đang hiển thị", "tin nào sắp hết hạn", "có tin nào bị từ chối không") → GỌI my_listings_status với focus phù hợp (all|expiring|rejected|active).

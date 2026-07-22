@@ -60,6 +60,32 @@ async def aclose_shared_client() -> None:
         _shared_client = None
 
 
+def error_details(exc: httpx.HTTPStatusError) -> Dict[str, Any]:
+    """Unpack a backend error response into {status, code, message}.
+
+    The backend answers errors with its own envelope — a DomainCode string
+    ("24002") plus a user-ready Vietnamese message. Tools that only reported
+    "Backend returned HTTP 409" threw both away, so the model had nothing to
+    tell the user beyond a number. `code` is the reliable signal; `message` is
+    the fallback when a code hasn't been assigned yet.
+    """
+    message: Optional[str] = None
+    code: Optional[str] = None
+    try:
+        body = exc.response.json()
+        if isinstance(body, dict):
+            message = body.get("message") or body.get("error")
+            raw_code = body.get("code")
+            code = str(raw_code) if raw_code is not None else None
+    except Exception:  # noqa: BLE001 — non-JSON error body (proxy page, timeout)
+        message = (exc.response.text or "").strip()[:300] or None
+    return {
+        "status": exc.response.status_code,
+        "code": code,
+        "message": message,
+    }
+
+
 async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     POST /v1/listings/search
