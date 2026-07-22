@@ -14,6 +14,11 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import (
+    LISTING_STATUS_LABELS,
+    MODERATION_STATUS_LABELS,
+    localize_enum,
+)
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
@@ -21,7 +26,28 @@ logger = logging.getLogger(__name__)
 
 _MAX_LISTINGS_TO_SHOW = 5
 _ATTENTION_STATUSES = {"EXPIRING_SOON", "EXPIRED", "REJECTED", "PENDING_PAYMENT"}
-_ATTENTION_MODERATION = {"REJECTED", "REVISION_REQUIRED"}
+_ATTENTION_MODERATION = {"REJECTED", "REVISION_REQUIRED", "SUSPENDED"}
+
+# Deep links into the seller's "Quản lý tin đăng" page. The chat summary is
+# capped at _MAX_LISTINGS_TO_SHOW rows, so every focus gets a chip that opens
+# the same subset on the page. Query params are the ones getFiltersFromQuery()
+# reads on the frontend (listingStatus → the matching status tab).
+_MANAGE_PATH = "/seller/listings"
+_FOCUS_LINKS: Dict[str, Dict[str, str]] = {
+    "all": {"label": "Xem tất cả tin đăng", "url": _MANAGE_PATH},
+    "active": {
+        "label": "Xem tất cả tin đang hoạt động",
+        "url": f"{_MANAGE_PATH}?listingStatus=DISPLAYING",
+    },
+    "expiring": {
+        "label": "Xem tất cả tin sắp hết hạn",
+        "url": f"{_MANAGE_PATH}?listingStatus=EXPIRING_SOON",
+    },
+    "rejected": {
+        "label": "Xem tất cả tin bị từ chối",
+        "url": f"{_MANAGE_PATH}?listingStatus=REJECTED",
+    },
+}
 
 
 def _attention_listings(listings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -36,8 +62,10 @@ def _attention_listings(listings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 {
                     "listingId": str(item.get("listingId", "")),
                     "title": item.get("title", ""),
-                    "listingStatus": ls,
-                    "moderationStatus": ms,
+                    # Vietnamese labels, not raw enums — the model echoes these
+                    # verbatim, so "REVISION_REQUIRED" leaked straight to chat.
+                    "listingStatus": localize_enum(ls, LISTING_STATUS_LABELS),
+                    "moderationStatus": localize_enum(ms, MODERATION_STATUS_LABELS),
                     "expiryDate": item.get("expiryDate"),
                     "districtName": addr.get("districtName", ""),
                 }
@@ -79,11 +107,18 @@ async def _do_my_listings_status(token: str, focus: str) -> Dict[str, Any]:
 
     listings = data.get("listings") or []
     stats = data.get("statistics") or {}
+    total_count = data.get("totalCount", len(listings))
+    needs_attention = _attention_listings(listings)
 
     return {
         "status": "success",
         "focus": focus,
-        "totalCount": data.get("totalCount", len(listings)),
+        "totalCount": total_count,
+        # The frontend renders `manageUrl` as a tappable chip; tell the model so
+        # it stops writing "vui lòng truy cập mục Quản lý tin đăng" by hand.
+        "manageUrl": _FOCUS_LINKS.get(focus, _FOCUS_LINKS["all"])["url"],
+        "shownCount": len(needs_attention),
+        "moreAvailable": total_count > len(needs_attention),
         "statistics": {
             "active": stats.get("active", 0),
             "pendingVerification": stats.get("pendingVerification", 0),
@@ -97,8 +132,29 @@ async def _do_my_listings_status(token: str, focus: str) -> Dict[str, Any]:
                 "diamond": stats.get("diamondListings", 0),
             },
         },
-        "needsAttention": _attention_listings(listings),
+        "needsAttention": needs_attention,
     }
+
+
+async def _dispatch_my_listings(
+    ctx: RunContextWrapper[ToolContext], focus: Optional[str]
+) -> Dict[str, Any]:
+    """Auth gate + fetch + deep-link registration — called directly in tests."""
+    token = ctx.context.auth_token
+    if not token:
+        return {
+            "status": "error",
+            "error": (
+                "Người dùng chưa đăng nhập. Hãy hướng dẫn đăng nhập "
+                "để xem tin của mình."
+            ),
+        }
+    resolved_focus = focus or "all"
+    result = await _do_my_listings_status(token, resolved_focus)
+    if result.get("status") == "success":
+        link = _FOCUS_LINKS.get(resolved_focus, _FOCUS_LINKS["all"])
+        ctx.context.add_action_link(link["label"], link["url"])
+    return result
 
 
 @function_tool(
@@ -108,7 +164,10 @@ async def _do_my_listings_status(token: str, focus: str) -> Dict[str, Any]:
         "active / pending / rejected / expired / expiring-soon counts plus "
         "the short list of listings that need attention. Use whenever the "
         "user asks about THEIR OWN listings (vd 'tin của tôi sao rồi', "
-        "'tin nào sắp hết hạn'). Do NOT use for searching public listings."
+        "'tin nào sắp hết hạn'). Do NOT use for searching public listings. "
+        "Only a few listings fit in chat: when moreAvailable is true, say so "
+        "briefly — a 'Xem tất cả' button to manageUrl is added automatically, "
+        "so do NOT write the link or the page name yourself."
     ),
 )
 async def my_listings_status(
@@ -127,13 +186,4 @@ async def my_listings_status(
         ),
     ] = None,
 ) -> Dict[str, Any]:
-    token = ctx.context.auth_token
-    if not token:
-        return {
-            "status": "error",
-            "error": (
-                "Người dùng chưa đăng nhập. Hãy hướng dẫn đăng nhập "
-                "để xem tin của mình."
-            ),
-        }
-    return await _do_my_listings_status(token, focus or "all")
+    return await _dispatch_my_listings(ctx, focus)

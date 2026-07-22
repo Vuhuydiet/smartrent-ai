@@ -15,6 +15,7 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import NOTIFICATION_TYPE_LABELS, localize_enum
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
@@ -28,8 +29,11 @@ def _summarise(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     by_type: Dict[str, int] = {}
     unread = 0
     for n in items:
-        t = n.get("type") or n.get("notificationType") or "OTHER"
-        by_type[t] = by_type.get(t, 0) + 1
+        raw_type = n.get("type") or n.get("notificationType") or "OTHER"
+        # Bucket under the Vietnamese label — byType keys are read out loud by
+        # the model, so raw "LISTING_REVISION_REQUIRED" leaked into the answer.
+        label = localize_enum(raw_type, NOTIFICATION_TYPE_LABELS)
+        by_type[label] = by_type.get(label, 0) + 1
         if not n.get("read", n.get("isRead", False)):
             unread += 1
 
@@ -40,7 +44,10 @@ def _summarise(items: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "id": n.get("id") or n.get("notificationId"),
                 "title": n.get("title", ""),
                 "message": (n.get("message") or n.get("content") or "")[:200],
-                "type": n.get("type") or n.get("notificationType"),
+                "type": localize_enum(
+                    n.get("type") or n.get("notificationType"),
+                    NOTIFICATION_TYPE_LABELS,
+                ),
                 "read": n.get("read", n.get("isRead", False)),
                 "createdAt": n.get("createdAt") or n.get("created_at"),
             }

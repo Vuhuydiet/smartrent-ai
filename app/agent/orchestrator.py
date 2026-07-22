@@ -295,6 +295,9 @@ GỢI Ý CÂU HỎI TIẾP THEO (ẩn với người dùng — hệ thống tự
   ngang hay dấu phân cách (`---`, `***`, `___`, `===`) — hay bất kỳ dãy ký tự lặp
   nào — trước khối hoặc ở bất kỳ đâu trong câu trả lời. KHÔNG lặp lại cùng một ký tự
   nhiều lần để trang trí/căn dòng; điều này khiến hệ thống lỗi.
+- KHÔNG tạo gợi ý kiểu "Xem tất cả ..." / "Mở trang quản lý" — hệ thống tự chèn
+  nút mở trang khi tool trả về `manageUrl`. Đừng viết đường link hay tên trang
+  trong lời đáp, chỉ nói ngắn gọn là còn nhiều mục khác.
 - Chỉ bỏ khối này khi thật sự không có gợi ý nào hợp lý (hiếm khi)."""
 
 
@@ -435,6 +438,21 @@ def _parse_followups(raw: str) -> List[Dict[str, str]]:
         if len(out) >= _MAX_FOLLOWUPS:
             break
     return out
+
+
+def _merge_action_links(
+    action_links: List[Dict[str, str]], chips: List[Dict[str, str]]
+) -> List[Dict[str, str]]:
+    """Put deterministic deep-link chips first, then the conversational ones.
+
+    Action links come from the tools themselves (a real route + query built from
+    the tool's own arguments), so they lead — the model can neither invent nor
+    mangle them. The combined list still respects _MAX_FOLLOWUPS so the chip row
+    stays one line on mobile.
+    """
+    if not action_links:
+        return chips[:_MAX_FOLLOWUPS]
+    return (list(action_links) + list(chips))[:_MAX_FOLLOWUPS]
 
 
 def _split_followups(text: str) -> Tuple[str, List[Dict[str, str]]]:
@@ -894,6 +912,8 @@ class AgentOrchestrator:
             {"event": "text",     "data": {"delta": str}}
             {"event": "listings", "data": {...}}
             {"event": "suggestions", "data": {"items": [{"label": str, "query": str}]}}
+                  — an item carries "url" instead of "query" when it is a deep
+                  link into the app (see ToolContext.action_links).
             {"event": "done",     "data": {"metadata": {...}, "tools_used": [...]}}
             {"event": "error",    "data": {"message": str}}
         """
@@ -1075,6 +1095,7 @@ class AgentOrchestrator:
                     )
                 except Exception:  # noqa: BLE001 — never let suggestions break stream
                     suggestions = []
+                suggestions = _merge_action_links(tool_ctx.action_links, suggestions)
                 if suggestions:
                     yield {"event": "suggestions", "data": {"items": suggestions}}
                 yield {
@@ -1130,6 +1151,7 @@ class AgentOrchestrator:
                     )
                 except Exception:  # noqa: BLE001 — never let suggestions break stream
                     suggestions = []
+            suggestions = _merge_action_links(tool_ctx.action_links, suggestions)
             if suggestions:
                 yield {"event": "suggestions", "data": {"items": suggestions}}
 
