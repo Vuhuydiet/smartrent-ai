@@ -10,10 +10,28 @@ import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
 from pydantic import Field
 
+from app.agent.enum_labels import (
+    MEMBERSHIP_STATUS_LABELS,
+    PRODUCT_TYPE_LABELS,
+    localize_enum,
+)
 from app.agent.tool_context import ToolContext
 from app.core import backend_client
 
 logger = logging.getLogger(__name__)
+
+# Pages that own the full list behind each info type — chat shows at most 10
+# saved listings, so the summary links out instead of paginating in chat.
+_INFO_LINKS: Dict[str, Dict[str, str]] = {
+    "saved_listings": {
+        "label": "Xem tất cả tin đã lưu",
+        "url": "/saved-listings",
+    },
+    "membership": {
+        "label": "Xem gói hội viên",
+        "url": "/sellernet/membership",
+    },
+}
 
 
 async def _get_profile(token: str) -> Dict[str, Any]:
@@ -52,7 +70,7 @@ async def _get_membership(token: str) -> Dict[str, Any]:
             "packageLevel": package.get("packageLevel", ""),
             "startDate": data.get("startDate", ""),
             "endDate": data.get("endDate", ""),
-            "status": data.get("status", ""),
+            "status": localize_enum(data.get("status", ""), MEMBERSHIP_STATUS_LABELS),
         },
     }
 
@@ -74,16 +92,19 @@ async def _get_saved(token: str) -> Dict[str, Any]:
                     "title": listing.get("title", ""),
                     "price": listing.get("price"),
                     "districtName": addr.get("districtName", ""),
-                    "productType": listing.get("productType", ""),
+                    "productType": localize_enum(
+                        listing.get("productType", ""), PRODUCT_TYPE_LABELS
+                    ),
                 }
             )
         return {
             "status": "success",
             "count": len(listings),
+            "totalCount": data.get("totalCount", len(listings)),
             "savedListings": listings,
         }
 
-    return {"status": "success", "count": 0, "savedListings": []}
+    return {"status": "success", "count": 0, "totalCount": 0, "savedListings": []}
 
 
 async def _dispatch_user_info(
@@ -104,10 +125,15 @@ async def _dispatch_user_info(
         if info_type == "profile":
             return await _get_profile(token)
         if info_type == "membership":
-            return await _get_membership(token)
-        if info_type == "saved_listings":
-            return await _get_saved(token)
-        return {"status": "error", "error": f"Unknown info type: {info_type}"}
+            result = await _get_membership(token)
+        elif info_type == "saved_listings":
+            result = await _get_saved(token)
+        else:
+            return {"status": "error", "error": f"Unknown info type: {info_type}"}
+        link = _INFO_LINKS.get(info_type)
+        if link and result.get("status") == "success":
+            ctx.context.add_action_link(link["label"], link["url"])
+        return result
     except httpx.HTTPStatusError as e:
         logger.error("Backend HTTP %s for get_user_info", e.response.status_code)
         return {
