@@ -103,11 +103,20 @@ async def _do_update_price(
                 "status": "error",
                 "error": f"Không tìm thấy tin {listing_id}.",
             }
-        logger.error("update_listing_price HTTP %s", e.response.status_code)
-        return {
-            "status": "error",
-            "error": f"Backend returned HTTP {e.response.status_code}",
-        }
+        details = backend_client.error_details(e)
+        logger.error(
+            "update_listing_price HTTP %s (code=%s): %s",
+            details["status"],
+            details["code"],
+            details["message"],
+        )
+        # Constraint violations ("Listing does not belong to user", a VIP-tier
+        # rule, …) arrive as a 4xx/5xx carrying a usable Vietnamese message.
+        # Relay it — a bare status code leaves the model guessing.
+        error = f"Backend returned HTTP {details['status']}"
+        if details["message"]:
+            error += f": {details['message']}"
+        return {"status": "error", "error": error}
     except Exception as e:  # noqa: BLE001
         logger.error("update_listing_price failed: %s", e, exc_info=True)
         return {"status": "error", "error": str(e)}
