@@ -111,9 +111,19 @@ def test_suspended_listing_is_flagged_for_attention():
             "/seller/listings?listingStatus=DISPLAYING",
         ),
         (
+            "pending",
+            "Xem tất cả tin chờ duyệt",
+            "/seller/listings?listingStatus=IN_REVIEW",
+        ),
+        (
             "expiring",
             "Xem tất cả tin sắp hết hạn",
             "/seller/listings?listingStatus=EXPIRING_SOON",
+        ),
+        (
+            "expired",
+            "Xem tất cả tin hết hạn",
+            "/seller/listings?listingStatus=EXPIRED",
         ),
         (
             "rejected",
@@ -139,6 +149,63 @@ async def test_focus_registers_matching_deep_link(
     ]
     # 498 listings, none rendered in chat → the model must mention there's more.
     assert result["moreAvailable"] is True
+
+
+@pytest.mark.asyncio
+async def test_focused_listings_are_returned_verbatim(authed_ctx):
+    # "các tin của tôi chưa duyệt" → the backend already filtered to IN_REVIEW,
+    # but the result was run through the attention filter a second time, which
+    # drops everything that needs no owner action. The answer became a bare
+    # "Bạn có 5 tin đang chờ duyệt." with nothing listed.
+    pending = [
+        {
+            "listingId": 757000 + i,
+            "title": f"Cho thuê phòng {i}",
+            "listingStatus": "IN_REVIEW",
+            "moderationStatus": "PENDING_REVIEW",
+            "address": {"districtName": "Quận 5"},
+        }
+        for i in range(5)
+    ]
+    with patch(
+        "app.agent.tools.my_listings_status.backend_client.get_my_listings",
+        new=AsyncMock(return_value={"listings": pending, "totalCount": 5}),
+    ):
+        result = await _dispatch_my_listings(authed_ctx, "pending")
+
+    assert result["listRole"] == "focus"
+    assert len(result["listings"]) == 5
+    assert result["listings"][0]["listingStatus"] == "Chờ duyệt"
+    assert result["listings"][0]["moderationStatus"] == "Chờ duyệt"
+    assert result["moreAvailable"] is False
+
+
+@pytest.mark.asyncio
+async def test_focused_query_asks_the_backend_for_that_status(authed_ctx):
+    fetch = AsyncMock(return_value={"listings": [], "totalCount": 0})
+    with patch(
+        "app.agent.tools.my_listings_status.backend_client.get_my_listings", new=fetch
+    ):
+        await _dispatch_my_listings(authed_ctx, "pending")
+    assert fetch.await_args.args[0]["listingStatus"] == "IN_REVIEW"
+
+
+@pytest.mark.asyncio
+async def test_overall_summary_still_shows_only_attention_rows(authed_ctx):
+    # focus="all" is the mixed bag — a healthy DISPLAYING listing is noise
+    # there, so it stays filtered out.
+    mixed = [
+        {"listingId": 1, "listingStatus": "DISPLAYING", "moderationStatus": "APPROVED"},
+        {"listingId": 2, "listingStatus": "EXPIRED", "moderationStatus": "APPROVED"},
+    ]
+    with patch(
+        "app.agent.tools.my_listings_status.backend_client.get_my_listings",
+        new=AsyncMock(return_value={"listings": mixed, "totalCount": 2}),
+    ):
+        result = await _dispatch_my_listings(authed_ctx, None)
+
+    assert result["listRole"] == "attention"
+    assert [row["listingId"] for row in result["listings"]] == ["2"]
 
 
 @pytest.mark.asyncio
