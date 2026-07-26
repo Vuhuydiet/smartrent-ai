@@ -86,9 +86,14 @@ def error_details(exc: httpx.HTTPStatusError) -> Dict[str, Any]:
     }
 
 
-async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
+async def search_listings(
+    params: Dict[str, Any], token: Optional[str] = None
+) -> Dict[str, Any]:
     """
     POST /v1/listings/search
+
+    Forwards the caller's token when present so an authenticated user still
+    receives seller contact (the backend withholds it from anonymous callers).
 
     Returns the raw `data` payload on success, or an error dict.
     """
@@ -96,6 +101,7 @@ async def search_listings(params: Dict[str, Any]) -> Dict[str, Any]:
         response = await client.post(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/search",
             json=params,
+            headers=_auth_headers(token),
         )
         response.raise_for_status()
         result = response.json()
@@ -144,15 +150,19 @@ async def get_price_comparables(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def get_listing(listing_id: str) -> Dict[str, Any]:
+async def get_listing(listing_id: str, token: Optional[str] = None) -> Dict[str, Any]:
     """
     GET /v1/listings/{listing_id}
+
+    Forwards the caller's token when present so an authenticated user still
+    receives seller contact (the backend withholds it from anonymous callers).
 
     Returns the raw `data` payload on success, or an error dict.
     """
     async with _backend_client() as client:
         response = await client.get(
             f"{settings.SMARTRENT_BACKEND_URL}/v1/listings/{listing_id}",
+            headers=_auth_headers(token),
         )
         response.raise_for_status()
         result = response.json()
