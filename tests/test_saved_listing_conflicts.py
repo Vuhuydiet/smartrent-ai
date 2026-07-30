@@ -7,6 +7,7 @@ These lock in the friendly outcome against both the new DomainCodes (24002 /
 24003) and the old bare-RuntimeException backend still running in prod.
 """
 
+from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -17,7 +18,7 @@ from app.agent.tools.save_listing import _do_save_unsave, classify_saved_conflic
 from app.core import backend_client
 
 
-def _http_error(status: int, code: str = None, message: str = None):
+def _http_error(status: int, code: Optional[str] = None, message: Optional[str] = None):
     request = httpx.Request("POST", "http://backend/v1/saved-listings")
     body = {}
     if code is not None:
