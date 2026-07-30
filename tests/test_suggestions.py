@@ -12,13 +12,41 @@ def test_search_with_results_offers_detail_compare_next():
     assert any("So sánh" in lbl for lbl in labels)
     assert any("Xem tiếp" in lbl for lbl in labels)
     assert 1 <= len(out) <= 4
-    detail = next(s for s in out if s["label"] == "Xem chi tiết căn 1")
-    assert "[Mã tin: 100]" in detail["query"]
 
 
 def test_search_single_result_has_no_compare():
     out = build_suggestions(["search_listings"], _listings(1), has_auth=True)
     assert not any("So sánh" in s["label"] for s in out)
+
+
+def test_no_chip_query_exposes_a_listing_id():
+    """The user must never see or send a listing ID — chips are positional."""
+    contexts = [
+        (["search_listings"], _listings(3)),
+        (["get_recommendations"], _listings(3)),
+        (["get_listing_detail"], _listings(1)),
+        (["compare_listings"], _listings(3)),
+        (["my_listings_status"], []),
+        ([], []),
+    ]
+    for tools_used, listings in contexts:
+        for has_auth in (True, False):
+            for chip in build_suggestions(tools_used, listings, has_auth):
+                blob = f"{chip['label']} {chip['query']}"
+                assert "Mã tin" not in blob
+                assert "#" not in blob
+                # _listings() ids are 100, 101, 102 — none may appear.
+                assert not any(str(100 + i) in blob for i in range(3))
+
+
+def test_compare_chip_covers_the_whole_result_set():
+    """Comparison is one operation: all results, never a chosen pair."""
+    out = build_suggestions(["search_listings"], _listings(4), has_auth=True)
+    compare = next(s for s in out if "So sánh" in s["label"])
+    assert compare["label"] == "So sánh tất cả"
+    assert "tất cả" in compare["query"]
+    # No chip may ask for a subset comparison.
+    assert not any("2 căn" in s["label"] for s in out)
 
 
 def test_search_zero_results_offers_relaxation():

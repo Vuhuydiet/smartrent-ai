@@ -41,7 +41,7 @@ _ZERO_RESULT = [
 ]
 
 _DETAIL = [
-    {"label": "So sánh với căn khác", "query": "so sánh tin này với một căn khác"},
+    {"label": "So sánh tất cả", "query": "so sánh tất cả các tin vừa tìm được"},
     {"label": "Lưu tin này", "query": "lưu tin này"},
     {"label": "Xung quanh có gì", "query": "xung quanh tin này có gì"},
     {"label": "Ước tính giá", "query": "ước tính giá tin này"},
@@ -61,29 +61,19 @@ def _last_context_tool(tools_used: List[str]) -> str:
     return ""
 
 
-def _detail_query(listing: Dict[str, Any]) -> str:
-    return f"Xem chi tiết tin [Mã tin: {listing.get('listingId')}]"
-
-
-def _compare_query(first: Dict[str, Any], second: Dict[str, Any]) -> str:
-    return (
-        f"So sánh tin [Mã tin: {first.get('listingId')}] "
-        f"và [Mã tin: {second.get('listingId')}]"
-    )
-
-
 def _result_head(listings: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """Detail + (conditional) compare chips shared by search and recommendation."""
+    """Detail + (conditional) compare chips shared by search and recommendation.
+
+    Chip queries are phrased by position, never by listing ID: the user should
+    never see or type one. The agent maps "căn đầu tiên" back to a listingId
+    using the hidden result-set context block.
+    """
     out: List[Dict[str, str]] = [
-        {"label": "Xem chi tiết căn 1", "query": _detail_query(listings[0])}
+        {"label": "Xem chi tiết căn 1", "query": "xem chi tiết căn đầu tiên"}
     ]
     if len(listings) >= 2:
-        out.append(
-            {
-                "label": "So sánh 2 căn đầu",
-                "query": _compare_query(listings[0], listings[1]),
-            }
-        )
+        # Comparison is all-or-nothing — there is no "compare these two".
+        out.append({"label": "So sánh tất cả", "query": "so sánh tất cả các tin trên"})
     return out
 
 

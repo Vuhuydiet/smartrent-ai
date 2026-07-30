@@ -1,10 +1,20 @@
 """
-Tool: compare_listings — fetch 2-5 listings in parallel and return normalised
-side-by-side rows the LLM turns into a comparison table + verdict.
+Tool: compare_listings — compare EVERY listing in the user's current result set
+side-by-side and return normalised rows the LLM turns into a table + verdict.
 
-Triggered by user phrases like "so sánh tin 1 và 3", "cái nào đáng thuê hơn",
-"compare these two". The LLM resolves ordinal references to listingIds from
-the conversation context and passes them in.
+Takes no arguments on purpose. Comparison is a whole-result-set operation: the
+user finds listings, then compares all of them. The LLM decides *whether* to
+compare, never *which* listings — the target set is resolved server-side from
+(in priority order):
+
+  1. ToolContext.collected_listings — a search ran earlier in this same turn
+     ("tìm phòng Q1 rồi so sánh giúp mình")
+  2. ToolContext.last_listing_ids — the set shown in the previous turn, echoed
+     back by the frontend as `last_listings`
+
+That keeps listing IDs entirely out of the conversation: the user never types
+one, and the model never has to resolve "tin 1 và 3" into IDs it could get
+wrong or hallucinate.
 
 Returning structured rows + headline callouts (cheapest, largest, best
 price/m², most amenities) keeps the verdict grounded — the model only writes
@@ -13,11 +23,10 @@ prose about numbers it sees in the tool result.
 
 import asyncio
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from agents import RunContextWrapper, function_tool  # type: ignore[import]
-from pydantic import Field
 
 from app.agent.enum_labels import localize_listing_enums
 from app.agent.tool_context import ToolContext
@@ -136,35 +145,68 @@ async def _fetch_one(listing_id: str) -> Dict[str, Any]:
         return {"listingId": listing_id, "_error": str(e)}
 
 
-async def _do_compare(
-    ctx: RunContextWrapper[ToolContext], listing_ids: List[str]
-) -> Dict[str, Any]:
-    """Core compare logic — separated so it can be called directly in tests."""
-    # Dedupe while preserving order, coerce to clean string IDs.
+def _dedupe_ids(raw_ids: List[Any]) -> List[str]:
+    """Coerce to clean string IDs, dropping blanks and duplicates, keeping order."""
     seen: set = set()
-    unique_ids: List[str] = []
-    for raw in listing_ids:
+    out: List[str] = []
+    for raw in raw_ids:
         try:
             cid = str(int(float(raw)))
         except (TypeError, ValueError):
-            cid = str(raw)
+            cid = str(raw or "").strip()
         if cid and cid not in seen:
             seen.add(cid)
-            unique_ids.append(cid)
+            out.append(cid)
+    return out
+
+
+def _resolve_target_ids(ctx: RunContextWrapper[ToolContext]) -> Tuple[List[str], str]:
+    """
+    Resolve which listings to compare, without consulting the LLM.
+
+    Returns (ids, source). Listings collected during THIS turn win over the
+    previous turn's set — if the user searched and then asked to compare in one
+    breath, the fresh results are what they mean.
+    """
+    collected = _dedupe_ids(
+        [item.get("listingId") for item in ctx.context.collected_listings]
+    )
+    if len(collected) >= _MIN_LISTINGS:
+        return collected, "current_turn"
+
+    previous = _dedupe_ids(ctx.context.last_listing_ids)
+    if len(previous) >= _MIN_LISTINGS:
+        return previous, "previous_turn"
+
+    # Neither source is usable on its own — prefer whichever had anything at all
+    # so the error message can be specific about how little we had.
+    return (collected or previous), "insufficient"
+
+
+async def _do_compare(ctx: RunContextWrapper[ToolContext]) -> Dict[str, Any]:
+    """Core compare logic — separated so it can be called directly in tests."""
+    unique_ids, source = _resolve_target_ids(ctx)
 
     if len(unique_ids) < _MIN_LISTINGS:
         return {
             "status": "error",
             "error": (
-                f"Cần ít nhất {_MIN_LISTINGS} listingId để so sánh "
-                f"(nhận được {len(unique_ids)})."
+                "Chưa có đủ tin trong danh sách kết quả để so sánh "
+                f"(cần ít nhất {_MIN_LISTINGS}, hiện có {len(unique_ids)}). "
+                "Hãy tìm kiếm BĐS trước, rồi so sánh toàn bộ kết quả."
             ),
         }
-    if len(unique_ids) > _MAX_LISTINGS:
+
+    available = len(unique_ids)
+    if available > _MAX_LISTINGS:
         unique_ids = unique_ids[:_MAX_LISTINGS]
 
     logger.info(
-        "compare_listings fetching %d listings: %s", len(unique_ids), unique_ids
+        "compare_listings comparing %d/%d listings from %s: %s",
+        len(unique_ids),
+        available,
+        source,
+        unique_ids,
     )
 
     raw_results = await asyncio.gather(*(_fetch_one(i) for i in unique_ids))
@@ -188,38 +230,35 @@ async def _do_compare(
 
     ctx.context.collected_listings.extend(raw_listings)
 
-    return {
+    result: Dict[str, Any] = {
         "status": "success",
         "count": len(rows),
         "listings": rows,
         "callouts": _summary_callouts(rows),
         "errors": errors,
     }
+    if available > _MAX_LISTINGS:
+        # Never let a cap pass silently — the model must tell the user it
+        # compared a subset rather than implying it covered everything.
+        result["availableCount"] = available
+        result["truncated"] = True
+    return result
 
 
 @function_tool(
     name_override="compare_listings",
     description_override=(
-        "Compare 2 to 5 listings side-by-side. Use this when the user asks to "
-        "compare specific listings (e.g. 'so sánh tin 1 và 3', 'cái nào đáng "
-        "thuê hơn?'). Resolve ordinal references like 'cái thứ 2' to "
-        "listingIds from the most recent search results in conversation "
-        "context — never ask the user for IDs. Returns structured rows + "
-        "headline callouts (cheapest, largest, best price-per-m², etc.). "
-        "Write a Vietnamese prose verdict based on those values."
+        "Compare ALL listings in the user's current result set side-by-side. "
+        "Takes no arguments — the listings are resolved server-side from the "
+        "most recent search results. Call this whenever the user asks to "
+        "compare, weigh up, or pick between the listings they were just shown "
+        "(e.g. 'so sánh tất cả', 'cái nào đáng thuê hơn?', 'nên chọn cái nào?') "
+        "— including when they phrase it as comparing only some of them, since "
+        "comparison always covers the whole result set. Returns structured rows "
+        "+ headline callouts (cheapest, largest, best price-per-m², etc.). "
+        "Write a Vietnamese prose verdict based on those values, referring to "
+        "listings by position and title — never by ID."
     ),
 )
-async def compare_listings(
-    ctx: RunContextWrapper[ToolContext],
-    listingIds: Annotated[
-        List[str],
-        Field(
-            description=(
-                f"Listing IDs to compare ({_MIN_LISTINGS}-{_MAX_LISTINGS} items). "
-                "Resolve ordinal phrases to IDs from the prior turn's search "
-                "results."
-            )
-        ),
-    ],
-) -> Dict[str, Any]:
-    return await _do_compare(ctx, listingIds)
+async def compare_listings(ctx: RunContextWrapper[ToolContext]) -> Dict[str, Any]:
+    return await _do_compare(ctx)
