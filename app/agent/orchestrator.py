@@ -153,25 +153,33 @@ SỬ DỤNG CÔNG CỤ:
     - "thuê nhà", "tìm nhà" → productTypes=["ROOM", "APARTMENT", "HOUSE"]
   * Truy vấn HOÀN TOÀN MỞ → KHÔNG set cả productType lẫn productTypes:
     - "có gì cho thuê ở Q1?", "BĐS ở Bình Thạnh"
+- MÃ TIN LÀ DỮ LIỆU NỘI BỘ (quy tắc BẮT BUỘC): listingId chỉ dùng để TRUYỀN VÀO TOOL. TUYỆT ĐỐI KHÔNG in mã tin ra cho người dùng dưới bất kỳ dạng nào — không "[ID: 35201]", không "Mã tin: 35201", không "tin #35201", không đọc số ID thành lời. Người dùng KHÔNG BAO GIỜ cần biết, nhớ, hay gõ mã tin. Khi nhắc tới một tin, chỉ dùng THỨ TỰ và TIÊU ĐỀ, ví dụ "căn thứ 2 — Phòng trọ Bình Thạnh 17m²".
 - Khi người dùng hỏi chi tiết về một BĐS cụ thể (sau khi đã tìm thấy) → TỰ tra listingId từ kết quả search trước đó dựa trên tên, vị trí, hoặc thứ tự (ví dụ "cái đầu tiên", "phòng trọ ở Long Hòa") rồi GỌI get_listing_detail. KHÔNG BAO GIỜ hỏi lại user cung cấp ID.
 - Khi người dùng hỏi thông tin liên hệ, số điện thoại, hoặc muốn liên hệ chủ nhà → GỌI get_listing_detail. Giao diện sẽ TỰ ĐỘNG hiển thị thẻ liên hệ từ dữ liệu trả về. Bạn CHỈ CẦN viết text ngắn gọn, ví dụ: "Đây là thông tin liên hệ của tin đăng này:" hoặc nếu contactAvailable=false thì nói "Chủ nhà chưa cung cấp thông tin liên hệ."
 - Khi người dùng hỏi giá thị trường hoặc muốn so sánh giá → GỌI get_price_estimate.
 - Giá tính bằng VND. Mặc định listingType="RENT" nếu không được chỉ định.
-- Sau khi nhận kết quả tìm kiếm, viết 1-2 câu tổng quan ngắn gọn, sau đó LIỆT KÊ NGẮN GỌN danh sách kết quả theo thứ tự gồm listingId và tiêu đề, ví dụ:
+- Sau khi nhận kết quả tìm kiếm, viết 1-2 câu tổng quan ngắn gọn, sau đó LIỆT KÊ NGẮN GỌN danh sách kết quả theo thứ tự gồm SỐ THỨ TỰ và tiêu đề, ví dụ:
   "Tìm thấy 90 kết quả ở Cần Thơ. Đây là {max_listings} BĐS phù hợp nhất:
-  1. [ID:35201] Phòng trọ Bình Thạnh 17m²
-  2. [ID:35202] Căn hộ Q1 50m²
+  1. Phòng trọ Bình Thạnh 17m²
+  2. Căn hộ Q1 50m²
   ..."
-  KHÔNG liệt kê chi tiết (giá, diện tích, nội thất...) vì giao diện sẽ TỰ ĐỘNG hiển thị thẻ listing. Chỉ cần ID + tiêu đề ngắn để bạn có thể tra cứu chi tiết khi user hỏi "cái thứ 2", "trọ đầu tiên"...
-- Khi user hỏi "chi tiết trọ thứ 2", "cái đầu tiên" → TRA listingId từ danh sách đã liệt kê ở tin nhắn trước rồi GỌI get_listing_detail. KHÔNG BAO GIỜ bịa listingId.
+  TUYỆT ĐỐI KHÔNG kèm mã tin/listingId vào danh sách này. KHÔNG liệt kê chi tiết (giá, diện tích, nội thất...) vì giao diện sẽ TỰ ĐỘNG hiển thị thẻ listing. Chỉ cần số thứ tự + tiêu đề ngắn.
+- Khi user hỏi "chi tiết trọ thứ 2", "cái đầu tiên" → TRA listingId (nội bộ, không in ra) theo đúng thứ tự bạn vừa liệt kê rồi GỌI get_listing_detail. KHÔNG BAO GIỜ bịa listingId.
 
 PHÂN TRANG:
 - Khi người dùng nói "xem thêm", "tìm tiếp", "còn nữa không", "trang tiếp" → GỌI lại search_listings với cùng tiêu chí nhưng tăng page lên 1. Nhớ giữ nguyên tất cả filter từ lần search trước.
 - Luôn cho user biết đang ở trang bao nhiêu và tổng số kết quả (ví dụ: "Trang 2/5, tổng 25 kết quả").
 
-SO SÁNH:
-- Khi người dùng muốn so sánh 2-5 BĐS (vd "so sánh tin 1 và 3", "cái nào đáng thuê hơn?", "tin nào tốt nhất trong 3 cái này?") → GỌI compare_listings với mảng listingIds. Tự tra ID từ kết quả search trước đó dựa trên thứ tự ("cái thứ 2"), tên, hoặc vị trí — KHÔNG hỏi user cung cấp ID.
+SO SÁNH (chỉ có MỘT thao tác: so sánh TOÀN BỘ kết quả hiện tại):
+- compare_listings KHÔNG NHẬN THAM SỐ. Nó luôn so sánh TẤT CẢ các tin trong danh sách kết quả gần nhất. Bạn chỉ quyết định CÓ so sánh hay không — KHÔNG chọn tin nào được so sánh.
+- Khi người dùng muốn so sánh (vd "so sánh tất cả", "cái nào đáng thuê hơn?", "nên chọn cái nào?", "tin nào tốt nhất?") → GỌI compare_listings, không truyền gì cả.
+- KỂ CẢ khi user nói kiểu "so sánh cái 1 với cái 3", "chỉ so sánh 2 căn đầu" → vẫn GỌI compare_listings (so sánh cả danh sách). KHÔNG hỏi user chọn tin nào, KHÔNG hỏi mã tin.
+- BẢNG SO SÁNH PHẢI CÓ ĐỦ MỌI TIN mà tool trả về — số cột LUÔN BẰNG `count` trong kết quả tool. TUYỆT ĐỐI KHÔNG cắt bớt cột, KỂ CẢ khi user chỉ nhắc tới vài căn hoặc nói "chỉ", "thôi", "riêng". Ví dụ: user hỏi "so sánh tin 1 và tin 3 thôi" mà tool trả về 5 tin → bảng vẫn phải có ĐỦ 5 cột.
+- Cách chiều lòng user khi họ chỉ quan tâm vài căn: hiện ĐỦ bảng, rồi NHẤN MẠNH các căn đó ở phần kết luận (vd "Riêng giữa căn 1 và căn 3 bạn hỏi thì căn 3 nhỉnh hơn vì..."). Người dùng vẫn thấy đủ lựa chọn, và giao diện cũng đang hiển thị đủ từng đó thẻ tin.
+- Nếu tool báo lỗi chưa đủ tin để so sánh → mời user tìm kiếm trước, ĐỪNG hỏi mã tin.
 - compare_listings trả về `listings` (mảng row đã chuẩn hóa, có thêm `pricePerSqm`) + `callouts` (cheapest, largest, bestPricePerSqm, mostAmenities, priceRangeVnd, areaRangeSqm). Dùng các giá trị này viết bảng so sánh tiếng Việt + 1-2 câu kết luận khuyến nghị nên chọn cái nào và vì sao.
+- Trong bảng so sánh và phần kết luận, gọi tên các tin theo THỨ TỰ + TIÊU ĐỀ (vd "Căn 1 — Phòng trọ Bình Thạnh"). Các trường `listingId` trong `callouts` chỉ để bạn đối chiếu nội bộ — TUYỆT ĐỐI KHÔNG in ra.
+- Nếu kết quả có `truncated: true` → nói rõ bạn đang so sánh `count` trong tổng `availableCount` tin.
 - KHÔNG gọi get_listing_detail riêng lẻ cho từng tin khi user yêu cầu so sánh — compare_listings đã fetch song song hiệu quả hơn.
 
 SẮP XẾP:
@@ -298,6 +306,13 @@ GỢI Ý CÂU HỎI TIẾP THEO (ẩn với người dùng — hệ thống tự
   ngang hay dấu phân cách (`---`, `***`, `___`, `===`) — hay bất kỳ dãy ký tự lặp
   nào — trước khối hoặc ở bất kỳ đâu trong câu trả lời. KHÔNG lặp lại cùng một ký tự
   nhiều lần để trang trí/căn dòng; điều này khiến hệ thống lỗi.
+- TUYỆT ĐỐI KHÔNG đưa mã tin/listingId vào label hay query (không "[Mã tin: 35201]",
+  không "tin #35201", không số ID trần). Nhắc tới tin bằng SỐ THỨ TỰ, vd
+  {"label":"Xem chi tiết căn 2","query":"xem chi tiết căn thứ 2"}. Người dùng
+  không bao giờ phải gõ mã tin.
+- SO SÁNH luôn là so sánh TOÀN BỘ kết quả. KHÔNG tạo gợi ý so sánh một phần
+  ("So sánh 2 căn đầu", "So sánh căn 1 và 3"). Nếu có ≥2 tin, chip so sánh phải
+  là dạng {"label":"So sánh tất cả","query":"so sánh tất cả các tin trên"}.
 - KHÔNG tạo gợi ý kiểu "Xem tất cả ..." / "Mở trang quản lý" — hệ thống tự chèn
   nút mở trang khi tool trả về `manageUrl`. Đừng viết đường link hay tên trang
   trong lời đáp, chỉ nói ngắn gọn là còn nhiều mục khác.
@@ -506,12 +521,35 @@ def _build_dynamic_context_block(
         parts.append(f"THÔNG TIN BỔ SUNG CHO TRUY VẤN NÀY:\n{dynamic_context}")
 
     if last_listings:
-        lines = ["KẾT QUẢ TÌM KIẾM GẦN NHẤT (dùng listingId khi user hỏi chi tiết):"]
+        lines = [
+            "KẾT QUẢ TÌM KIẾM GẦN NHẤT — DỮ LIỆU NỘI BỘ, KHÔNG ĐƯỢC IN RA:",
+            "listingId dưới đây CHỈ dùng làm tham số khi gọi tool. Khi nói với "
+            "người dùng, chỉ nhắc tới số thứ tự và tiêu đề.",
+        ]
         for ref in last_listings:
             lines.append(f"  {ref.position}. listingId={ref.listingId} — {ref.title}")
         parts.append("\n".join(lines))
 
     return "\n\n".join(parts)
+
+
+def _build_tool_context(
+    user_id: Optional[str],
+    auth_token: Optional[str],
+    last_listings: Optional[List[LastListingRef]],
+) -> ToolContext:
+    """
+    Build the per-request ToolContext, carrying the previous turn's result set.
+
+    `compare_listings` reads `last_listing_ids` to compare the whole set the
+    user was just shown, so the IDs stay server-side instead of round-tripping
+    through the model.
+    """
+    return ToolContext(
+        user_id=user_id,
+        auth_token=auth_token,
+        last_listing_ids=[ref.listingId for ref in (last_listings or [])],
+    )
 
 
 def _to_responses_input(messages: List[ChatMessage]) -> List[Dict[str, Any]]:
@@ -623,19 +661,14 @@ def _friendly_tool_summary(name: str, args: Dict[str, Any]) -> str:
         if bits:
             return f"{label}: " + " ".join(bits) + "..."
 
-    if name == "get_listing_detail" and args.get("listingId"):
-        return f"{label} #{args['listingId']}..."
-
+    # NB: summaries are rendered verbatim in the UI, so they never carry a
+    # listingId — the user identifies listings by position, not by ID.
     if name == "compare_listings":
-        ids = args.get("listingIds") or []
-        if isinstance(ids, list) and ids:
-            return f"{label}: {len(ids)} tin..."
+        return "Đang so sánh toàn bộ kết quả..."
 
     if name == "save_listing":
         action = args.get("action", "save")
         verb = "Đang bỏ lưu" if action == "unsave" else "Đang lưu"
-        if args.get("listingId"):
-            return f"{verb} tin #{args['listingId']}..."
         return f"{verb} tin..."
 
     if name == "bulk_save_listings":
@@ -835,7 +868,7 @@ class AgentOrchestrator:
 
             # ── Run ──────────────────────────────────────────────────
             input_items = self._build_input(messages, dynamic_context, last_listings)
-            tool_ctx = ToolContext(user_id=user_id, auth_token=auth_token)
+            tool_ctx = _build_tool_context(user_id, auth_token, last_listings)
 
             llm_span = trace.generation(
                 name="agent-run",
@@ -946,7 +979,7 @@ class AgentOrchestrator:
             },
         )
 
-        tool_ctx = ToolContext(user_id=user_id, auth_token=auth_token)
+        tool_ctx = _build_tool_context(user_id, auth_token, last_listings)
         tools_used: List[str] = []
         any_text_streamed = False
 

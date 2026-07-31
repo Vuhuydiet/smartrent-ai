@@ -9,6 +9,11 @@ Tools use this to:
     Chat can only ever show a handful of rows, so a tool that summarises a
     larger set points at the page that owns the full list. Built server-side
     from the tool's own arguments, never by the LLM, so the URL is always valid.
+  - Read `last_listing_ids` — the result set the previous turn showed the user,
+    echoed back by the frontend. `compare_listings` resolves its own target set
+    from this (or from `collected_listings` when a search ran in the same turn),
+    so the LLM never picks *which* listings get compared — only whether to
+    compare at all.
 
 The dataclass is process-local; it never crosses the wire to the LLM.
 """
@@ -23,6 +28,7 @@ class ToolContext:
     auth_token: Optional[str] = None
     collected_listings: List[Dict[str, Any]] = field(default_factory=list)
     action_links: List[Dict[str, str]] = field(default_factory=list)
+    last_listing_ids: List[str] = field(default_factory=list)
 
     def add_action_link(self, label: str, url: str) -> None:
         """Register a deep link chip, de-duplicated by url (first label wins)."""
