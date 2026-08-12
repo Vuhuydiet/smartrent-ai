@@ -187,7 +187,9 @@ async def _do_search(
         return {"status": "error", "error": _NO_CRITERIA_ERROR}
     try:
         logger.info("search_listings request params: %s", params)
-        data = await backend_client.search_listings(params)
+        data = await backend_client.search_listings(
+            params, token=ctx.context.auth_token
+        )
         raw_listings = data.get("listings", [])
         listing_ids = [str(item.get("listingId", "?")) for item in raw_listings]
         logger.info(
@@ -264,10 +266,12 @@ async def _do_multi_type_search(
         size,
     )
 
+    token = ctx.context.auth_token
+
     async def _one(pt: str) -> Dict[str, Any]:
         sub = {**params, "productType": pt}
         try:
-            return await backend_client.search_listings(sub)
+            return await backend_client.search_listings(sub, token=token)
         except httpx.HTTPStatusError as e:
             logger.warning("multi-type %s HTTP %s", pt, e.response.status_code)
             return {"error": f"HTTP {e.response.status_code}", "listings": []}

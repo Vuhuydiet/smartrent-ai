@@ -131,10 +131,10 @@ def _summary_callouts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return out
 
 
-async def _fetch_one(listing_id: str) -> Dict[str, Any]:
+async def _fetch_one(listing_id: str, token: Optional[str] = None) -> Dict[str, Any]:
     """Fetch one listing; on error return a sentinel row the LLM can flag."""
     try:
-        data = await backend_client.get_listing(listing_id)
+        data = await backend_client.get_listing(listing_id, token=token)
         if "error" in data:
             return {"listingId": listing_id, "_error": data["error"]}
         return data
@@ -209,7 +209,9 @@ async def _do_compare(ctx: RunContextWrapper[ToolContext]) -> Dict[str, Any]:
         unique_ids,
     )
 
-    raw_results = await asyncio.gather(*(_fetch_one(i) for i in unique_ids))
+    raw_results = await asyncio.gather(
+        *(_fetch_one(i, ctx.context.auth_token) for i in unique_ids)
+    )
 
     rows: List[Dict[str, Any]] = []
     raw_listings: List[Dict[str, Any]] = []

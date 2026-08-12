@@ -26,7 +26,9 @@ async def _fetch_detail(
 ) -> Dict[str, Any]:
     """Core detail-fetch logic — separated so it can be called directly in tests."""
     try:
-        data = await backend_client.get_listing(listing_id_str)
+        data = await backend_client.get_listing(
+            listing_id_str, token=ctx.context.auth_token
+        )
 
         if "error" in data:
             return {"status": "error", "error": data["error"]}
